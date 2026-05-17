@@ -1179,17 +1179,22 @@ class AquariumSolver {
         for (const idx of g.cells) { const c = idx % cols; if (tCols.indexOf(c) < 0) tCols.push(c); }
       }
 
+      // contribs[lvl].rc[r] = # cells this aquarium fills in row r at water lvl.
+      // contribs[lvl].cc[c] = # cells this aquarium fills in col c at water lvl.
+      // Dense Int32Arrays (length rows/cols) rather than sparse objects: faster
+      // lookups in the _solveRepair / _dpPreprocess hot loops and no `|| 0`.
       const contribs = [];
       for (let lvl = 0; lvl <= maxLvl; lvl++) {
-        const rc = {}; const cc = {};
+        const rc = new Int32Array(rows);
+        const cc = new Int32Array(cols);
         for (let i = maxLvl - lvl; i < maxLvl; i++) {
           const g = groups[i];
-          rc[g.row] = (rc[g.row] || 0) + g.count;
-          for (const idx of g.cells) cc[idx % cols] = (cc[idx % cols] || 0) + 1;
+          rc[g.row] += g.count;
+          for (const idx of g.cells) cc[idx % cols] += 1;
         }
         contribs.push({ rc, cc });
       }
-      this.aquariums.push({ id, groups, maxLvl, contribs, tRows, tCols });
+      this.aquariums.push({ id, idx: this.aquariums.length, groups, maxLvl, contribs, tRows, tCols });
     }
 
     this.waterLevel = {};
@@ -1996,15 +2001,20 @@ class AquariumSolver {
     const rc = this.rowClues, cc = this.colClues;
     const vars = this.aquariums;
 
-    const levels = {};
-    for (const aq of vars) {
+    // levels[aq.idx] = array of possible water levels for that aquarium.
+    // Indexed by aq.idx (integer) rather than aq.id (string) — array lookup is
+    // faster than object-property lookup in the inner repair loop.
+    const levels = new Array(vars.length);
+    for (let vi = 0; vi < vars.length; vi++) {
+      const aq = vars[vi];
       if (this.waterLevel[aq.id] >= 0) {
-        levels[aq.id] = [this.waterLevel[aq.id]];
+        levels[vi] = [this.waterLevel[aq.id]];
       } else {
         const d = this.d[aq.id];
         if (d.mn > d.mx) return null;
-        levels[aq.id] = [];
-        for (let l = d.mn; l <= d.mx; l++) levels[aq.id].push(l);
+        const out = [];
+        for (let l = d.mn; l <= d.mx; l++) out.push(l);
+        levels[vi] = out;
       }
     }
 
@@ -2012,8 +2022,9 @@ class AquariumSolver {
     // level. Pre-filtering by .length > 1 here (it's constant for this call)
     // saves a .filter() allocation in every step of the inner loop.
     const lineVars = Array.from({ length: H + W }, () => []);
-    for (const aq of vars) {
-      if (levels[aq.id].length <= 1) continue;
+    for (let vi = 0; vi < vars.length; vi++) {
+      const aq = vars[vi];
+      if (levels[vi].length <= 1) continue;
       for (let i = 0; i < aq.tRows.length; i++) lineVars[aq.tRows[i]].push(aq);
       for (let i = 0; i < aq.tCols.length; i++) lineVars[H + aq.tCols[i]].push(aq);
     }
@@ -2037,23 +2048,28 @@ class AquariumSolver {
     };
 
     for (let restart = 0; restart < maxRestarts; restart++) {
-      const assign = {};
-      const rowS = Array(H).fill(0), colS = Array(W).fill(0);
+      // assign[aq.idx] = current water level. Int32Array vs object: faster
+      // indexed access in the inner hot loop.
+      const assign = new Int32Array(vars.length);
+      const rowS = new Int32Array(H), colS = new Int32Array(W);
 
-      for (const aq of vars) {
-        const ls = levels[aq.id];
+      for (let vi = 0; vi < vars.length; vi++) {
+        const aq = vars[vi];
+        const ls = levels[vi];
         const lvl = pick(ls);
-        assign[aq.id] = lvl;
+        assign[vi] = lvl;
         const ct = aq.contribs[lvl];
-        for (let r = 0; r < H; r++) rowS[r] += ct.rc[r] || 0;
-        for (let c = 0; c < W; c++) colS[c] += ct.cc[c] || 0;
+        const ctRc = ct.rc, ctCc = ct.cc;
+        for (let r = 0; r < H; r++) rowS[r] += ctRc[r];
+        for (let c = 0; c < W; c++) colS[c] += ctCc[c];
       }
 
       let cur = violation(rowS, colS);
       for (let step = 0; step < maxSteps; step++) {
         if (cur === 0) {
-          for (const aq of vars) {
-            const lvl = assign[aq.id];
+          for (let vi = 0; vi < vars.length; vi++) {
+            const aq = vars[vi];
+            const lvl = assign[vi];
             this.waterLevel[aq.id] = lvl;
             this.d[aq.id].mn = this.d[aq.id].mx = lvl;
           }
@@ -2073,34 +2089,36 @@ class AquariumSolver {
         let bestV = cur;
         for (let ci = 0; ci < candidates.length; ci++) {
           const aq = candidates[ci];
-          const oldLvl = assign[aq.id];
+          const aqIdx = aq.idx;
+          const oldLvl = assign[aqIdx];
           const oldCt = aq.contribs[oldLvl];
-          const aqLevels = levels[aq.id];
+          const aqLevels = levels[aqIdx];
           const tRows = aq.tRows, tCols = aq.tCols;
           const tRowsLen = tRows.length, tColsLen = tCols.length;
+          const oldRc = oldCt.rc, oldCc = oldCt.cc;
           for (let li = 0; li < aqLevels.length; li++) {
             const lvl = aqLevels[li];
             if (lvl === oldLvl) continue;
             const ct = aq.contribs[lvl];
-            const ctRc = ct.rc, ctCc = ct.cc, oldRc = oldCt.rc, oldCc = oldCt.cc;
+            const ctRc = ct.rc, ctCc = ct.cc;
             let nextV = cur;
             for (let i = 0; i < tRowsLen; i++) {
               const r = tRows[i];
               const before = Math.abs(rowS[r] - rc[r]);
-              const after = Math.abs(rowS[r] + (ctRc[r] || 0) - (oldRc[r] || 0) - rc[r]);
+              const after = Math.abs(rowS[r] + ctRc[r] - oldRc[r] - rc[r]);
               nextV += after - before;
             }
             for (let i = 0; i < tColsLen; i++) {
               const c = tCols[i];
               const before = Math.abs(colS[c] - cc[c]);
-              const after = Math.abs(colS[c] + (ctCc[c] || 0) - (oldCc[c] || 0) - cc[c]);
+              const after = Math.abs(colS[c] + ctCc[c] - oldCc[c] - cc[c]);
               nextV += after - before;
             }
             if (nextV < bestV) {
               bestV = nextV;
-              bestMoves = [{ aq, lvl, oldCt, ct, nextV }];
+              bestMoves = [{ aq, aqIdx, lvl, oldCt, ct, nextV }];
             } else if (nextV === bestV) {
-              bestMoves.push({ aq, lvl, oldCt, ct, nextV });
+              bestMoves.push({ aq, aqIdx, lvl, oldCt, ct, nextV });
             }
           }
         }
@@ -2114,9 +2132,10 @@ class AquariumSolver {
           // Random move — compute its violation incrementally rather than
           // doing the full O(H+W) recompute after applying it.
           const aq = candidates[Math.floor(rand() * candidates.length)];
-          const oldLvl = assign[aq.id];
-          const aqLevels = levels[aq.id];
-          // Inline filter+pick to avoid array allocation
+          const aqIdx = aq.idx;
+          const oldLvl = assign[aqIdx];
+          const aqLevels = levels[aqIdx];
+          // Inline filter+pick to avoid array allocation.
           let pickIdx = Math.floor(rand() * (aqLevels.length - 1));
           let lvl = -1;
           for (let i = 0; i < aqLevels.length; i++) {
@@ -2132,29 +2151,29 @@ class AquariumSolver {
           for (let i = 0; i < tRows.length; i++) {
             const r = tRows[i];
             const before = Math.abs(rowS[r] - rc[r]);
-            const after = Math.abs(rowS[r] + (ctRc[r] || 0) - (oldRc[r] || 0) - rc[r]);
+            const after = Math.abs(rowS[r] + ctRc[r] - oldRc[r] - rc[r]);
             nextV += after - before;
           }
           for (let i = 0; i < tCols.length; i++) {
             const c = tCols[i];
             const before = Math.abs(colS[c] - cc[c]);
-            const after = Math.abs(colS[c] + (ctCc[c] || 0) - (oldCc[c] || 0) - cc[c]);
+            const after = Math.abs(colS[c] + ctCc[c] - oldCc[c] - cc[c]);
             nextV += after - before;
           }
-          move = { aq, lvl, oldCt, ct };
+          move = { aq, aqIdx, lvl, oldCt, ct };
           moveV = nextV;
         }
 
-        assign[move.aq.id] = move.lvl;
+        assign[move.aqIdx] = move.lvl;
         const mRc = move.ct.rc, mCc = move.ct.cc, moRc = move.oldCt.rc, moCc = move.oldCt.cc;
         const mTRows = move.aq.tRows, mTCols = move.aq.tCols;
         for (let i = 0; i < mTRows.length; i++) {
           const r = mTRows[i];
-          rowS[r] += (mRc[r] || 0) - (moRc[r] || 0);
+          rowS[r] += mRc[r] - moRc[r];
         }
         for (let i = 0; i < mTCols.length; i++) {
           const c = mTCols[i];
-          colS[c] += (mCc[c] || 0) - (moCc[c] || 0);
+          colS[c] += mCc[c] - moCc[c];
         }
         cur = moveV;
       }
