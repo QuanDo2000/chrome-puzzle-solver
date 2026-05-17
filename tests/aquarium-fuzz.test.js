@@ -214,3 +214,21 @@ test('AquariumSolver: random-clue 3x3 (20 trials)', () => {
 test('AquariumSolver: random-clue 4x4 (20 trials)', () => {
   for (let seed = 400; seed <= 419; seed++) runRandomClues(seed, 4, 4, 3);
 });
+
+test('AquariumSolver: maxMs budget triggers timedOut on slow unsolvable puzzle', () => {
+  // Seed 555 was identified empirically as taking ~5s of search before
+  // exhausting nodes. With maxMs=1 the solver must bail well before then.
+  const rand = rng(555);
+  const regionMap = randomRegionMap(rand, 4, 4, 3);
+  const maxClue = 4;
+  const rs = Array.from({ length: 4 }, () => Math.floor(rand() * (maxClue + 1)));
+  const cs = Array.from({ length: 4 }, () => Math.floor(rand() * (maxClue + 1)));
+  const solver = new AquariumSolver(rs, cs, regionMap, 4, 4);
+  solver.maxMs = 1;
+  const t0 = Date.now();
+  const result = solver.solve(null);
+  const elapsed = Date.now() - t0;
+  assert.equal(result.solved, false);
+  assert.ok(elapsed < 500,
+    `solver should bail within 500ms once maxMs=1 is exceeded, took ${elapsed}ms`);
+});

@@ -1242,6 +1242,12 @@ class AquariumSolver {
     this.rowClues = rowClues;
     this.colClues = colClues;
     this._cellsCount = rows * cols;
+    // Soft wall-clock budget. 0 = unlimited (matches the small-puzzle case in
+    // NonogramSolver/GalaxiesSolver). Checked sparsely in the search hot
+    // loops to keep Date.now() overhead negligible.
+    this.maxMs = rows * cols >= 400 ? 8000 : 0;
+    this.startedAt = 0;
+    this.timedOut = false;
 
     const raw = {};
     for (let r = 0; r < rows; r++)
@@ -1329,6 +1335,8 @@ class AquariumSolver {
     this._bestPartial = null;
     this._bestPartialFilled = 0;
     this._kc.fill(0);
+    this.startedAt = Date.now();
+    this.timedOut = false;
     if (initialGrid)
       for (let r = 0; r < this.rows; r++)
         for (let c = 0; c < this.cols; c++) {
@@ -2153,6 +2161,11 @@ class AquariumSolver {
 
       let cur = violation(rowS, colS);
       for (let step = 0; step < maxSteps; step++) {
+        if (this.maxMs && (step & 0xFF) === 0 &&
+            Date.now() - this.startedAt > this.maxMs) {
+          this.timedOut = true;
+          return null;
+        }
         if (cur === 0) {
           for (let vi = 0; vi < vars.length; vi++) {
             const aq = vars[vi];
@@ -2272,6 +2285,13 @@ class AquariumSolver {
   _backtrack() {
     if (++this._searchNodes > this._maxSearchNodes) {
       return { solved: false, error: 'search limit exceeded' };
+    }
+    // Time check every 1024 nodes — Date.now() is cheap but not free, and
+    // 1024 nodes is well below the cost of a single millisecond of search.
+    if (this.maxMs && (this._searchNodes & 0x3FF) === 0 &&
+        Date.now() - this.startedAt > this.maxMs) {
+      this.timedOut = true;
+      return { solved: false, error: 'time limit exceeded' };
     }
     const assignedTokens = this._assignmentTokens();
     if (this._hasNogood(assignedTokens)) return { solved: false, error: 'contradiction' };
