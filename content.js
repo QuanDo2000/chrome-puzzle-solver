@@ -10,6 +10,26 @@ const MAX_UNDO = 50;
 // each other's grid writes. Each operation sets this to its name on entry and
 // clears it on exit (try/finally). Other operations bail with a clear error.
 let mutatingOp = null;
+let mutatingOpTimer = null;
+const MUTATING_OP_TIMEOUT_MS = 30000;
+
+// Wrappers so a handler that throws past the try/finally — or a hung Worker
+// that never resolves — cannot leave the flag stuck and lock out every
+// subsequent action until reload.
+function setMutatingOp(name) {
+  mutatingOp = name;
+  if (mutatingOpTimer) clearTimeout(mutatingOpTimer);
+  mutatingOpTimer = setTimeout(() => {
+    console.warn(`[puzzle-solver] mutatingOp '${mutatingOp}' stuck >${MUTATING_OP_TIMEOUT_MS}ms; clearing`);
+    mutatingOp = null;
+    mutatingOpTimer = null;
+  }, MUTATING_OP_TIMEOUT_MS);
+}
+
+function clearMutatingOp() {
+  mutatingOp = null;
+  if (mutatingOpTimer) { clearTimeout(mutatingOpTimer); mutatingOpTimer = null; }
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.action) {
@@ -84,7 +104,7 @@ async function applySolution(solution, skipUndo = false) {
   if (mutatingOp) {
     return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
   }
-  mutatingOp = 'apply';
+  setMutatingOp('apply');
   try {
     if (!detectedGrid) {
       const d = await detectPuzzle();
@@ -109,7 +129,7 @@ async function applySolution(solution, skipUndo = false) {
     }
     return { success: true };
   } finally {
-    mutatingOp = null;
+    clearMutatingOp();
   }
 }
 
@@ -983,7 +1003,7 @@ async function handleUndo() {
     return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
   }
   if (undoStack.length === 0) return { success: false, error: 'Nothing to undo' };
-  mutatingOp = 'undo';
+  setMutatingOp('undo');
   try {
     const currentState = await readGridState();
     if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
@@ -991,11 +1011,11 @@ async function handleUndo() {
     const prevState = undoStack.pop();
     // applySolution would refuse because mutatingOp is set — release the flag
     // around the nested apply so the inner critical section can run.
-    mutatingOp = null;
+    clearMutatingOp();
     await applySolution(prevState, true);
     return { success: true, grid: prevState, undoCount: undoStack.length, redoCount: redoStack.length };
   } finally {
-    mutatingOp = null;
+    clearMutatingOp();
   }
 }
 
@@ -1004,17 +1024,17 @@ async function handleRedo() {
     return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
   }
   if (redoStack.length === 0) return { success: false, error: 'Nothing to redo' };
-  mutatingOp = 'redo';
+  setMutatingOp('redo');
   try {
     const currentState = await readGridState();
     if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
     undoStack.push(currentState.grid);
     const nextState = redoStack.pop();
-    mutatingOp = null;
+    clearMutatingOp();
     await applySolution(nextState, true);
     return { success: true, grid: nextState, undoCount: undoStack.length, redoCount: redoStack.length };
   } finally {
-    mutatingOp = null;
+    clearMutatingOp();
   }
 }
 
