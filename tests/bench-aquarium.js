@@ -8,7 +8,7 @@ const log = (...a) => origLog(...a);
 
 const p = fixtures.aquariumLarge;
 
-const N = 5;
+const N = 11;
 const times = [];
 let solvedFlag = null;
 for (let i = 0; i < N; i++) {

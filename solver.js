@@ -2008,10 +2008,14 @@ class AquariumSolver {
       }
     }
 
+    // lineVars[line] = aquariums that touch that row/col AND have >1 possible
+    // level. Pre-filtering by .length > 1 here (it's constant for this call)
+    // saves a .filter() allocation in every step of the inner loop.
     const lineVars = Array.from({ length: H + W }, () => []);
     for (const aq of vars) {
-      for (const r of aq.tRows) lineVars[r].push(aq);
-      for (const c of aq.tCols) lineVars[H + c].push(aq);
+      if (levels[aq.id].length <= 1) continue;
+      for (let i = 0; i < aq.tRows.length; i++) lineVars[aq.tRows[i]].push(aq);
+      for (let i = 0; i < aq.tCols.length; i++) lineVars[H + aq.tCols[i]].push(aq);
     }
 
     let seed = 2166136261;
@@ -2062,52 +2066,97 @@ class AquariumSolver {
         if (badLines.length === 0) continue;
 
         const line = pick(badLines);
-        const candidates = lineVars[line].filter(aq => levels[aq.id].length > 1);
+        const candidates = lineVars[line];
         if (candidates.length === 0) continue;
 
         let bestMoves = [];
         let bestV = cur;
-        for (const aq of candidates) {
+        for (let ci = 0; ci < candidates.length; ci++) {
+          const aq = candidates[ci];
           const oldLvl = assign[aq.id];
           const oldCt = aq.contribs[oldLvl];
-          for (const lvl of levels[aq.id]) {
+          const aqLevels = levels[aq.id];
+          const tRows = aq.tRows, tCols = aq.tCols;
+          const tRowsLen = tRows.length, tColsLen = tCols.length;
+          for (let li = 0; li < aqLevels.length; li++) {
+            const lvl = aqLevels[li];
             if (lvl === oldLvl) continue;
             const ct = aq.contribs[lvl];
+            const ctRc = ct.rc, ctCc = ct.cc, oldRc = oldCt.rc, oldCc = oldCt.cc;
             let nextV = cur;
-            for (const r of aq.tRows) {
+            for (let i = 0; i < tRowsLen; i++) {
+              const r = tRows[i];
               const before = Math.abs(rowS[r] - rc[r]);
-              const after = Math.abs(rowS[r] + (ct.rc[r] || 0) - (oldCt.rc[r] || 0) - rc[r]);
+              const after = Math.abs(rowS[r] + (ctRc[r] || 0) - (oldRc[r] || 0) - rc[r]);
               nextV += after - before;
             }
-            for (const c of aq.tCols) {
+            for (let i = 0; i < tColsLen; i++) {
+              const c = tCols[i];
               const before = Math.abs(colS[c] - cc[c]);
-              const after = Math.abs(colS[c] + (ct.cc[c] || 0) - (oldCt.cc[c] || 0) - cc[c]);
+              const after = Math.abs(colS[c] + (ctCc[c] || 0) - (oldCc[c] || 0) - cc[c]);
               nextV += after - before;
             }
             if (nextV < bestV) {
               bestV = nextV;
-              bestMoves = [{ aq, lvl, oldCt, ct }];
+              bestMoves = [{ aq, lvl, oldCt, ct, nextV }];
             } else if (nextV === bestV) {
-              bestMoves.push({ aq, lvl, oldCt, ct });
+              bestMoves.push({ aq, lvl, oldCt, ct, nextV });
             }
           }
         }
 
         let move = null;
+        let moveV = cur;
         if (bestMoves.length > 0 && (bestV < cur || rand() < 0.05)) {
           move = pick(bestMoves);
+          moveV = move.nextV;
         } else {
-          const aq = pick(candidates);
+          // Random move — compute its violation incrementally rather than
+          // doing the full O(H+W) recompute after applying it.
+          const aq = candidates[Math.floor(rand() * candidates.length)];
           const oldLvl = assign[aq.id];
-          const ls = levels[aq.id].filter(l => l !== oldLvl);
-          const lvl = pick(ls);
-          move = { aq, lvl, oldCt: aq.contribs[oldLvl], ct: aq.contribs[lvl] };
+          const aqLevels = levels[aq.id];
+          // Inline filter+pick to avoid array allocation
+          let pickIdx = Math.floor(rand() * (aqLevels.length - 1));
+          let lvl = -1;
+          for (let i = 0; i < aqLevels.length; i++) {
+            if (aqLevels[i] === oldLvl) continue;
+            if (pickIdx === 0) { lvl = aqLevels[i]; break; }
+            pickIdx--;
+          }
+          const oldCt = aq.contribs[oldLvl];
+          const ct = aq.contribs[lvl];
+          const ctRc = ct.rc, ctCc = ct.cc, oldRc = oldCt.rc, oldCc = oldCt.cc;
+          const tRows = aq.tRows, tCols = aq.tCols;
+          let nextV = cur;
+          for (let i = 0; i < tRows.length; i++) {
+            const r = tRows[i];
+            const before = Math.abs(rowS[r] - rc[r]);
+            const after = Math.abs(rowS[r] + (ctRc[r] || 0) - (oldRc[r] || 0) - rc[r]);
+            nextV += after - before;
+          }
+          for (let i = 0; i < tCols.length; i++) {
+            const c = tCols[i];
+            const before = Math.abs(colS[c] - cc[c]);
+            const after = Math.abs(colS[c] + (ctCc[c] || 0) - (oldCc[c] || 0) - cc[c]);
+            nextV += after - before;
+          }
+          move = { aq, lvl, oldCt, ct };
+          moveV = nextV;
         }
 
         assign[move.aq.id] = move.lvl;
-        for (const r of move.aq.tRows) rowS[r] += (move.ct.rc[r] || 0) - (move.oldCt.rc[r] || 0);
-        for (const c of move.aq.tCols) colS[c] += (move.ct.cc[c] || 0) - (move.oldCt.cc[c] || 0);
-        cur = violation(rowS, colS);
+        const mRc = move.ct.rc, mCc = move.ct.cc, moRc = move.oldCt.rc, moCc = move.oldCt.cc;
+        const mTRows = move.aq.tRows, mTCols = move.aq.tCols;
+        for (let i = 0; i < mTRows.length; i++) {
+          const r = mTRows[i];
+          rowS[r] += (mRc[r] || 0) - (moRc[r] || 0);
+        }
+        for (let i = 0; i < mTCols.length; i++) {
+          const c = mTCols[i];
+          colS[c] += (mCc[c] || 0) - (moCc[c] || 0);
+        }
+        cur = moveV;
       }
     }
 
