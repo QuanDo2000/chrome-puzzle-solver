@@ -383,6 +383,8 @@ class GalaxiesSolver {
     this.stars = stars || [];
     this.rows = rows;
     this.cols = cols;
+    this.grid = null;            // assigned by solve() once the seed grid is built
+    this.trail = [];             // (row, col, oldValue) entries for trail-based undo
     this.maxNodes = rows * cols >= 900 ? 750000 : 200000;
     this.nodes = 0;
     this.startedAt = 0;
@@ -829,11 +831,30 @@ class GalaxiesSolver {
   }
 
 
+  // Trailed write to a single cell. Returns true iff a write happened.
+  // Trail entry format: [row, col, oldValue].
+  _assign(row, col, value) {
+    const old = this.grid[row][col];
+    if (old === value) return false;
+    this.trail.push([row, col, old]);
+    this.grid[row][col] = value;
+    return true;
+  }
+
+  // Roll the trail back to `mark`, restoring each cell to its previous value.
+  _rollback(mark) {
+    const t = this.trail;
+    while (t.length > mark) {
+      const [r, c, old] = t.pop();
+      this.grid[r][c] = old;
+    }
+  }
+
   _assignPair(row, col, starIndex, changed) {
     if (!this._canAssignPair(row, col, starIndex)) return false;
     const m = this._mirror(row, col, starIndex);
-    this.grid[row][col] = starIndex;
-    this.grid[m.row][m.col] = starIndex;
+    this._assign(row, col, starIndex);
+    this._assign(m.row, m.col, starIndex);
     if (changed) changed.add(starIndex);
     return true;
   }
@@ -892,26 +913,27 @@ class GalaxiesSolver {
     }
 
     bestCandidates.sort((a, b) => this._distance(best.row, best.col, a) - this._distance(best.row, best.col, b));
+    // Save alternative branches to the frontier (so they can resume later if
+    // this branch fails). Each "save" is: trail mark, assign, snapshot, rollback.
     for (let i = bestCandidates.length - 1; i > 0; i--) {
-      const next = this.grid.map(row => row.slice());
-      const savedGrid = this.grid;
-      this.grid = next;
+      const mark = this.trail.length;
       const altChanged = new Set([bestCandidates[i]]);
       if (this._assignPair(best.row, best.col, bestCandidates[i], altChanged)) {
         this._pushFrontier();
       }
-      this.grid = savedGrid;
+      this._rollback(mark);
     }
+    // Try each candidate in distance order. Trail-based undo replaces the
+    // per-recursion grid clone — _rollback unwinds every write _assignPair and
+    // _propagate made during the failed branch.
     for (const starIndex of bestCandidates) {
-      const next = this.grid.map(row => row.slice());
-      const savedGrid = this.grid;
-      this.grid = next;
+      const mark = this.trail.length;
       const nextChanged = new Set([starIndex]);
       if (this._assignPair(best.row, best.col, starIndex, nextChanged)) {
         const solved = this._search(nextChanged);
         if (solved) return this.grid;  // leave this.grid pointing at the solved state
       }
-      this.grid = savedGrid;
+      this._rollback(mark);
     }
     this._rememberDead(key);
     return null;
