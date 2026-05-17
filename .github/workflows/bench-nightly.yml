@@ -1,0 +1,31 @@
+name: bench (nightly)
+
+# Runs the captured-real-puzzle benchmark on a schedule (and on demand).
+# Not part of the PR-blocking test workflow — too noisy and too slow for that,
+# but useful as a heartbeat that catches perf regressions in the solver hot
+# paths. Output lives in the job log; nothing is published.
+
+on:
+  schedule:
+    # 07:00 UTC daily — quiet hour, free runner pool tends to be empty.
+    - cron: '0 7 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  bench-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: node tests/bench-real.js
+      - run: node tests/bench.js
+        continue-on-error: true
+      - run: node tests/bench-galaxies.js
+        continue-on-error: true
+      - run: node tests/bench-aquarium.js
+        continue-on-error: true
