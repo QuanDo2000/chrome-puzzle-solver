@@ -431,11 +431,14 @@ class GalaxiesSolver {
     const frontierGrids = options.frontierGrids || [];
     for (let i = frontierGrids.length - 1; i >= 0; i--) {
       const fgrid = this._newSeededGrid();
-      if (!fgrid || !this._applyInitialGrid(fgrid, frontierGrids[i])) continue;
-      this._rememberPartial(fgrid);
-      const solvedFrontier = this._search(fgrid, null);
+      if (!fgrid) continue;
+      this.grid = fgrid;
+      this.trail = [];
+      if (!this._applyInitialGrid(frontierGrids[i])) continue;
+      this._rememberPartial();
+      const solvedFrontier = this._search(null);
       if (solvedFrontier) {
-        const out = this._toOutputGrid(solvedFrontier);
+        const out = this._toOutputGrid(this.grid);
         this._storeSolution(cacheKey, out);
         return { solved: true, grid: out };
       }
@@ -455,19 +458,21 @@ class GalaxiesSolver {
       };
     }
 
-    const grid = this._newSeededGrid();
-    if (!grid) return { solved: false, grid: null, error: 'Invalid Galaxies star layout' };
+    const seedGrid = this._newSeededGrid();
+    if (!seedGrid) return { solved: false, grid: null, error: 'Invalid Galaxies star layout' };
+    this.grid = seedGrid;
+    this.trail = [];
     this.timedOut = false;
     this.startedAt = Date.now();
     this.frontier = [];
     this.forbiddenPartials = this._normalizeForbiddenPartials(options.forbiddenPartials || []);
-    for (const f of frontierGrids) this._pushFrontier(f, true);
+    for (const f of frontierGrids) this._pushFrontierFromOutput(f);
     const resumed = !!initialGrid;
-    if (initialGrid && !this._applyInitialGrid(grid, initialGrid)) {
+    if (initialGrid && !this._applyInitialGrid(initialGrid)) {
       return { solved: false, grid: null, error: 'invalid partial state' };
     }
-    this._rememberPartial(grid);
-    const solved = this._search(grid, null);
+    this._rememberPartial();
+    const solved = this._search(null);
     if (!solved) {
       if (resumed && !this.timedOut && this.nodes <= 2) {
         return { solved: false, grid: null, failedPartialGrid: initialGrid, frontierGrids: this._frontierOutput(), error: 'partial state exhausted' };
@@ -484,20 +489,24 @@ class GalaxiesSolver {
         error: this.timedOut ? 'time limit exceeded' : 'search limit exceeded'
       };
     }
-    const out = this._toOutputGrid(solved);
+    const out = this._toOutputGrid(this.grid);
     this._storeSolution(cacheKey, out);
     return { solved: true, grid: out };
   }
 
   _newSeededGrid() {
     const grid = Array.from({ length: this.rows }, () => Array(this.cols).fill(-1));
+    const savedGrid = this.grid;
+    this.grid = grid;
     for (let i = 0; i < this.stars.length; i++) {
       for (const cell of this._seedCells(this.stars[i])) {
-        if (!this._assignPair(grid, cell.row, cell.col, i)) {
+        if (!this._assignPair(cell.row, cell.col, i)) {
+          this.grid = savedGrid;
           return null;
         }
       }
     }
+    this.grid = savedGrid;
     return grid;
   }
 
@@ -594,7 +603,11 @@ class GalaxiesSolver {
     for (const shape of solvedShapes) {
       for (const idx of shape.cells) internal[Math.floor(idx / this.cols)][idx % this.cols] = shape.star;
     }
-    if (!this._verify(internal)) return null;
+    const savedGrid = this.grid;
+    this.grid = internal;
+    const ok = this._verify();
+    this.grid = savedGrid;
+    if (!ok) return null;
     return { solved: true, grid: this._toOutputGrid(internal), method: 'exact-cover-shapes' };
   }
 
@@ -702,12 +715,12 @@ class GalaxiesSolver {
     return out;
   }
 
-  _applyInitialGrid(grid, initialGrid) {
+  _applyInitialGrid(initialGrid) {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const v = initialGrid[r]?.[c];
         if (!v || v <= 0) continue;
-        if (!this._assignPair(grid, r, c, v - 1)) return false;
+        if (!this._assignPair(r, c, v - 1)) return false;
       }
     }
     return true;
@@ -807,50 +820,50 @@ class GalaxiesSolver {
     return owner === undefined || owner === starIndex;
   }
 
-  _canAssignPair(grid, row, col, starIndex) {
+  _canAssignPair(row, col, starIndex) {
     if (this.staticCandidates[row]?.[col] && !this.staticCandidates[row][col].includes(starIndex)) return false;
     const m = this._mirror(row, col, starIndex);
     if (!this._canUseCell(row, col, starIndex) || !this._canUseCell(m.row, m.col, starIndex)) return false;
-    const a = grid[row][col], b = grid[m.row][m.col];
+    const a = this.grid[row][col], b = this.grid[m.row][m.col];
     return (a === -1 || a === starIndex) && (b === -1 || b === starIndex);
   }
 
 
-  _assignPair(grid, row, col, starIndex, changed) {
-    if (!this._canAssignPair(grid, row, col, starIndex)) return false;
+  _assignPair(row, col, starIndex, changed) {
+    if (!this._canAssignPair(row, col, starIndex)) return false;
     const m = this._mirror(row, col, starIndex);
-    grid[row][col] = starIndex;
-    grid[m.row][m.col] = starIndex;
+    this.grid[row][col] = starIndex;
+    this.grid[m.row][m.col] = starIndex;
     if (changed) changed.add(starIndex);
     return true;
   }
 
-  _candidates(grid, row, col) {
+  _candidates(row, col) {
     const out = [];
     const staticCandidates = this.staticCandidates[row]?.[col] || [];
     for (const i of staticCandidates) {
-      if (this._canAssignPair(grid, row, col, i)) out.push(i);
+      if (this._canAssignPair(row, col, i)) out.push(i);
     }
     return out;
   }
 
 
-  _search(grid, checkStars) {
+  _search(checkStars) {
     if (++this.nodes > this.maxNodes) return null;
     if (this.maxMs && Date.now() - this.startedAt > this.maxMs) {
       this.timedOut = true;
-      this.timeoutPartial = grid.map(row => row.slice());
+      this.timeoutPartial = this.grid.map(row => row.slice());
       return null;
     }
     const changed = new Set(checkStars || []);
-    if (!this._propagate(grid, changed)) return null;
-    if (this._matchesForbiddenPartial(grid)) return null;
-    this._rememberPartial(grid);
-    const key = this.maxDeadCache ? this._stateKey(grid) : null;
+    if (!this._propagate(changed)) return null;
+    if (this._matchesForbiddenPartial()) return null;
+    this._rememberPartial();
+    const key = this.maxDeadCache ? this._stateKey() : null;
     if (key && this.deadCache.has(key)) return null;
     let reachStars = this.rows * this.cols <= 225 ? null : (changed.size ? changed : null);
     if (this.rows * this.cols >= 900 && this.nodes % 250 === 0) reachStars = null;
-    if (!this._regionsReachable(grid, reachStars)) {
+    if (!this._regionsReachable(reachStars)) {
       this._rememberDead(key);
       return null;
     }
@@ -858,8 +871,8 @@ class GalaxiesSolver {
     let bestCandidates = null;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (grid[r][c] !== -1) continue;
-        const candidates = this._candidates(grid, r, c);
+        if (this.grid[r][c] !== -1) continue;
+        const candidates = this._candidates(r, c);
         if (candidates.length === 0) {
           this._rememberDead(key);
           return null;
@@ -873,67 +886,80 @@ class GalaxiesSolver {
       if (bestCandidates && bestCandidates.length === 1) break;
     }
     if (!best) {
-      if (this._isFilled(grid) && this._verify(grid)) return grid;
+      if (this._isFilled() && this._verify()) return this.grid;
       this._rememberDead(key);
       return null;
     }
 
     bestCandidates.sort((a, b) => this._distance(best.row, best.col, a) - this._distance(best.row, best.col, b));
     for (let i = bestCandidates.length - 1; i > 0; i--) {
-      const next = grid.map(row => row.slice());
-      const changed = new Set([bestCandidates[i]]);
-      if (this._assignPair(next, best.row, best.col, bestCandidates[i], changed)) this._pushFrontier(next);
+      const next = this.grid.map(row => row.slice());
+      const savedGrid = this.grid;
+      this.grid = next;
+      const altChanged = new Set([bestCandidates[i]]);
+      if (this._assignPair(best.row, best.col, bestCandidates[i], altChanged)) {
+        this._pushFrontier();
+      }
+      this.grid = savedGrid;
     }
     for (const starIndex of bestCandidates) {
-      const next = grid.map(row => row.slice());
+      const next = this.grid.map(row => row.slice());
+      const savedGrid = this.grid;
+      this.grid = next;
       const nextChanged = new Set([starIndex]);
-      if (!this._assignPair(next, best.row, best.col, starIndex, nextChanged)) continue;
-      const solved = this._search(next, nextChanged);
-      if (solved) return solved;
+      if (this._assignPair(best.row, best.col, starIndex, nextChanged)) {
+        const solved = this._search(nextChanged);
+        if (solved) return this.grid;  // leave this.grid pointing at the solved state
+      }
+      this.grid = savedGrid;
     }
     this._rememberDead(key);
     return null;
   }
 
-  _pushFrontier(grid, outputGrid = false) {
-    if (!this.maxFrontier || this.frontier.length >= this.maxFrontier || !grid) return;
-    const internal = outputGrid ? grid.map(row => row.map(v => v - 1)) : grid.map(row => row.slice());
-    this.frontier.push(internal);
+  _pushFrontier() {
+    if (!this.maxFrontier || this.frontier.length >= this.maxFrontier) return;
+    this.frontier.push(this.grid.map(row => row.slice()));
+  }
+
+  _pushFrontierFromOutput(outputGrid) {
+    if (!this.maxFrontier || this.frontier.length >= this.maxFrontier || !outputGrid) return;
+    this.frontier.push(outputGrid.map(row => row.map(v => v - 1)));
   }
 
   _frontierOutput() {
     return this.frontier.map(grid => this._toOutputGrid(grid));
   }
 
-  _matchesForbiddenPartial(grid) {
+  _matchesForbiddenPartial() {
     for (const cells of this.forbiddenPartials) {
       let matches = true;
       for (const [r, c, v] of cells) {
-        if (grid[r][c] !== v) { matches = false; break; }
+        if (this.grid[r][c] !== v) { matches = false; break; }
       }
       if (matches) return true;
     }
     return false;
   }
 
-  _rememberPartial(grid) {
+  _rememberPartial() {
     if (!this.maxMs) return;
     let filled = 0;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (grid[r][c] !== -1) filled++;
+        if (this.grid[r][c] !== -1) filled++;
       }
     }
     if (filled > this.bestPartialFilled) {
       this.bestPartialFilled = filled;
-      this.bestPartial = grid.map(row => row.slice());
+      this.bestPartial = this.grid.map(row => row.slice());
     }
   }
 
-  _stateKey(grid) {
+  _stateKey() {
     let out = '';
     for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) out += (grid[r][c] + 1).toString(36) + '.';
+      for (let c = 0; c < this.cols; c++) out += (this.grid[r][c] + 1).toString(36) + '.';
     }
     return out;
   }
@@ -942,17 +968,17 @@ class GalaxiesSolver {
     if (key && this.deadCache.size < this.maxDeadCache) this.deadCache.add(key);
   }
 
-  _propagate(grid, changedStars) {
+  _propagate(changedStars) {
     let didChange = true;
     while (didChange) {
       didChange = false;
       for (let r = 0; r < this.rows; r++) {
         for (let c = 0; c < this.cols; c++) {
-          if (grid[r][c] !== -1) continue;
-          const candidates = this._candidates(grid, r, c);
+          if (this.grid[r][c] !== -1) continue;
+          const candidates = this._candidates(r, c);
           if (candidates.length === 0) return false;
           if (candidates.length === 1) {
-            if (!this._assignPair(grid, r, c, candidates[0], changedStars)) return false;
+            if (!this._assignPair(r, c, candidates[0], changedStars)) return false;
             didChange = true;
           }
         }
@@ -966,36 +992,36 @@ class GalaxiesSolver {
     return Math.abs(2 * row - s.row) + Math.abs(2 * col - s.col);
   }
 
-  _verify(grid) {
+  _verify() {
     for (let i = 0; i < this.stars.length; i++) {
-      if (!this._connected(grid, i)) return false;
+      if (!this._connected(i)) return false;
     }
     return true;
   }
 
-  _isFilled(grid) {
+  _isFilled() {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (grid[r][c] === -1) return false;
+        if (this.grid[r][c] === -1) return false;
       }
     }
     return true;
   }
 
-  _regionsReachable(grid, stars) {
+  _regionsReachable(stars) {
     const list = stars ? Array.from(stars) : this.stars.map((_, i) => i);
     for (const i of list) {
-      if (!this._regionReachable(grid, i)) return false;
+      if (!this._regionReachable(i)) return false;
     }
     return true;
   }
 
-  _regionReachable(grid, starIndex) {
+  _regionReachable(starIndex) {
     let assigned = 0;
     let start = null;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (grid[r][c] === starIndex) {
+        if (this.grid[r][c] === starIndex) {
           assigned++;
           if (!start) start = { row: r, col: c };
         }
@@ -1008,12 +1034,12 @@ class GalaxiesSolver {
     let reachedAssigned = 0;
     for (let qi = 0; qi < q.length; qi++) {
       const p = q[qi];
-      if (grid[p.row][p.col] === starIndex) reachedAssigned++;
+      if (this.grid[p.row][p.col] === starIndex) reachedAssigned++;
       for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nr = p.row + d[0], nc = p.col + d[1];
         const key = nr + ',' + nc;
         if (!this._inside(nr, nc) || seen.has(key)) continue;
-        if (grid[nr][nc] !== starIndex && !this._canAssignPair(grid, nr, nc, starIndex)) continue;
+        if (this.grid[nr][nc] !== starIndex && !this._canAssignPair(nr, nc, starIndex)) continue;
         seen.add(key);
         q.push({ row: nr, col: nc });
       }
@@ -1021,12 +1047,12 @@ class GalaxiesSolver {
     return reachedAssigned === assigned;
   }
 
-  _connected(grid, starIndex) {
+  _connected(starIndex) {
     let total = 0;
     let start = null;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (grid[r][c] !== starIndex) continue;
+        if (this.grid[r][c] !== starIndex) continue;
         total++;
         if (!start) start = { row: r, col: c };
       }
@@ -1039,7 +1065,7 @@ class GalaxiesSolver {
       for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nr = p.row + d[0], nc = p.col + d[1];
         const key = nr + ',' + nc;
-        if (!this._inside(nr, nc) || seen.has(key) || grid[nr][nc] !== starIndex) continue;
+        if (!this._inside(nr, nc) || seen.has(key) || this.grid[nr][nc] !== starIndex) continue;
         seen.add(key);
         q.push({ row: nr, col: nc });
       }
