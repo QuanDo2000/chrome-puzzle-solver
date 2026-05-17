@@ -1998,8 +1998,9 @@ function makeWidget() {
 }
 
 function shouldShowWidget() {
-  const handler = getActiveHandler();
-  return handler && handler !== genericHandler;
+  // genericHandler was removed (was never registered); any active handler
+  // matching the current page now qualifies.
+  return !!getActiveHandler();
 }
 
 if (document.readyState === 'loading') {
