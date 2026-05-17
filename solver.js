@@ -23,8 +23,6 @@ class NonogramSolver {
 
   _idx(r, c) { return r * this.cols + c; }
 
-  _get(r, c) { return this.gridBuf[r * this.cols + c]; }
-
   // Direct write, no trail. Use only outside backtracking (initial state).
   _set(r, c, v) {
     this.gridBuf[r * this.cols + c] = v;
@@ -70,7 +68,9 @@ class NonogramSolver {
     this.startedAt = Date.now();
     this.timedOut = false;
 
-    this.propagate();
+    if (!this.propagate()) {
+      return { solved: false, grid: null, error: 'contradiction on initial propagation' };
+    }
     this.rememberPartial(this.grid);
     if (this.isComplete()) return { solved: true, grid: this.grid };
 
