@@ -33,7 +33,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["solver.js", "solver.worker.js", "handler.js"],
+      "resources": ["solver.js", "solver.worker.js"],
       "matches": ["https://www.puzzles-mobile.com/*"]
     }
   ]
