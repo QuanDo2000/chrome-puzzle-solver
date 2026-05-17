@@ -1,4 +1,24 @@
+/**
+ * Solver result envelope. Cell value conventions are solver-specific:
+ *   NonogramSolver: 1 = filled, -1 = empty, 0 = unknown
+ *   AquariumSolver: 1 = water,  -1 = dry,   0 = unknown
+ *   GalaxiesSolver: cell value = (star index + 1), 0 = unassigned (unsolved
+ *     only). The grid array also has a `.galaxies` property: lines between
+ *     adjacent cells that belong to different stars.
+ *
+ * @typedef {Object} SolveResult
+ * @property {boolean} solved
+ * @property {number[][] | null} [grid]
+ * @property {string} [error]
+ * @property {number[][]} [partialGrid]
+ * @property {number} [partialFilled]
+ */
+
 class NonogramSolver {
+  /**
+   * @param {number[][]} rowClues  Per-row block-length lists, top-to-bottom.
+   * @param {number[][]} colClues  Per-column block-length lists, left-to-right.
+   */
   constructor(rowClues, colClues) {
     this.rowClues = rowClues.map(r => r.filter(n => n > 0));
     this.colClues = colClues.map(c => c.filter(n => n > 0));
@@ -54,6 +74,10 @@ class NonogramSolver {
     }
   }
 
+  /**
+   * @param {number[][] | null} initialGrid  Optional partial state (1/-1/0).
+   * @returns {SolveResult}
+   */
   solve(initialGrid) {
     this.trail.length = 0;
     if (initialGrid) {
@@ -410,7 +434,21 @@ class NonogramSolver {
   }
 }
 
+/**
+ * @typedef {Object} Star  Galaxy center in doubled coordinates: rows
+ *   0..2R-2, cols 0..2C-2. Even/even = cell center; odd row = between two
+ *   vertically-adjacent cells; odd col = between two horizontally-adjacent;
+ *   odd/odd = at a four-cell corner.
+ * @property {number} row
+ * @property {number} col
+ */
+
 class GalaxiesSolver {
+  /**
+   * @param {Star[] | null | undefined} stars
+   * @param {number} rows
+   * @param {number} cols
+   */
   constructor(stars, rows, cols) {
     this.stars = stars || [];
     this.rows = rows;
@@ -427,6 +465,11 @@ class GalaxiesSolver {
     this.maxDeadCache = rows * cols >= 900 ? 0 : 200000;
     this.staticCandidates = [];
     this.forbiddenPartials = [];
+    this.frontier = [];
+    // TODO: the _pushFrontier/_frontierOutput resume mechanism is currently a
+    // no-op because maxFrontier is 0 — set to a positive value (matching
+    // NonogramSolver's `rows*cols >= 900 ? 80 : 0`) to actually engage it.
+    this.maxFrontier = 0;
     // owner: Map<flatIndex, starIndex|-1>. Flat index = row * cols + col,
     // not a "r,c" string key, so lookups in _canUseCell don't allocate.
     this.owner = new Map();
@@ -444,6 +487,11 @@ class GalaxiesSolver {
   static _solutionCache = new Map();
   static _maxSolutionCache = 30;
 
+  /**
+   * @param {number[][] | null} initialGrid  Optional partial state ((star+1)/0).
+   * @param {{ frontierGrids?: number[][][], forbiddenPartials?: any[] }} [options]
+   * @returns {SolveResult & { frontierGrids?: number[][][], failedPartialGrid?: number[][] | null }}
+   */
   solve(initialGrid, options = {}) {
     if (!this.rows || !this.cols || !this.stars.length) {
       return { solved: false, grid: null, error: 'No Galaxies task data found' };
@@ -560,7 +608,7 @@ class GalaxiesSolver {
       shapesByStar[i] = shapes;
       for (const shape of shapes) {
         shape.id = shapeId++;
-        shape.star = i;
+        // shape.star already set to starIndex (== i) by _enumerateGalaxyShapes.
         for (const cell of shape.cells) cellToShapes[cell].push(shape);
       }
     }
@@ -663,7 +711,7 @@ class GalaxiesSolver {
     while (stack.length && shapes.length < maxShapes) {
       if (Date.now() - started > maxMs) break;
       const shape = stack.pop();
-      if (this._shapeConnected(shape)) shapes.push({ cells: Array.from(shape) });
+      if (this._shapeConnected(shape)) shapes.push({ cells: Array.from(shape), star: starIndex, id: 0 });
       if (shape.size >= maxCells) continue;
 
       const frontier = this._shapeFrontier(shape, starIndex);
@@ -1178,6 +1226,16 @@ class GalaxiesSolver {
 }
 
 class AquariumSolver {
+  /**
+   * @param {number[]} rowClues  Water count per row, top-to-bottom.
+   * @param {number[]} colClues  Water count per column, left-to-right.
+   * @param {number[][]} regionMap  rows × cols matrix of region IDs. Each
+   *   region is one connected aquarium; water within it obeys gravity (if
+   *   any cell at row r is water, every cell at row >= r in that region is
+   *   too).
+   * @param {number} rows
+   * @param {number} cols
+   */
   constructor(rowClues, colClues, regionMap, rows, cols) {
     this.rows = rows;
     this.cols = cols;
@@ -1254,6 +1312,10 @@ class AquariumSolver {
     this._bestPartialFilled = 0;
   }
 
+  /**
+   * @param {number[][] | null} initialGrid  Optional partial state (1/-1/0).
+   * @returns {SolveResult}
+   */
   solve(initialGrid) {
     this._searchNodes = 0;
     this._deadCache.clear();
@@ -1660,7 +1722,7 @@ class AquariumSolver {
       // getPair(lvl): returns [c1, c2]
       // ranges: [mn, mx] to update
       const n = vars.length;
-      if (n === 0) return true;
+      if (n === 0) return { ok: true, changed: false };
       const cacheKey = cachePrefix + ':' + pairClue1 + ',' + pairClue2 + ':' + vars.map((v, i) => {
         const d = ranges[i];
         return v.id + '=' + d.mn + '-' + d.mx;
