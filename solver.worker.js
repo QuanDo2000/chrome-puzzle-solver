@@ -11,7 +11,6 @@ self.onmessage = function (e) {
       const s = new GalaxiesSolver(extraData.stars, extraData.rows, extraData.cols);
       result = s.solve(extraData.partialGrid || null, {
         forbiddenPartials: extraData.failedPartials || [],
-        frontierGrids: extraData.frontierGrids || [],
       });
     } else if (type === 'aquarium' && extraData) {
       const s = new AquariumSolver(
@@ -27,7 +26,15 @@ self.onmessage = function (e) {
       result = s.solve(initialGrid || null);
     }
   } catch (err) {
-    result = { solved: false, grid: null, error: err && err.message ? err.message : String(err) };
+    // Preserve stack so content.js can console.error it. Plain Error objects
+    // don't survive structured cloning intact; copy the fields we need.
+    result = {
+      solved: false,
+      grid: null,
+      error: (err && err.message) ? err.message : String(err),
+      stack: err && err.stack ? String(err.stack) : undefined,
+      errorName: err && err.name ? err.name : undefined,
+    };
   }
   self.postMessage({ id, result });
 };

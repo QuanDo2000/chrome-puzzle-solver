@@ -153,11 +153,19 @@ function getSolverWorker() {
       const pending = solverPending.get(id);
       if (!pending) return;
       solverPending.delete(id);
+      if (result && result.stack) {
+        console.error(`[puzzle-solver] worker reported ${result.errorName || 'error'}: ${result.error}\n${result.stack}`);
+      }
       pending.resolve(result);
     };
     w.onerror = (err) => {
+      // ErrorEvent carries filename/lineno/colno but not a JS stack — log the
+      // whole event so DevTools shows the trace, and surface a useful summary.
+      console.error('[puzzle-solver] worker onerror:', err);
+      const where = err.filename ? ` (${err.filename}:${err.lineno}:${err.colno})` : '';
+      const summary = (err.message || 'worker error') + where;
       for (const pending of solverPending.values()) {
-        pending.resolve({ solved: false, grid: null, error: err.message || 'worker error' });
+        pending.resolve({ solved: false, grid: null, error: summary });
       }
       solverPending.clear();
       try { w.terminate(); } catch (_) {}
@@ -182,8 +190,9 @@ function runSolve(rowClues, colClues, initialGrid, solverType, extraData) {
         id, type: solverType, rowClues, colClues, initialGrid, extraData,
       }))
       .catch((e) => {
+        console.error('[puzzle-solver] worker init/post failed:', e);
         solverPending.delete(id);
-        resolve({ solved: false, grid: null, error: e.message || String(e) });
+        resolve({ solved: false, grid: null, error: (e && e.message) || String(e) });
       });
   });
 }
