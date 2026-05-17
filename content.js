@@ -264,30 +264,6 @@ function getGalaxiesHint(grid, stars) {
   const transitiveHints = findTransitiveHints(components, grid, stars);
   if (transitiveHints) return makeHint(transitiveHints);
 
-  const log = {
-    board: `${rows}x${cols}`,
-    stars: stars.length,
-    starPositions: stars.map((s, i) => `${i}:(r${s.row},c${s.col})`),
-    components: Array.from(components.entries()).map(([id, c]) => ({
-      id, size: c.cells.length,
-      possible: [...c.possibleNodes],
-      seeds: [...c.seedNodes]
-    })),
-    componentCount: components.size,
-    certain: (() => {
-      const c = new Array(stars.length).fill(0);
-      for (const [, comp] of components) if (comp.possibleNodes.size === 1) c[comp.possibleNodes.values().next().value] += comp.cells.length;
-      return c;
-    })(),
-    maxTarget: Math.ceil((rows * cols) / stars.length),
-    drawnBoundaries: stats.drawn,
-    candidateStats: stats,
-    totalCandidates: candidates.length,
-    transitiveHints: transitiveHints ? transitiveHints.length : 0,
-    undrawnCheckCount: stats.total
-  };
-  console.log('GALAXIES HINT: no hint found', JSON.stringify(log));
-
   return null;
 }
 
@@ -1160,6 +1136,26 @@ function makeWidget() {
     q('[data-action="hint"]').textContent = text;
   }
 
+  // Reset the "pending hint" UI state in one call: clear the cached hint,
+  // restore the button label, and disable Apply Hint. Replaces the three-line
+  // pattern that used to appear scattered through the handlers (sometimes with
+  // accidental duplication).
+  function clearPendingHint() {
+    if (puzzleData) puzzleData.pendingHint = null;
+    setHintLabel('Hint');
+    q('[data-action="applyHint"]').disabled = true;
+  }
+
+  // Human-readable description of a Galaxies hint's boundary line(s).
+  function galaxiesHintLineDesc(h) {
+    const lines = h.lineHints || [h];
+    if (lines.length !== 1) return `${lines.length} boundary lines`;
+    const l = lines[0];
+    return l.orientation === 'horizontal'
+      ? `horizontal boundary below row ${l.row}, column ${l.col + 1}`
+      : `vertical boundary at row ${l.row + 1}, after column ${l.col}`;
+  }
+
   function hintStatusText(h) {
     const label = h.type === 'row' ? 'Row' : 'Column';
     const clueStr = h.clue.join(', ');
@@ -1518,7 +1514,6 @@ function makeWidget() {
       return;
     }
     puzzleData = result;
-    puzzleData.pendingHint = null;
     confirming = false;
     loopConfirming = false;
     looping = false;
@@ -1527,8 +1522,7 @@ function makeWidget() {
     q('[data-action="loop"]').disabled = false;
     loopBtn.textContent = 'Loop';
     q('[data-action="hint"]').disabled = false;
-    setHintLabel('Hint');
-    q('[data-action="applyHint"]').disabled = true;
+    clearPendingHint();
 
     const stateResult = await readGridState();
     const label = (result.type || 'puzzle').charAt(0).toUpperCase() + (result.type || 'puzzle').slice(1);
@@ -1566,10 +1560,7 @@ function makeWidget() {
 
     if (puzzleData.solution) {
       loopConfirming = false;
-      setHintLabel('Hint');
-      puzzleData.pendingHint = null;
-      setHintLabel('Hint');
-      q('[data-action="applyHint"]').disabled = true;
+      clearPendingHint();
       solveBtn.textContent = 'Confirm';
       confirming = true;
       setStatus('Preview ready.', 'info');
@@ -1588,7 +1579,7 @@ function makeWidget() {
       const retry = await runSolve(puzzleData.rowClues, puzzleData.colClues, stateResult?.success ? stateResult.grid : null,
         puzzleData.type, solveExtraData());
       if (retry?.solved) {
-        retryResultToPuzzle(retry);
+        applySolveResult(retry);
         return;
       }
       setStatus(`Solve failed${retry?.error ? ': ' + retry.error : ''}`, 'error');
@@ -1608,35 +1599,20 @@ function makeWidget() {
       setStatus(`Solve failed${result?.error ? ': ' + result.error : ''}`, 'error');
       return;
     }
-    loopConfirming = false;
-    setHintLabel('Hint');
-    setHintLabel('Hint');
-    q('[data-action="applyHint"]').disabled = true;
-    puzzleData.solution = result.grid;
-    cacheGalaxiesSolution(puzzleData, result.grid);
-    clearPartial(puzzleData);
-    clearFailedGalaxiesPartials(puzzleData);
-    clearGalaxiesFrontier(puzzleData);
-    puzzleData.pendingHint = null;
-    setHintLabel('Hint');
-    q('[data-action="applyHint"]').disabled = true;
-    solveBtn.textContent = 'Confirm';
-    confirming = true;
-    setStatus('Preview ready.', 'info');
-    drawPreview(result.grid);
+    applySolveResult(result);
   }
 
-  function retryResultToPuzzle(result) {
+  // Move from "solving" into "ready to apply": cache the solution, clear
+  // outstanding partial/frontier state, and put the widget into confirm mode
+  // showing a preview. Used by both the fresh-solve and the retry path.
+  function applySolveResult(result) {
     loopConfirming = false;
-    setHintLabel('Hint');
     puzzleData.solution = result.grid;
     cacheGalaxiesSolution(puzzleData, result.grid);
     clearPartial(puzzleData);
     clearFailedGalaxiesPartials(puzzleData);
     clearGalaxiesFrontier(puzzleData);
-    puzzleData.pendingHint = null;
-    setHintLabel('Hint');
-    q('[data-action="applyHint"]').disabled = true;
+    clearPendingHint();
     solveBtn.textContent = 'Confirm';
     confirming = true;
     setStatus('Preview ready.', 'info');
@@ -1700,12 +1676,7 @@ function makeWidget() {
 
         steps++;
         if (h.type === 'galaxies') {
-          const lines = h.lineHints || [h];
-          const line = lines.length === 1
-            ? (lines[0].orientation === 'horizontal'
-              ? `horizontal boundary below row ${lines[0].row}, column ${lines[0].col + 1}`
-              : `vertical boundary at row ${lines[0].row + 1}, after column ${lines[0].col}`)
-            : `${lines.length} boundary lines`;
+          const line = galaxiesHintLineDesc(h);
           setStatusHtml(`Step ${steps}: Draw the <b>${line}</b>.`, 'info');
         } else {
           const st = hintStatusText(h);
@@ -1768,12 +1739,7 @@ function makeWidget() {
 
     if (h.type === 'galaxies') {
       if (hintResult.solution) puzzleData.solution = hintResult.solution;
-      const lines = h.lineHints || [h];
-      const line = lines.length === 1
-        ? (lines[0].orientation === 'horizontal'
-          ? `horizontal boundary below row ${lines[0].row}, column ${lines[0].col + 1}`
-          : `vertical boundary at row ${lines[0].row + 1}, after column ${lines[0].col}`)
-        : `${lines.length} boundary lines`;
+      const line = galaxiesHintLineDesc(h);
       setStatusHtml(`Draw the <b>${line}</b>.`, 'info');
       if (hintResult.grid) drawPreview(hintResult.grid, h);
     } else {
@@ -1805,12 +1771,7 @@ function makeWidget() {
       if (result.solution) puzzleData.solution = result.solution;
       puzzleData.pendingHint = h;
       q('[data-action="applyHint"]').disabled = false;
-      const lines = h.lineHints || [h];
-      const line = lines.length === 1
-        ? (lines[0].orientation === 'horizontal'
-          ? `horizontal boundary below row ${lines[0].row}, column ${lines[0].col + 1}`
-          : `vertical boundary at row ${lines[0].row + 1}, after column ${lines[0].col}`)
-        : `${lines.length} boundary lines`;
+      const line = galaxiesHintLineDesc(h);
       setStatusHtml(`Draw the <b>${line}</b>.`, 'info');
       if (result.grid) drawPreview(result.grid, h);
       return;
@@ -1910,20 +1871,13 @@ function makeWidget() {
         if (!puzzleData.pendingHint) return;
         const hintResult = await getHint({ solution: puzzleData.solution });
         if (!hintResult?.success) {
-          puzzleData.pendingHint = null;
-          setHintLabel('Hint');
-          q('[data-action="applyHint"]').disabled = true;
+          clearPendingHint();
           return;
         }
         const h = hintResult.hint;
         puzzleData.pendingHint = h;
         if (h.type === 'galaxies') {
-          const lines = h.lineHints || [h];
-          const line = lines.length === 1
-            ? (lines[0].orientation === 'horizontal'
-              ? `horizontal boundary below row ${lines[0].row}, column ${lines[0].col + 1}`
-              : `vertical boundary at row ${lines[0].row + 1}, after column ${lines[0].col}`)
-            : `${lines.length} boundary lines`;
+          const line = galaxiesHintLineDesc(h);
           q('[data-action="applyHint"]').disabled = false;
           setStatusHtml(`Draw the <b>${line}</b>.`, 'info');
           drawPreview(state.grid, h);
@@ -1955,9 +1909,7 @@ function makeWidget() {
     setStatus('Undoing...', 'info');
     const result = await handleUndo();
     if (result?.success) {
-      puzzleData.pendingHint = null;
-      setHintLabel('Hint');
-      q('[data-action="applyHint"]').disabled = true;
+      clearPendingHint();
       if (result.grid) drawPreview(result.grid);
       updateUndoRedoButtons();
       setStatus('Undone.', 'success');
@@ -1971,9 +1923,7 @@ function makeWidget() {
     setStatus('Redoing...', 'info');
     const result = await handleRedo();
     if (result?.success) {
-      puzzleData.pendingHint = null;
-      setHintLabel('Hint');
-      q('[data-action="applyHint"]').disabled = true;
+      clearPendingHint();
       if (result.grid) drawPreview(result.grid);
       updateUndoRedoButtons();
       setStatus('Redone.', 'success');

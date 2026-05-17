@@ -1246,17 +1246,12 @@ class AquariumSolver {
     this._propagate();
     this._rememberPartial();
 
-    const unassigned1 = this.aquariums.filter(a => this.waterLevel[a.id] < 0).length;
-    console.log('[AquariumSolver] init: rows=' + this.rows + ' cols=' + this.cols +
-      ' aquariums=' + this.aquariums.length + ' unassigned=' + unassigned1);
-
     if (this._allAssigned()) { this._buildGrid(); return { solved: true, grid: this.grid }; }
 
     this._dpPreprocess();
     this._dpPairwise();
     if (!this._propagate()) {
       // DP may have partially modified ranges — restore to pre-DP state
-      console.log('[AquariumSolver] DP caused inconsistency, restoring state');
       this._deadCache.clear();
       this._dpCache.clear();
       this._nogoods = [];
@@ -1266,10 +1261,6 @@ class AquariumSolver {
       this._propagate();
     }
     this._rememberPartial();
-
-    const unassigned2 = this.aquariums.filter(a => this.waterLevel[a.id] < 0).length;
-    console.log('[AquariumSolver] after DP: unassigned=' + unassigned2 +
-      ' maxLvl=' + this.aquariums.map(a => a.maxLvl).join(','));
 
     if (this._allAssigned()) { this._buildGrid(); return { solved: true, grid: this.grid }; }
 
@@ -1282,12 +1273,6 @@ class AquariumSolver {
 
     const result = this._backtrack();
     if (!result.solved) {
-      console.log('[AquariumSolver] FAILED', JSON.stringify({
-        rows: this.rows, cols: this.cols, aquariums: this.aquariums.length,
-        rowClues: this.rowClues, colClues: this.colClues,
-        searchNodes: this._searchNodes, deadCacheHits: this._deadCacheHits,
-        nogoodHits: this._nogoodHits, error: result.error
-      }));
       return this._withPartial(result);
     }
     this._buildGrid();

@@ -84,35 +84,25 @@ function readGameClues() {
       }
 
       if (window.Game.currentState) {
+        // Both Game.currentState.colors and .clues use the same flat layout:
+        // indices [0..width) are column clues, [width..width+height) are row.
+        function splitFlatClues(c) {
+          var cc = [];
+          var rc = [];
+          for (var i = 0; i < width; i++) cc.push(normalizeClueArray(c[i]));
+          for (var i = width; i < width + height; i++) rc.push(normalizeClueArray(c[i]));
+          return { colClues: cc, rowClues: rc, width: width, height: height };
+        }
         var state = window.Game.currentState;
         if (state.colors && Array.isArray(state.colors) && state.colors.length > 0) {
-          var c = state.colors;
-          if (width && height && c.length >= width + height) {
-            var colClues = [];
-            var rowClues = [];
-            for (var i = 0; i < width; i++) {
-              colClues.push(normalizeClueArray(c[i]));
-            }
-            for (var i = width; i < width + height; i++) {
-              rowClues.push(normalizeClueArray(c[i]));
-            }
-            return { colClues: colClues, rowClues: rowClues, width: width, height: height };
+          if (width && height && state.colors.length >= width + height) {
+            return splitFlatClues(state.colors);
           }
-          return { colors: c, width: width, height: height };
+          return { colors: state.colors, width: width, height: height };
         }
-        if (state.clues && Array.isArray(state.clues) && state.clues.length > 0) {
-          var c = state.clues;
-          if (width && height && c.length >= width + height) {
-            var colClues = [];
-            var rowClues = [];
-            for (var i = 0; i < width; i++) {
-              colClues.push(normalizeClueArray(c[i]));
-            }
-            for (var i = width; i < width + height; i++) {
-              rowClues.push(normalizeClueArray(c[i]));
-            }
-            return { colClues: colClues, rowClues: rowClues, width: width, height: height };
-          }
+        if (state.clues && Array.isArray(state.clues) && state.clues.length > 0
+            && width && height && state.clues.length >= width + height) {
+          return splitFlatClues(state.clues);
         }
       }
 

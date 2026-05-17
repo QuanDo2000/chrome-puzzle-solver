@@ -15,13 +15,13 @@
   "content_scripts": [
     {
       "matches": ["https://www.puzzles-mobile.com/*"],
-      "js": ["utils.js", "solver.js", "handler.js", "content.js"],
+      "js": ["solver.js", "handler.js", "content.js"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["solver.js", "solver.worker.js", "utils.js", "handler.js"],
+      "resources": ["solver.js", "solver.worker.js", "handler.js"],
       "matches": ["https://www.puzzles-mobile.com/*"]
     }
   ]
