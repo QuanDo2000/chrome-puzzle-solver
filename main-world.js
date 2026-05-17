@@ -3,6 +3,11 @@
 // worker. They reference `window.Game`, `document`, `localStorage` etc., which
 // don't exist here — the SW only ever forwards them. Loaded into the SW via
 // importScripts so the listener in background.js can resolve them by name.
+//
+// Every top-level function here is invoked reflectively via
+// globalThis[request.funcName] — ESLint can't see those call sites, so
+// disable no-unused-vars for the file rather than annotating each function.
+/* eslint-disable no-unused-vars */
 
 function readGameState(rows, cols) {
   try {

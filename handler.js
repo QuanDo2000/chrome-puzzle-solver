@@ -11,6 +11,9 @@ function registerHandler(h) {
   handlers.sort((a, b) => (b.priority || 0) - (a.priority || 0));
 }
 
+// Used by content.js — content scripts share scope but lint files in
+// isolation, so the cross-file consumer is invisible here.
+// eslint-disable-next-line no-unused-vars
 function getActiveHandler() {
   return handlers.find(h => h.matches()) || null;
 }
@@ -29,7 +32,7 @@ function callMainWorld(funcName, args) {
         funcName: funcName,
         args: args || []
       }, resolve);
-    } catch (e) {
+    } catch {
       resolve(null);
     }
   });
@@ -231,7 +234,7 @@ const aquariumHandler = {
     return state || null;
   },
 
-  async applySolution(solution, ctx) {
+  async applySolution(solution, _ctx) {
     await callMainWorld('applyGameState', [solution]);
     return true;
   },

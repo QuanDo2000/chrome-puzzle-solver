@@ -172,7 +172,7 @@ function getSolverWorker() {
         pending.resolve({ solved: false, grid: null, error: summary });
       }
       solverPending.clear();
-      try { w.terminate(); } catch (_) {}
+      try { w.terminate(); } catch {}
       solverWorker = null;
       solverWorkerInit = null;
     };
@@ -625,7 +625,6 @@ function findEmptyCompHints(components, grid, stars, reachable) {
     if (tried.has(tKey)) return;
     tried.add(tKey);
     const aCell = orientation === 'horizontal' ? { row: row - 1, col } : { row, col: col - 1 };
-    const bCell = orientation === 'horizontal' ? { row, col } : { row, col: col };
     const sideA = bfsComponentSide(aCell.row, aCell.col, orientation, row, col, grid, current);
     if (sideA.size === comp.cells.length || sideA.size === 0) return;
     const compSet = compCellSets.get(comp.id);
@@ -807,14 +806,6 @@ function getCachedGalaxiesPartial(data) {
   return getCachedPartial(data);
 }
 
-function cacheGalaxiesPartial(data, grid, filled) {
-  cachePartial(data, grid, filled);
-}
-
-function clearGalaxiesPartial(data) {
-  clearPartial(data);
-}
-
 function getFailedGalaxiesPartials(data) {
   const key = galaxiesFailedKey(data);
   if (!key) return [];
@@ -945,7 +936,7 @@ async function getHint(request = {}) {
   }
 }
 
-async function clickCell(row, col, state) {
+async function clickCell(row, col, _state) {
   if (!detectedGrid) {
     await detectPuzzle();
   }
@@ -1146,7 +1137,6 @@ function makeWidget() {
   const root = shadow.querySelector('#ns-widget');
 
   function q(sel) { return shadow.querySelector(sel); }
-  function qa(sel) { return shadow.querySelectorAll(sel); }
 
   const statusEl = q('#ns-status');
   const canvas = q('#ns-canvas');
@@ -1630,7 +1620,7 @@ function makeWidget() {
         applySolveResult(retry);
         return;
       }
-      setStatus(`Solve failed${retry?.error ? ': ' + retry.error : ''}`, 'error');
+      setStatus(formatSolveError(retry), 'error');
       return;
     }
     if (!result || !result.solved) {
@@ -1642,7 +1632,7 @@ function makeWidget() {
         }
         clearPartial(puzzleData);
       }
-      setStatus(`Solve failed${result?.error ? ': ' + result.error : ''}`, 'error');
+      setStatus(formatSolveError(result), 'error');
       return;
     }
     applySolveResult(result);
@@ -1764,7 +1754,7 @@ function makeWidget() {
       const result = await runSolve(puzzleData.rowClues, puzzleData.colClues, initialGrid,
         puzzleData.type, solveExtraData());
       if (!result?.solved) {
-        setStatus(`Solve failed${result?.error ? ': ' + result.error : ''}`, 'error');
+        setStatus(formatSolveError(result), 'error');
         return;
       }
       puzzleData.solution = result.grid;
@@ -1988,7 +1978,7 @@ function makeWidget() {
       setStatus(msg, 'error');
       console.warn('[puzzle-solver dump]\n' + JSON.stringify(data, null, 2));
       // Also try to copy the diagnostic so the user can paste it back.
-      try { await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); } catch (_) {}
+      try { await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); } catch {}
       return;
     }
     const json = JSON.stringify(data, null, 2);
@@ -1996,7 +1986,7 @@ function makeWidget() {
     try {
       await navigator.clipboard.writeText(json);
       setStatus(`Dumped ${data.type} ${data.rows}×${data.cols} to clipboard.`, 'success');
-    } catch (e) {
+    } catch {
       setStatus(`Dumped ${data.type} ${data.rows}×${data.cols} to console (clipboard blocked).`, 'info');
     }
   }
