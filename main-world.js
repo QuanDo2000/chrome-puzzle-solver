@@ -317,6 +317,29 @@ function readGalaxiesState(rows, cols) {
 }
 
 async function applyGalaxiesState(lines) {
+  // Nested because this function is serialized via fn.toString() into the page
+  // MAIN world — closure to outer-scope helpers is lost in transit.
+  function syncTimer() {
+    try {
+      if (!window.Game) return;
+      var now = new Date().getTime();
+      var elapsed = null;
+      if (typeof window.startTime === 'number' && window.startTime > 0) {
+        elapsed = Math.max(0, now - window.startTime);
+      } else if (typeof window.Game.tickTimer === 'function' && typeof window.Game.getTimer === 'function') {
+        window.Game.tickTimer();
+        elapsed = window.Game.getTimer();
+      }
+      if (typeof elapsed !== 'number' || !isFinite(elapsed)) return;
+      window.Game.accumulated = elapsed;
+      window.Game.lastTrackedTime = now;
+      if (typeof window.Game.getSaveIdent === 'function') {
+        localStorage.setItem('timer-' + window.Game.getSaveIdent(), elapsed);
+      }
+    } catch (e) {
+      console.warn('Timer sync failed:', e);
+    }
+  }
   try {
     if (!window.Game || !window.Game.currentState || !lines) return;
     var hs = window.Game.currentState.cellHorizontalStatus;
@@ -338,7 +361,7 @@ async function applyGalaxiesState(lines) {
     else if (typeof window.Game.render === 'function') window.Game.render();
     if (lines.check !== false && typeof window.Game.check === 'function') {
       await new Promise(function(resolve) { setTimeout(resolve, 0); });
-      syncGameTimerForCheck();
+      syncTimer();
       window.Game.solved = false;
       window.Game.currentState.solved = false;
       await window.Game.check(false, true);
@@ -349,6 +372,29 @@ async function applyGalaxiesState(lines) {
 }
 
 function applyGameState(solution) {
+  // Nested because this function is serialized via fn.toString() into the page
+  // MAIN world — closure to outer-scope helpers is lost in transit.
+  function syncTimer() {
+    try {
+      if (!window.Game) return;
+      var now = new Date().getTime();
+      var elapsed = null;
+      if (typeof window.startTime === 'number' && window.startTime > 0) {
+        elapsed = Math.max(0, now - window.startTime);
+      } else if (typeof window.Game.tickTimer === 'function' && typeof window.Game.getTimer === 'function') {
+        window.Game.tickTimer();
+        elapsed = window.Game.getTimer();
+      }
+      if (typeof elapsed !== 'number' || !isFinite(elapsed)) return;
+      window.Game.accumulated = elapsed;
+      window.Game.lastTrackedTime = now;
+      if (typeof window.Game.getSaveIdent === 'function') {
+        localStorage.setItem('timer-' + window.Game.getSaveIdent(), elapsed);
+      }
+    } catch (e) {
+      console.warn('Timer sync failed:', e);
+    }
+  }
   try {
     var rows = solution.length;
     var cols = solution[0].length;
@@ -385,7 +431,7 @@ function applyGameState(solution) {
         if (hasUnknown) break;
       }
       if (!hasUnknown && typeof window.Game.check === 'function') {
-        syncGameTimerForCheck();
+        syncTimer();
         window.Game.solved = false;
         window.Game.currentState.solved = false;
         window.Game.check(false, true);
@@ -409,32 +455,6 @@ function applyHintCells(hintCells) {
     if (typeof window.Game.render === 'function') window.Game.render();
   } catch (e) {
     console.warn('Hint apply failed:', e);
-  }
-}
-
-function syncGameTimerForCheck() {
-  try {
-    if (!window.Game) return;
-    var now = new Date().getTime();
-    var elapsed = null;
-
-    if (typeof window.startTime === 'number' && window.startTime > 0) {
-      elapsed = Math.max(0, now - window.startTime);
-    } else if (typeof window.Game.tickTimer === 'function' && typeof window.Game.getTimer === 'function') {
-      window.Game.tickTimer();
-      elapsed = window.Game.getTimer();
-    }
-
-    if (typeof elapsed !== 'number' || !isFinite(elapsed)) return;
-
-    window.Game.accumulated = elapsed;
-    window.Game.lastTrackedTime = now;
-
-    if (typeof window.Game.getSaveIdent === 'function') {
-      localStorage.setItem('timer-' + window.Game.getSaveIdent(), elapsed);
-    }
-  } catch (e) {
-    console.warn('Timer sync failed:', e);
   }
 }
 
