@@ -832,20 +832,23 @@ class GalaxiesSolver {
 
 
   // Trailed write to a single cell. Returns true iff a write happened.
-  // Trail entry format: [row, col, oldValue].
+  // Trail is a flat array of 3-int groups: ..., row, col, oldValue.
+  // Pushing 3 ints avoids the per-write tuple allocation of `push([r,c,old])`.
   _assign(row, col, value) {
     const old = this.grid[row][col];
     if (old === value) return false;
-    this.trail.push([row, col, old]);
+    this.trail.push(row, col, old);
     this.grid[row][col] = value;
     return true;
   }
 
-  // Roll the trail back to `mark`, restoring each cell to its previous value.
+  // Roll the trail back to `mark` (a previously-captured `this.trail.length`).
   _rollback(mark) {
     const t = this.trail;
     while (t.length > mark) {
-      const [r, c, old] = t.pop();
+      const old = t.pop();
+      const c = t.pop();
+      const r = t.pop();
       this.grid[r][c] = old;
     }
   }

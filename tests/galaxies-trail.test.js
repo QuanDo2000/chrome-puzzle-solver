@@ -19,7 +19,8 @@ test('_assign records old value and _rollback restores it', () => {
   assert.equal(s._assign(1, 1, 0), true);
   assert.equal(s.grid[0][0], 2);
   assert.equal(s.grid[1][1], 0);
-  assert.equal(s.trail.length, 2);
+  // Trail is flat: 3 ints per assignment (row, col, oldValue).
+  assert.equal(s.trail.length, 6);
   s._rollback(mark);
   assert.equal(s.grid[0][0], -1);
   assert.equal(s.grid[1][1], -1);
@@ -68,9 +69,11 @@ test('solve drains its own search trail (search returns with grid solved)', () =
   // assignments stay on it (no rollback when search returns success). The
   // invariant we DO care about: trail length didn't blow up beyond the grid
   // size (which would indicate runaway pushing without rollback).
+  // Each filled cell contributed 3 ints to the flat trail; cellCount*3 is a
+  // generous upper bound (we don't expect the trail to grow past total cells).
   const cellCount = p.rows * p.cols;
-  assert.ok(s.trail.length <= cellCount * 2,
-    `trail length ${s.trail.length} exceeds 2× cell count ${cellCount * 2}`);
+  assert.ok(s.trail.length <= cellCount * 3 * 2,
+    `trail length ${s.trail.length} exceeds bound ${cellCount * 6}`);
   assert.ok(s.trail.length > trailBefore,
     'trail should have grown from at least the seed assignments');
 });
