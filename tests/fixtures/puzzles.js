@@ -27,12 +27,14 @@ module.exports = {
     cols: 2,
   },
 
-  // 4x4 galaxies with two stars centered on cell (0,0) and cell (3,3).
-  // GalaxiesSolver uses "doubled" star coords: cell center = (2r+1, 2c+1).
+  // 4x4 galaxies with two stars. Doubled-coord grid is (2*4-1) x (2*4-1) = 7x7,
+  // so star coords range 0..6. Odd coord = between cells, even = cell center.
+  // Stars at (1,3) and (5,3) sit between top two rows and between bottom two
+  // rows respectively, partitioning the grid into 2 galaxies of 8 cells each.
   galaxiesTiny: {
     stars: [
-      { row: 1, col: 1 },   // center of cell (0, 0)
-      { row: 7, col: 7 },   // center of cell (3, 3)
+      { row: 1, col: 3 },   // between rows 0-1, between cols 1-2
+      { row: 5, col: 3 },   // between rows 2-3, between cols 1-2
     ],
     rows: 4,
     cols: 4,
