@@ -5,6 +5,12 @@ let undoStack = [];
 let redoStack = [];
 const MAX_UNDO = 50;
 
+// Serializes apply / undo / redo so concurrent invocations (e.g. user clicks
+// Undo while the solver is mid-apply) can't interleave their grid reads with
+// each other's grid writes. Each operation sets this to its name on entry and
+// clears it on exit (try/finally). Other operations bail with a clear error.
+let mutatingOp = null;
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.action) {
     case 'detect':
@@ -75,25 +81,36 @@ async function readGridState() {
 }
 
 async function applySolution(solution, skipUndo = false) {
-  if (!detectedGrid) {
-    const d = await detectPuzzle();
-    if (!d.found) return { success: false, error: 'No puzzle detected' };
+  if (mutatingOp) {
+    return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
   }
-  if (!skipUndo) {
-    const currentState = await readGridState();
-    if (currentState?.success) {
-      undoStack.push(currentState.grid);
-      if (undoStack.length > MAX_UNDO) undoStack.shift();
-      redoStack = [];
+  mutatingOp = 'apply';
+  try {
+    if (!detectedGrid) {
+      const d = await detectPuzzle();
+      if (!d.found) return { success: false, error: 'No puzzle detected' };
     }
+    if (!skipUndo) {
+      const currentState = await readGridState();
+      if (currentState?.success) {
+        undoStack.push(currentState.grid);
+        if (undoStack.length > MAX_UNDO) undoStack.shift();
+        redoStack = [];
+      }
+    }
+    const handler = getHandler();
+    if (handler) {
+      suppressStateWatch = true;
+      try {
+        await handler.applySolution(solution, detectedGrid);
+      } finally {
+        suppressStateWatch = false;
+      }
+    }
+    return { success: true };
+  } finally {
+    mutatingOp = null;
   }
-  const handler = getHandler();
-  if (handler) {
-    suppressStateWatch = true;
-    await handler.applySolution(solution, detectedGrid);
-    suppressStateWatch = false;
-  }
-  return { success: true };
 }
 
 let solverWorker = null;
@@ -962,23 +979,43 @@ async function clickCell(row, col, state) {
 }
 
 async function handleUndo() {
+  if (mutatingOp) {
+    return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
+  }
   if (undoStack.length === 0) return { success: false, error: 'Nothing to undo' };
-  const currentState = await readGridState();
-  if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
-  redoStack.push(currentState.grid);
-  const prevState = undoStack.pop();
-  await applySolution(prevState, true);
-  return { success: true, grid: prevState, undoCount: undoStack.length, redoCount: redoStack.length };
+  mutatingOp = 'undo';
+  try {
+    const currentState = await readGridState();
+    if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
+    redoStack.push(currentState.grid);
+    const prevState = undoStack.pop();
+    // applySolution would refuse because mutatingOp is set — release the flag
+    // around the nested apply so the inner critical section can run.
+    mutatingOp = null;
+    await applySolution(prevState, true);
+    return { success: true, grid: prevState, undoCount: undoStack.length, redoCount: redoStack.length };
+  } finally {
+    mutatingOp = null;
+  }
 }
 
 async function handleRedo() {
+  if (mutatingOp) {
+    return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
+  }
   if (redoStack.length === 0) return { success: false, error: 'Nothing to redo' };
-  const currentState = await readGridState();
-  if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
-  undoStack.push(currentState.grid);
-  const nextState = redoStack.pop();
-  await applySolution(nextState, true);
-  return { success: true, grid: nextState, undoCount: undoStack.length, redoCount: redoStack.length };
+  mutatingOp = 'redo';
+  try {
+    const currentState = await readGridState();
+    if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
+    undoStack.push(currentState.grid);
+    const nextState = redoStack.pop();
+    mutatingOp = null;
+    await applySolution(nextState, true);
+    return { success: true, grid: nextState, undoCount: undoStack.length, redoCount: redoStack.length };
+  } finally {
+    mutatingOp = null;
+  }
 }
 
 // ── Floating widget ──────────────────────────────────────────
@@ -1156,17 +1193,29 @@ function makeWidget() {
       : `vertical boundary at row ${l.row + 1}, after column ${l.col}`;
   }
 
-  function hintStatusText(h) {
+  // Returns an array of DOM nodes / strings describing a row/col nonogram hint,
+  // for use with setStatusNodes(). Replaces the old html-string approach so we
+  // never pass dynamic content through innerHTML.
+  function hintStatusNodes(h) {
     const label = h.type === 'row' ? 'Row' : 'Column';
     const clueStr = h.clue.join(', ');
     const filled = h.cells.filter(c => c.value === 1).map(c => c.index + 1);
     const crossed = h.cells.filter(c => c.value === -1).map(c => c.index + 1);
     const extra = h.extraCells || [];
-    const parts = [];
-    if (filled.length) parts.push('cells <b>' + fmtList(filled) + '</b> must be filled');
-    if (crossed.length) parts.push('cells <b>' + fmtList(crossed) + '</b> must be empty');
-    if (extra.length) parts.push('<b>' + extra.length + '</b> related aquarium cell' + (extra.length === 1 ? '' : 's') + ' can also be filled');
-    return { html: `<b>${label} ${h.index+1}</b> (clue: ${clueStr}): ${parts.join(', ')}`, label, clueStr, filled, crossed, extra, parts };
+
+    const nodes = [bold(`${label} ${h.index + 1}`), ` (clue: ${clueStr}): `];
+    const segments = [];
+    if (filled.length) segments.push(['cells ', bold(fmtList(filled)), ' must be filled']);
+    if (crossed.length) segments.push(['cells ', bold(fmtList(crossed)), ' must be empty']);
+    if (extra.length) {
+      segments.push([bold(String(extra.length)),
+        ' related aquarium cell' + (extra.length === 1 ? '' : 's') + ' can also be filled']);
+    }
+    for (let i = 0; i < segments.length; i++) {
+      if (i > 0) nodes.push(', ');
+      for (const seg of segments[i]) nodes.push(seg);
+    }
+    return nodes;
   }
 
   function setStatus(msg, type) {
@@ -1174,9 +1223,22 @@ function makeWidget() {
     statusEl.className = 'ns-status' + (type ? ' ns-' + type : '');
   }
 
-  function setStatusHtml(html, type) {
-    statusEl.innerHTML = html;
+  // Safer replacement for the old setStatusHtml: appends DOM nodes directly,
+  // never sets innerHTML. Strings become text nodes (HTML chars are not parsed).
+  // Use bold() to wrap text in a <b>; pass arrays to splat-merge.
+  function setStatusNodes(type, ...parts) {
+    while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
+    for (const p of parts) {
+      if (p instanceof Node) statusEl.appendChild(p);
+      else statusEl.appendChild(document.createTextNode(String(p)));
+    }
     statusEl.className = 'ns-status' + (type ? ' ns-' + type : '');
+  }
+
+  function bold(text) {
+    const b = document.createElement('b');
+    b.textContent = text;
+    return b;
   }
 
   // Cached state for drawPreview's incremental rendering.
@@ -1677,10 +1739,9 @@ function makeWidget() {
         steps++;
         if (h.type === 'galaxies') {
           const line = galaxiesHintLineDesc(h);
-          setStatusHtml(`Step ${steps}: Draw the <b>${line}</b>.`, 'info');
+          setStatusNodes('info', `Step ${steps}: Draw the `, bold(line), '.');
         } else {
-          const st = hintStatusText(h);
-          setStatusHtml(`Step ${steps}: ${st.html}`, 'info');
+          setStatusNodes('info', `Step ${steps}: `, ...hintStatusNodes(h));
         }
         const ss = await readGridState();
         if (ss?.success) drawPreview(ss.grid);
@@ -1740,11 +1801,10 @@ function makeWidget() {
     if (h.type === 'galaxies') {
       if (hintResult.solution) puzzleData.solution = hintResult.solution;
       const line = galaxiesHintLineDesc(h);
-      setStatusHtml(`Draw the <b>${line}</b>.`, 'info');
+      setStatusNodes('info', 'Draw the ', bold(line), '.');
       if (hintResult.grid) drawPreview(hintResult.grid, h);
     } else {
-      const st = hintStatusText(h);
-      setStatusHtml(st.html, 'info');
+      setStatusNodes('info', ...hintStatusNodes(h));
       if (hintResult.grid) drawPreview(hintResult.grid, h);
     }
 
@@ -1772,14 +1832,13 @@ function makeWidget() {
       puzzleData.pendingHint = h;
       q('[data-action="applyHint"]').disabled = false;
       const line = galaxiesHintLineDesc(h);
-      setStatusHtml(`Draw the <b>${line}</b>.`, 'info');
+      setStatusNodes('info', 'Draw the ', bold(line), '.');
       if (result.grid) drawPreview(result.grid, h);
       return;
     }
-    const st = hintStatusText(h);
     puzzleData.pendingHint = h;
     q('[data-action="applyHint"]').disabled = false;
-    setStatusHtml(st.html, 'info');
+    setStatusNodes('info', ...hintStatusNodes(h));
     if (result.grid) drawPreview(result.grid, h);
   }
 
@@ -1879,21 +1938,12 @@ function makeWidget() {
         if (h.type === 'galaxies') {
           const line = galaxiesHintLineDesc(h);
           q('[data-action="applyHint"]').disabled = false;
-          setStatusHtml(`Draw the <b>${line}</b>.`, 'info');
+          setStatusNodes('info', 'Draw the ', bold(line), '.');
           drawPreview(state.grid, h);
           return;
         }
-        const label = h.type === 'row' ? 'Row' : 'Column';
-        const clueStr = h.clue.join(', ');
-        const filled = h.cells.filter(c => c.value === 1).map(c => c.index + 1);
-        const crossed = h.cells.filter(c => c.value === -1).map(c => c.index + 1);
-        const extra = h.extraCells || [];
-        const parts = [];
-        if (filled.length) parts.push('cells <b>' + fmtList(filled) + '</b> must be filled');
-        if (crossed.length) parts.push('cells <b>' + fmtList(crossed) + '</b> must be empty');
-        if (extra.length) parts.push('<b>' + extra.length + '</b> related aquarium cell' + (extra.length === 1 ? '' : 's') + ' can also be filled');
         q('[data-action="applyHint"]').disabled = false;
-        setStatusHtml(`<b>${label} ${h.index+1}</b> (clue: ${clueStr}): ${parts.join(', ')}`, 'info');
+        setStatusNodes('info', ...hintStatusNodes(h));
         drawPreview(state.grid, h);
       }, 200);
     });
