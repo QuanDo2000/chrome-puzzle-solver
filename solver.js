@@ -5,6 +5,11 @@ class NonogramSolver {
     this.rows = rowClues.length;
     this.cols = colClues.length;
     this.grid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    // Typed-array mirror of this.grid for fast access and trail-based undo.
+    // Values: 0 = unknown, 1 = filled, -1 = empty (matches this.grid).
+    this.gridBuf = new Int8Array(this.rows * this.cols);
+    // Trail entries: (cellIndex << 2) | (oldValue + 1) — old ∈ {-1,0,1}.
+    this.trail = [];
     this.maxIterations = 1000;
     this.bestPartial = null;
     this.bestPartialFilled = 0;
@@ -14,6 +19,41 @@ class NonogramSolver {
     this.maxMs = this.rows * this.cols >= 900 ? 3000 : 0;
     this.startedAt = 0;
     this.timedOut = false;
+  }
+
+  _idx(r, c) { return r * this.cols + c; }
+
+  _get(r, c) { return this.gridBuf[r * this.cols + c]; }
+
+  // Direct write, no trail. Use only outside backtracking (initial state).
+  _set(r, c, v) {
+    this.gridBuf[r * this.cols + c] = v;
+    this.grid[r][c] = v;
+  }
+
+  // Trailed write — records old value so _rollback can restore. Returns true
+  // iff a write happened.
+  _assign(r, c, v) {
+    const i = r * this.cols + c;
+    const old = this.gridBuf[i];
+    if (old === v) return false;
+    this.trail.push((i << 2) | (old + 1));
+    this.gridBuf[i] = v;
+    this.grid[r][c] = v;
+    return true;
+  }
+
+  // Roll the trail back to `mark`, restoring each cell to its previous value.
+  _rollback(mark) {
+    const t = this.trail;
+    const cols = this.cols;
+    while (t.length > mark) {
+      const entry = t.pop();
+      const old = (entry & 0b11) - 1;
+      const i = entry >>> 2;
+      this.gridBuf[i] = old;
+      this.grid[(i / cols) | 0][i % cols] = old;
+    }
   }
 
   solve(initialGrid) {
