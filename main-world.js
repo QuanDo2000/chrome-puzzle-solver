@@ -569,18 +569,29 @@ function dumpPuzzleForBench() {
     }
 
     function extractDualClueArrays() {
+      // 1. g.task = { columns: [...], rows: [...] }
       if (g.task && Array.isArray(g.task.columns) && Array.isArray(g.task.rows)) {
         return {
           colClues: g.task.columns.slice(0, width).map(normalizeClue),
           rowClues: g.task.rows.slice(0, height).map(normalizeClue),
         };
       }
+      // 2. g.task = flat array of (width + height) entries — columns first,
+      //    then rows. Each entry is a number, string, or array of runs.
+      //    (puzzles-mobile.com aquarium uses this shape.)
+      if (Array.isArray(g.task) && g.task.length >= width + height) {
+        var colClues = [], rowClues = [];
+        for (var i = 0; i < width; i++) colClues.push(normalizeClue(g.task[i]));
+        for (var i = width; i < width + height; i++) rowClues.push(normalizeClue(g.task[i]));
+        return { colClues: colClues, rowClues: rowClues };
+      }
+      // 3. g.currentState.{colors,clues} = same flat layout as (2).
       var flat = g.currentState && (g.currentState.colors || g.currentState.clues);
       if (Array.isArray(flat) && flat.length >= width + height) {
-        var colClues = [], rowClues = [];
-        for (var i = 0; i < width; i++) colClues.push(normalizeClue(flat[i]));
-        for (var i = width; i < width + height; i++) rowClues.push(normalizeClue(flat[i]));
-        return { colClues: colClues, rowClues: rowClues };
+        var colClues2 = [], rowClues2 = [];
+        for (var i = 0; i < width; i++) colClues2.push(normalizeClue(flat[i]));
+        for (var i = width; i < width + height; i++) rowClues2.push(normalizeClue(flat[i]));
+        return { colClues: colClues2, rowClues: rowClues2 };
       }
       return null;
     }
