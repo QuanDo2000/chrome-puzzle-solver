@@ -491,12 +491,19 @@ class GalaxiesSolver {
     if (!this.rows || !this.cols || !this.stars.length) {
       return { solved: false, grid: null, error: 'No Galaxies task data found' };
     }
+    // Cache stores the unconstrained solution; bypass when caller has constraints
+    // that may invalidate it (a resumed partial, or a forbidden-solutions list).
+    const cacheable = !initialGrid && !(options.forbiddenPartials?.length);
     const cacheKey = this._puzzleKey();
-    const cached = GalaxiesSolver._solutionCache.get(cacheKey);
-    if (cached) {
-      return { solved: true, grid: this._cloneSolvedGrid(cached) };
+    if (cacheable) {
+      const cached = GalaxiesSolver._solutionCache.get(cacheKey);
+      if (cached) {
+        return { solved: true, grid: this._cloneSolvedGrid(cached) };
+      }
     }
-    if (this.rows * this.cols < 400) {
+    // Exact-cover ignores forbiddenPartials/initialGrid; only run on the
+    // unconstrained path that also feeds the cache.
+    if (cacheable && this.rows * this.cols < 400) {
       const exact = this._solveByRegionExactCover();
       if (exact?.solved) {
         this._storeSolution(cacheKey, exact.grid);
@@ -533,7 +540,7 @@ class GalaxiesSolver {
       };
     }
     const out = this._toOutputGrid(this.grid);
-    this._storeSolution(cacheKey, out);
+    if (cacheable) this._storeSolution(cacheKey, out);
     return { solved: true, grid: out };
   }
 

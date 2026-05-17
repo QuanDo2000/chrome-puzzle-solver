@@ -59,6 +59,24 @@ test('_assignPair pushes two trail entries and rollback restores both', () => {
   }
 });
 
+test('solve with forbiddenPartials bypasses the static solution cache', () => {
+  const p = fixtures.galaxiesTiny;
+  // Clear any cached solution from prior tests in this run.
+  GalaxiesSolver._solutionCache.clear();
+
+  // First solve warms the cache.
+  const first = new GalaxiesSolver(p.stars, p.rows, p.cols).solve(null);
+  assert.equal(first.solved, true);
+
+  // Now forbid the only solution. If the cache short-circuit fires (the bug),
+  // the solver returns the cached (and now-forbidden) grid; with the fix it
+  // bypasses the cache, searches, and finds nothing.
+  const second = new GalaxiesSolver(p.stars, p.rows, p.cols)
+    .solve(null, { forbiddenPartials: [first.grid] });
+  assert.equal(second.solved, false,
+    'solver should not return a cached solution that is in forbiddenPartials');
+});
+
 test('solve drains its own search trail (search returns with grid solved)', () => {
   const p = fixtures.galaxiesSmall;
   const s = new GalaxiesSolver(p.stars, p.rows, p.cols);
