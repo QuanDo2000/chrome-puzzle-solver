@@ -95,11 +95,16 @@ async function readGridState() {
   return { success: false, error: 'Cannot read grid state' };
 }
 
-async function applySolution(solution, skipUndo = false) {
-  if (mutatingOp) {
-    return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
+// `internal=true` is set by undo/redo, which already own the mutex; skipping
+// the acquire/release here lets the nested apply run without the caller having
+// to drop the mutex (which previously opened a race window for a fresh click).
+async function applySolution(solution, skipUndo = false, internal = false) {
+  if (!internal) {
+    if (mutatingOp) {
+      return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
+    }
+    setMutatingOp('apply');
   }
-  setMutatingOp('apply');
   try {
     if (!detectedGrid) {
       const d = await detectPuzzle();
@@ -124,7 +129,7 @@ async function applySolution(solution, skipUndo = false) {
     }
     return { success: true };
   } finally {
-    clearMutatingOp();
+    if (!internal) clearMutatingOp();
   }
 }
 
@@ -959,10 +964,7 @@ async function handleUndo() {
     if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
     redoStack.push(currentState.grid);
     const prevState = undoStack.pop();
-    // applySolution would refuse because mutatingOp is set — release the flag
-    // around the nested apply so the inner critical section can run.
-    clearMutatingOp();
-    await applySolution(prevState, true);
+    await applySolution(prevState, true, true);
     return { success: true, grid: prevState, undoCount: undoStack.length, redoCount: redoStack.length };
   } finally {
     clearMutatingOp();
@@ -980,8 +982,7 @@ async function handleRedo() {
     if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
     undoStack.push(currentState.grid);
     const nextState = redoStack.pop();
-    clearMutatingOp();
-    await applySolution(nextState, true);
+    await applySolution(nextState, true, true);
     return { success: true, grid: nextState, undoCount: undoStack.length, redoCount: redoStack.length };
   } finally {
     clearMutatingOp();
