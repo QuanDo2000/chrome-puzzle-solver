@@ -597,24 +597,48 @@ function dumpPuzzleForBench() {
     }
 
     if (path.indexOf('/galaxies/') !== -1) {
+      var stars = [];
+      // 1. g.task as a sparse 2D matrix of doubled-coord star positions
+      //    (puzzles-mobile.com /galaxies/special/monthly uses this shape).
+      //    Cell count = (matrix_dim + 1) / 2. puzzleWidth/Height reported by
+      //    the site are 1 more than the cell count for this puzzle type.
+      if (Array.isArray(g.task) && Array.isArray(g.task[0])) {
+        for (var r = 0; r < g.task.length; r++) {
+          var row = g.task[r];
+          if (!Array.isArray(row)) continue;
+          for (var c = 0; c < row.length; c++) {
+            if (row[c] === 1) stars.push({ row: r, col: c });
+          }
+        }
+        var dimRows = (g.task.length + 1) / 2;
+        // Derive cell-col count from the widest row, fall back to width/(width-1).
+        var maxCols = 0;
+        for (var r2 = 0; r2 < g.task.length; r2++) {
+          if (Array.isArray(g.task[r2]) && g.task[r2].length > maxCols) maxCols = g.task[r2].length;
+        }
+        var dimCols = (maxCols + 1) / 2;
+        return { type: 'galaxies', rows: dimRows, cols: dimCols, stars: stars, path: path };
+      }
+      // 2. g.task as a task string (existing path).
       var taskStr =
         (g.currentState && typeof g.currentState.task === 'string' && g.currentState.task) ||
         (typeof g.task === 'string' ? g.task : null);
-      if (!taskStr) return { error: 'galaxies: no task string', diagnostic: diagnostic(g), path: path };
-      var cols = 2 * width - 1;
-      var rows = 2 * height - 1;
-      var stars = [];
+      if (!taskStr) return { error: 'galaxies: no task string or matrix', diagnostic: diagnostic(g), path: path };
+      var cellW = (typeof g.puzzleWidth === 'number' && g.puzzleWidth > 1 && Array.isArray(g.task)) ? g.puzzleWidth - 1 : width;
+      var cellH = (typeof g.puzzleHeight === 'number' && g.puzzleHeight > 1 && Array.isArray(g.task)) ? g.puzzleHeight - 1 : height;
+      var cols = 2 * cellW - 1;
+      var rows = 2 * cellH - 1;
       var pos = 0;
       for (var i = 0; i < taskStr.length; i++) {
         if (taskStr[i] === 'z') { pos += 25; continue; }
         pos += taskStr.charCodeAt(i) - 97;
-        var r = Math.floor(pos / cols);
-        var c = pos % cols;
-        if (r >= rows) break;
-        stars.push({ row: r, col: c });
+        var sr = Math.floor(pos / cols);
+        var sc = pos % cols;
+        if (sr >= rows) break;
+        stars.push({ row: sr, col: sc });
         pos++;
       }
-      return { type: 'galaxies', rows: height, cols: width, stars: stars, path: path };
+      return { type: 'galaxies', rows: cellH, cols: cellW, stars: stars, path: path };
     }
 
     if (path.indexOf('/aquarium/') !== -1) {
