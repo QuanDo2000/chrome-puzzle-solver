@@ -97,43 +97,66 @@ async function applySolution(solution, skipUndo = false) {
 }
 
 let solverWorker = null;
+let solverWorkerInit = null;
 let solverNextId = 1;
 const solverPending = new Map();
 
+// Chrome MV3 content scripts run in the host page's origin (puzzles-mobile.com),
+// not the extension's. `new Worker('chrome-extension://...')` is blocked as
+// cross-origin even when the resource is web-accessible. Workaround: fetch the
+// script text and load it via a Blob URL, which inherits the page's origin.
+// The worker's `importScripts('solver.js')` would hit the same cross-origin
+// wall, so we inline solver.js into the blob ahead of the worker entry point.
 function getSolverWorker() {
-  if (solverWorker) return solverWorker;
-  solverWorker = new Worker(chrome.runtime.getURL('solver.worker.js'));
-  solverWorker.onmessage = (e) => {
-    const { id, result } = e.data || {};
-    const pending = solverPending.get(id);
-    if (!pending) return;
-    solverPending.delete(id);
-    pending.resolve(result);
-  };
-  solverWorker.onerror = (err) => {
-    // Reject everything in flight, then drop the worker so the next call recreates it.
-    for (const pending of solverPending.values()) {
-      pending.resolve({ solved: false, grid: null, error: err.message || 'worker error' });
-    }
-    solverPending.clear();
-    try { solverWorker.terminate(); } catch (_) {}
-    solverWorker = null;
-  };
-  return solverWorker;
+  if (solverWorker) return Promise.resolve(solverWorker);
+  if (solverWorkerInit) return solverWorkerInit;
+  solverWorkerInit = (async () => {
+    const [solverSrc, workerSrc] = await Promise.all([
+      fetch(chrome.runtime.getURL('solver.js')).then(r => r.text()),
+      fetch(chrome.runtime.getURL('solver.worker.js')).then(r => r.text()),
+    ]);
+    // Strip the importScripts line; solver.js is now inlined above it.
+    const workerEntry = workerSrc.replace(/^\s*importScripts\([^)]*\);?\s*$/m, '');
+    const blob = new Blob([solverSrc + '\n' + workerEntry], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    const w = new Worker(url);
+    w.onmessage = (e) => {
+      const { id, result } = e.data || {};
+      const pending = solverPending.get(id);
+      if (!pending) return;
+      solverPending.delete(id);
+      pending.resolve(result);
+    };
+    w.onerror = (err) => {
+      for (const pending of solverPending.values()) {
+        pending.resolve({ solved: false, grid: null, error: err.message || 'worker error' });
+      }
+      solverPending.clear();
+      try { w.terminate(); } catch (_) {}
+      solverWorker = null;
+      solverWorkerInit = null;
+    };
+    solverWorker = w;
+    return w;
+  })().catch((e) => {
+    solverWorkerInit = null;
+    throw e;
+  });
+  return solverWorkerInit;
 }
 
 function runSolve(rowClues, colClues, initialGrid, solverType, extraData) {
   return new Promise((resolve) => {
     const id = solverNextId++;
     solverPending.set(id, { resolve });
-    try {
-      getSolverWorker().postMessage({
+    getSolverWorker()
+      .then((w) => w.postMessage({
         id, type: solverType, rowClues, colClues, initialGrid, extraData,
+      }))
+      .catch((e) => {
+        solverPending.delete(id);
+        resolve({ solved: false, grid: null, error: e.message || String(e) });
       });
-    } catch (e) {
-      solverPending.delete(id);
-      resolve({ solved: false, grid: null, error: e.message });
-    }
   });
 }
 
