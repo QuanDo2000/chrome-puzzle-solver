@@ -126,23 +126,32 @@ class NonogramSolver {
     return true;
   }
 
+  // Returns a length-L array: result[c] = 0 (unknown), 1 (forced filled),
+  // or -1 (forced empty). Returns null if the line has no valid completion.
+  //
+  // Forward + backward DP in O(L·N·blockAvg). The previous implementation
+  // re-ran an O(L·N) DP twice per unknown cell, giving O(L²·N·block) — for the
+  // 50×50 monthly puzzle that's the dominant cost in NonogramSolver.propagate.
   solveLine(clues, line) {
     const L = line.length;
     const N = clues.length;
-    if (N === 0) return Array(L).fill(-1);
 
-    const f = Array.from({ length: L + 1 }, () => Array(N + 1).fill(false));
-    f[0][0] = true;
+    if (N === 0) {
+      for (let c = 0; c < L; c++) if (line[c] === 1) return null;
+      return Array(L).fill(-1);
+    }
 
-    for (let i = 0; i <= L; i++) {
+    const W = N + 1;
+    // f[i*W + k] = "first i cells matched the first k clues, about to consider cell i"
+    // (cell i is at this point not yet inside a block).
+    const f = new Uint8Array((L + 1) * W);
+    f[0] = 1;
+    for (let i = 0; i < L; i++) {
       for (let k = 0; k <= N; k++) {
-        if (!f[i][k]) continue;
-        if (i === L) continue;
-
-        if (line[i] !== 1) {
-          f[i + 1][k] = true;
-        }
-
+        if (!f[i * W + k]) continue;
+        // Option A: cell i is empty.
+        if (line[i] !== 1) f[(i + 1) * W + k] = 1;
+        // Option B: place clue k starting at cell i.
         if (k < N) {
           const block = clues[k];
           if (i + block <= L) {
@@ -153,77 +162,100 @@ class NonogramSolver {
             if (fits) {
               if (k < N - 1) {
                 if (i + block < L && line[i + block] !== 1) {
-                  f[i + block + 1][k + 1] = true;
+                  f[(i + block + 1) * W + k + 1] = 1;
                 }
               } else {
-                f[i + block][k + 1] = true;
+                f[(i + block) * W + k + 1] = 1;
               }
             }
           }
         }
       }
     }
+    if (!f[L * W + N]) return null;
 
-    if (!f[L][N]) return null;
-
-    const result = Array(L).fill(0);
-    for (let p = 0; p < L; p++) {
-      if (line[p] !== 0) { result[p] = line[p]; continue; }
-
-      const lineEmpty = line.slice();
-      lineEmpty[p] = -1;
-      const canBeEmpty = this.solveLineValid(clues, lineEmpty);
-
-      const lineFilled = line.slice();
-      lineFilled[p] = 1;
-      const canBeFilled = this.solveLineValid(clues, lineFilled);
-
-      if (canBeFilled && !canBeEmpty) result[p] = 1;
-      else if (!canBeFilled && canBeEmpty) result[p] = -1;
+    // b[i*W + k] = "cells [i..L) can match clues [k..N)".
+    const b = new Uint8Array((L + 1) * W);
+    b[L * W + N] = 1;
+    // Also: b[i][N] iff cells [i..L) are all empty-compatible.
+    for (let i = L - 1; i >= 0; i--) {
+      if (line[i] !== 1 && b[(i + 1) * W + N]) b[i * W + N] = 1;
+    }
+    for (let i = L - 1; i >= 0; i--) {
+      for (let k = N - 1; k >= 0; k--) {
+        // Option A: skip cell i (empty).
+        if (line[i] !== 1 && b[(i + 1) * W + k]) { b[i * W + k] = 1; continue; }
+        // Option B: place clue k at cell i.
+        const block = clues[k];
+        if (i + block > L) continue;
+        let fits = true;
+        for (let j = i; j < i + block; j++) {
+          if (line[j] === -1) { fits = false; break; }
+        }
+        if (!fits) continue;
+        if (k < N - 1) {
+          if (i + block < L && line[i + block] !== 1 && b[(i + block + 1) * W + k + 1]) {
+            b[i * W + k] = 1;
+          }
+        } else {
+          if (b[(i + block) * W + k + 1]) b[i * W + k] = 1;
+        }
+      }
     }
 
+    // Cells covered by at least one valid block placement → can be filled.
+    // Use a difference array so each (s, k) contributes O(1) work.
+    // gapEmpty[c]=1 marks cells that are the mandatory single-cell gap right
+    // after a non-last block. The forward DP collapses that gap into the
+    // block-placement transition (jumping from f[s][k] to f[s+block+1][k+1]),
+    // so f[s+block][k+1] is never set and the generic "f[c][k] && skip &&
+    // b[c+1][k]" check below cannot detect cell s+block as empty. We mark it
+    // explicitly when we confirm the (s, k) placement is part of a valid
+    // configuration.
+    const fillDelta = new Int32Array(L + 1);
+    const gapEmpty = new Uint8Array(L);
+    for (let s = 0; s < L; s++) {
+      for (let k = 0; k < N; k++) {
+        if (!f[s * W + k]) continue;
+        const block = clues[k];
+        if (s + block > L) continue;
+        let fits = true;
+        for (let j = s; j < s + block; j++) {
+          if (line[j] === -1) { fits = false; break; }
+        }
+        if (!fits) continue;
+        let validTail;
+        if (k < N - 1) {
+          validTail = s + block < L && line[s + block] !== 1 && b[(s + block + 1) * W + k + 1];
+        } else {
+          validTail = !!b[(s + block) * W + k + 1];
+        }
+        if (!validTail) continue;
+        fillDelta[s]++;
+        fillDelta[s + block]--;
+        if (k < N - 1) gapEmpty[s + block] = 1;
+      }
+    }
+
+    const result = new Array(L);
+    let cover = 0;
+    for (let c = 0; c < L; c++) {
+      cover += fillDelta[c];
+      const canFill = cover > 0;
+      // canEmpty: either c is the mandatory gap of some valid placement, OR
+      // there's a valid config where cell c is in an "explicit skip" region.
+      let canEmpty = gapEmpty[c] === 1;
+      if (!canEmpty && line[c] !== 1) {
+        for (let k = 0; k <= N; k++) {
+          if (f[c * W + k] && b[(c + 1) * W + k]) { canEmpty = true; break; }
+        }
+      }
+      if (line[c] !== 0) result[c] = line[c];
+      else if (canFill && !canEmpty) result[c] = 1;
+      else if (canEmpty && !canFill) result[c] = -1;
+      else result[c] = 0;
+    }
     return result;
-  }
-
-  solveLineValid(clues, line) {
-    const L = line.length;
-    const N = clues.length;
-    if (N === 0) return true;
-
-    const f = Array.from({ length: L + 1 }, () => Array(N + 1).fill(false));
-    f[0][0] = true;
-
-    for (let i = 0; i <= L; i++) {
-      for (let k = 0; k <= N; k++) {
-        if (!f[i][k]) continue;
-        if (i === L) continue;
-
-        if (line[i] !== 1) {
-          f[i + 1][k] = true;
-        }
-
-        if (k < N) {
-          const block = clues[k];
-          if (i + block <= L) {
-            let fits = true;
-            for (let j = i; j < i + block; j++) {
-              if (line[j] === -1) { fits = false; break; }
-            }
-            if (fits) {
-              if (k < N - 1) {
-                if (i + block < L && line[i + block] !== 1) {
-                  f[i + block + 1][k + 1] = true;
-                }
-              } else {
-                f[i + block][k + 1] = true;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return f[L][N];
   }
 
   isComplete() {
