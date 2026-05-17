@@ -1,0 +1,629 @@
+// ── Handler registry ──────────────────────────────────────────
+
+const handlers = [];
+
+function isPuzzlesMobilePage() {
+  return window.location.hostname === 'www.puzzles-mobile.com';
+}
+
+function registerHandler(h) {
+  handlers.push(h);
+  handlers.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+}
+
+function getActiveHandler() {
+  return handlers.find(h => h.matches()) || null;
+}
+
+// ── callMainWorld: bridge to MAIN world via background script ─
+
+function callMainWorld(funcName, args) {
+  return new Promise((resolve) => {
+    try {
+      if (typeof chrome?.runtime?.sendMessage !== 'function') {
+        resolve(null);
+        return;
+      }
+      chrome.runtime.sendMessage({
+        action: 'execMain',
+        funcName: funcName,
+        args: args || []
+      }, resolve);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+// ── Generic DOM-based handler ─────────────────────────────────
+
+const genericHandler = {
+  name: 'generic',
+  priority: 1,
+
+  matches() {
+    return true;
+  },
+
+  async detect() {
+    const grid = this._findGridElement();
+    if (!grid) return { found: false, error: 'No puzzle grid found on this page.' };
+
+    const cells = this._getGridCells(grid);
+    if (cells.length === 0) return { found: false, error: 'Grid found but no cells detected.' };
+
+    const { rows, cols } = this._detectDimensions(cells, grid);
+    const rowClueEls = this._findClueElements(rows, true);
+    const colClueEls = this._findClueElements(cols, false);
+    const rowClues = rowClueEls ? this._parseCluesFromElements(rowClueEls, rows) : this._guessClues(rows, cols);
+    const colClues = colClueEls ? this._parseCluesFromElements(colClueEls, cols) : this._guessClues(cols, rows);
+
+    return {
+      found: true,
+      type: 'nonogram',
+      rows,
+      cols,
+      rowClues,
+      colClues,
+      _cells: cells,
+      _element: grid,
+    };
+  },
+
+  async readState(ctx) {
+    const { rows, cols, _cells: cells } = ctx;
+    if (!cells || cells.length < rows * cols) return null;
+    const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        if (idx < cells.length) grid[r][c] = genericGetCellState(cells[idx]);
+      }
+    }
+    return grid;
+  },
+
+  async applySolution(solution, ctx) {
+    const { rows, cols, _cells: cells } = ctx;
+    if (!cells || cells.length < rows * cols) return false;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        if (idx >= cells.length) continue;
+        if (!solution[r] || solution[r][c] === undefined) continue;
+        genericSetCellDOM(cells[idx], solution[r][c]);
+      }
+    }
+    return true;
+  },
+
+  _findGridElement() {
+    for (const sel of PUZZLE_SELECTORS.grid) {
+      const el = document.querySelector(sel);
+      if (el) {
+        const parent = el.closest('table') || el.closest('[class*="grid"]') || el.parentElement;
+        if (parent) return parent;
+        return el.parentElement || el;
+      }
+    }
+    for (const sel of ['table', '[class*="grid"]', '[class*="puzzle"]', '[class*="nonogram"]']) {
+      const els = document.querySelectorAll(sel);
+      for (const el of els) {
+        const cells = el.querySelectorAll('td, [class*="cell"]');
+        if (cells.length >= 9) return el;
+      }
+    }
+    const allTds = document.querySelectorAll('td');
+    if (allTds.length >= 9) return allTds[0].closest('table') || null;
+    return null;
+  },
+
+  _getGridCells(grid) {
+    if (!grid) return [];
+    let cells = grid.querySelectorAll('td');
+    if (cells.length > 0) return Array.from(cells);
+    cells = grid.querySelectorAll('[class*="cell"]');
+    if (cells.length > 0) return Array.from(cells);
+    cells = grid.querySelectorAll('input[type="checkbox"], input[type="radio"]');
+    if (cells.length > 0) return Array.from(cells);
+    if (grid.tagName === 'TABLE') {
+      cells = grid.querySelectorAll('td, th');
+      if (cells.length > 0) return Array.from(cells);
+    }
+    return Array.from(grid.children).filter(
+      el => el.tagName === 'TD' || el.tagName === 'DIV' || el.tagName === 'SPAN'
+    );
+  },
+
+  _detectDimensions(cells, grid) {
+    const rowsEl = grid.querySelectorAll('tr');
+    if (rowsEl.length > 1) {
+      const maxCols = Math.max(...Array.from(rowsEl).map(tr =>
+        tr.querySelectorAll('td, th, [class*="cell"]').length
+      ));
+      return { rows: rowsEl.length, cols: maxCols };
+    }
+    const n = cells.length;
+    const side = Math.round(Math.sqrt(n));
+    if (side * side === n) return { rows: side, cols: side };
+    for (let r = Math.floor(Math.sqrt(n)); r >= 1; r--) {
+      if (n % r === 0) return { rows: r, cols: n / r };
+    }
+    return { rows: n, cols: 1 };
+  },
+
+  _findClueElements(count, isRow) {
+    const selectors = isRow ? PUZZLE_SELECTORS.rowClues : PUZZLE_SELECTORS.colClues;
+    for (const sel of selectors) {
+      const els = document.querySelectorAll(sel);
+      if (els.length >= count) return Array.from(els);
+    }
+    const pattern = isRow ? 'row' : 'col';
+    const candidates = document.querySelectorAll(
+      `[class*="${pattern}"] td, [class*="${pattern}"] li, [class*="${pattern}"] div, [class*="${pattern}"] span`
+    );
+    if (candidates.length >= count) return Array.from(candidates);
+    return null;
+  },
+
+  _parseCluesFromElements(elements, count) {
+    const result = [];
+    for (let i = 0; i < Math.min(elements.length, count); i++) {
+      const text = elements[i].textContent.trim();
+      const clues = text.split(/[\s,]+/).map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+      result.push(clues.length > 0 ? clues : [1]);
+    }
+    while (result.length < count) result.push([1]);
+    return result;
+  },
+
+  _guessClues(count, otherDim) {
+    return Array.from({ length: count }, () =>
+      Array.from({ length: Math.max(1, Math.floor(otherDim / 3)) }, () => 1)
+    );
+  },
+};
+
+// Generic helpers are kept for puzzles-mobile fallbacks, but the extension no
+// longer registers a catch-all handler for arbitrary sites.
+
+// ── Shared task parser ────────────────────────────────────────
+
+function parsePuzzleTask() {
+  const scripts = document.querySelectorAll('script');
+  let task = null;
+  let width = 30;
+  let height = 30;
+  for (const script of scripts) {
+    const text = script.textContent || '';
+    const taskMatch = text.match(/var\s+task\s*=\s*'([^']+)'/);
+    if (taskMatch) task = taskMatch[1];
+    const wMatch = text.match(/puzzleWidth\s*:\s*(\d+)/);
+    const hMatch = text.match(/puzzleHeight\s*:\s*(\d+)/);
+    if (wMatch) width = parseInt(wMatch[1], 10);
+    if (hMatch) height = parseInt(hMatch[1], 10);
+  }
+  return { task, width, height };
+}
+
+function parseGalaxiesTask(task, width, height) {
+  const stars = [];
+  if (!task) return stars;
+  const cols = 2 * width - 1;
+  const rows = 2 * height - 1;
+  let pos = 0;
+  for (let i = 0; i < task.length; i++) {
+    if (task[i] === 'z') {
+      pos += 25;
+      continue;
+    }
+    pos += task.charCodeAt(i) - 97;
+    const row = Math.floor(pos / cols);
+    const col = pos % cols;
+    if (row >= rows) break;
+    stars.push({ row, col });
+    pos++;
+  }
+  return stars;
+}
+
+// ── Galaxies handler (puzzles-mobile.com/galaxies/) ───────────
+
+const galaxiesHandler = {
+  name: 'puzzles-mobile-galaxies',
+  priority: 25,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/galaxies/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    let { task, width, height } = parsePuzzleTask();
+    const gameData = await callMainWorld('readGalaxiesData', []);
+    if (gameData) {
+      task = gameData.task || task;
+      width = gameData.width || width;
+      height = gameData.height || height;
+    }
+    const stars = gameData?.stars?.length ? gameData.stars : parseGalaxiesTask(task, width, height);
+    if (!stars.length) return { ...result, error: 'No Galaxies dots found' };
+    const gameEl = document.getElementById('game') ||
+      document.querySelector('#stage, [class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'galaxies',
+      rows: height,
+      cols: width,
+      rowClues: [],
+      colClues: [],
+      stars,
+      task,
+      _cells: [],
+      _element: gameEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readGalaxiesState', [ctx.rows, ctx.cols]);
+    if (state?.grid) {
+      state.grid.galaxies = state.lines;
+      return state.grid;
+    }
+    return Array.from({ length: ctx.rows }, () => Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, ctx) {
+    const lines = solution?.type === 'galaxies-lines'
+      ? solution.lines
+      : solution?.galaxies || buildGalaxiesLinesFromRegions(solution, ctx.rows, ctx.cols);
+    await callMainWorld('applyGalaxiesState', [lines]);
+    return true;
+  },
+};
+
+function buildGalaxiesLinesFromRegions(grid, rows, cols) {
+  const horizontal = Array.from({ length: rows + 1 }, () => Array(cols).fill(0));
+  const vertical = Array.from({ length: rows }, () => Array(cols + 1).fill(0));
+  if (!grid) return { horizontal, vertical };
+  for (let r = 1; r < rows; r++) {
+    for (let c = 0; c < cols; c++) horizontal[r][c] = grid[r - 1]?.[c] !== grid[r]?.[c] ? 1 : 0;
+  }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 1; c < cols; c++) vertical[r][c] = grid[r]?.[c - 1] !== grid[r]?.[c] ? 1 : 0;
+  }
+  return { horizontal, vertical };
+}
+
+registerHandler(galaxiesHandler);
+
+// ── Aquarium handler (puzzles-mobile.com/aquarium/) ───────────
+
+const aquariumHandler = {
+  name: 'puzzles-mobile-aquarium',
+  priority: 20,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/aquarium/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    let task, width, height;
+    const parsed = parsePuzzleTask();
+    task = parsed.task;
+    width = parsed.width;
+    height = parsed.height;
+
+    if (task) {
+      return this._processAquariumTask(result, task, width, height);
+    }
+
+    const gameData = await callMainWorld('readGameClues', []);
+    if (gameData && gameData.task) {
+      return this._processAquariumTask(result, gameData.task,
+        gameData.width || width, gameData.height || height);
+    }
+
+    return { ...result, error: 'No aquarium task data found' };
+  },
+
+  _processAquariumTask(result, task, width, height) {
+    const parts = task.split(';');
+    if (parts.length !== 2) {
+      return { ...result, error: 'Expected aquarium task format: clues;regions' };
+    }
+
+    const clueVals = parts[0].split('_').map(Number);
+    const totalClues = height + width;
+    if (clueVals.length < totalClues) {
+      return { ...result, error: `Expected ${totalClues} clues, got ${clueVals.length}` };
+    }
+
+    const colClues = clueVals.slice(0, width);
+    const rowClues = clueVals.slice(width, width + height);
+
+    const regionIds = parts[1].split(',').map(Number);
+    if (regionIds.length < width * height) {
+      return { ...result, error: `Expected ${width * height} region IDs, got ${regionIds.length}` };
+    }
+
+    const regionMap = [];
+    for (let r = 0; r < height; r++) {
+      regionMap[r] = [];
+      for (let c = 0; c < width; c++) {
+        regionMap[r][c] = regionIds[r * width + c];
+      }
+    }
+
+    const gameEl = document.getElementById('game') ||
+      document.querySelector('#stage, [class*="game"], [class*="puzzle"]');
+
+    return {
+      found: true,
+      type: 'aquarium',
+      rows: height,
+      cols: width,
+      rowClues,
+      colClues,
+      regionMap,
+      _cells: [],
+      _element: gameEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readGameState', [ctx.rows, ctx.cols]);
+    return state || null;
+  },
+
+  async applySolution(solution, ctx) {
+    await callMainWorld('applyGameState', [solution]);
+    return true;
+  },
+};
+
+registerHandler(aquariumHandler);
+
+// ── Puzzles-mobile handler ────────────────────────────────────
+
+const puzzlesMobileHandler = {
+  name: 'puzzles-mobile',
+  priority: 10,
+
+  matches() {
+    return isPuzzlesMobilePage();
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const { task, width, height } = parsePuzzleTask();
+
+    if (task) {
+      return this._processTaskString(result, task, width, height);
+    }
+
+    return await this._detectFromGameAPI(result, width, height);
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readGameState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+
+    const { rows, cols, _cells: cells } = ctx;
+    if (!cells || cells.length < rows * cols) return null;
+    const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        if (idx < cells.length) grid[r][c] = genericGetCellState(cells[idx]);
+      }
+    }
+    return grid;
+  },
+
+  async applySolution(solution, ctx) {
+    const { rows, cols, _cells: cells } = ctx;
+    if (cells && cells.length >= rows * cols) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const idx = r * cols + c;
+          if (idx >= cells.length) continue;
+          if (!solution[r] || solution[r][c] === undefined) continue;
+          genericSetCellDOM(cells[idx], solution[r][c]);
+        }
+      }
+    }
+    await callMainWorld('applyGameState', [solution]);
+    return true;
+  },
+
+  _processTaskString(result, task, width, height) {
+    const segments = task.split('/');
+    const expected = width + height;
+    if (segments.length < expected) {
+      return { ...result, error: `Expected ${expected} clue groups, got ${segments.length}` };
+    }
+    const colClues = segments.slice(0, width).map(s =>
+      s.split('.').map(Number).filter(n => !isNaN(n))
+    );
+    const rowClues = segments.slice(width, width + height).map(s =>
+      s.split('.').map(Number).filter(n => !isNaN(n))
+    );
+    const ctx = this._buildContext({ element: null, rows: height, cols: width, rowClues, colClues });
+    return {
+      found: true, type: 'nonogram', rows: height, cols: width, rowClues, colClues,
+      _cells: ctx._cells, _element: ctx._element,
+      note: ctx._cells.length < height * width
+        ? 'Grid cells not fully found — clues extracted, state reading may be limited'
+        : undefined,
+    };
+  },
+
+  async _detectFromGameAPI(result, fallbackWidth, fallbackHeight) {
+    const gameData = await callMainWorld('readGameClues', []);
+    if (!gameData) return { ...result, error: 'No puzzle task data or game clues found' };
+
+    let width = fallbackWidth;
+    let height = fallbackHeight;
+    let colClues, rowClues;
+
+    if (gameData.colClues && gameData.rowClues) {
+      colClues = gameData.colClues;
+      rowClues = gameData.rowClues;
+      if (gameData.width) width = gameData.width;
+      if (gameData.height) height = gameData.height;
+    } else if (gameData.task) {
+      return this._processTaskString(result, gameData.task, gameData.width || width, gameData.height || height);
+    } else if (gameData.colors && gameData.colors.length > 0) {
+      if (!width || !height) {
+        if (gameData.width) width = gameData.width;
+        if (gameData.height) height = gameData.height;
+      }
+      if (width && height && gameData.colors.length >= width + height) {
+        const normalize = a => (Array.isArray(a) ? a : [a]).map(v =>
+          typeof v === 'number' ? v : (v && typeof v.run === 'number' ? v.run : NaN)
+        ).filter(v => !isNaN(v));
+        colClues = gameData.colors.slice(0, width).map(normalize);
+        rowClues = gameData.colors.slice(width, width + height).map(normalize);
+      } else {
+        return { ...result, error: 'Could not determine puzzle dimensions from game API' };
+      }
+    } else {
+      return { ...result, error: 'No puzzle task data found on puzzles-mobile.com' };
+    }
+
+    if (colClues && rowClues && width && height) {
+      const ctx = this._buildContext({ element: null, rows: height, cols: width, rowClues, colClues });
+      return {
+        found: true, type: 'nonogram', rows: height, cols: width, rowClues, colClues,
+        _cells: ctx._cells, _element: ctx._element,
+        note: ctx._cells.length < height * width
+          ? 'Grid cells not fully found — clues extracted, state reading may be limited'
+          : undefined,
+      };
+    }
+
+    return { ...result, error: 'Could not parse puzzle clues from game API' };
+  },
+
+  _buildContext(base) {
+    const gameEl = document.getElementById('game') ||
+      document.querySelector('#stage, [class*="game"], [class*="puzzle"]');
+    const cells = this._findPluginGridCells(gameEl, base.rows, base.cols);
+    return { ...base, _element: gameEl, _cells: cells };
+  },
+
+  _findPluginGridCells(container, rows, cols) {
+    if (!container) return [];
+    const gridBack = container.querySelector('.nonograms-cell-back');
+    if (gridBack) {
+      const rowEls = gridBack.querySelectorAll('.row');
+      const cells = [];
+      for (const rowEl of rowEls) {
+        const rowCells = rowEl.querySelectorAll('.cell');
+        if (rowCells.length > 0) cells.push(...rowCells);
+      }
+      if (cells.length >= rows * cols) return cells;
+    }
+    const tables = container.querySelectorAll('table');
+    for (const table of tables) {
+      const tds = table.querySelectorAll('td');
+      if (tds.length >= rows * cols) return Array.from(tds);
+    }
+    const rowEls = container.querySelectorAll('[class*="row"]');
+    if (rowEls.length >= rows) {
+      const cells = [];
+      for (const rowEl of rowEls) {
+        const rowCells = rowEl.querySelectorAll('[class*="cell"]');
+        if (rowCells.length > 0) cells.push(...rowCells);
+        else cells.push(...rowEl.children);
+      }
+      if (cells.length >= rows * cols) return cells;
+    }
+    const allCells = container.querySelectorAll('[class*="cell"]');
+    if (allCells.length >= rows * cols) return Array.from(allCells);
+    const divs = container.querySelectorAll('div');
+    const cellDivs = Array.from(divs).filter(d => d.children.length === 0 && d.parentElement === container);
+    if (cellDivs.length >= rows * cols) return cellDivs;
+    return [];
+  },
+};
+
+registerHandler(puzzlesMobileHandler);
+
+// ── Shared DOM helpers (used by multiple handlers) ────────────
+
+function genericGetCellState(cell) {
+  const data = cell.dataset.state || cell.dataset.value || '';
+  if (data === '1' || data === 'filled' || data === 'black') return 1;
+  if (data === '-1' || data === '0' || data === 'cross') return -1;
+
+  const text = cell.textContent.trim();
+  if (text === '×' || text === 'X' || text === '✕' || text === '✖') return -1;
+
+  for (const child of cell.children) {
+    const c = (child.className || child.tagName || '').toLowerCase();
+    if (c.includes('icon-cancel') || c === 'x-mark' || c.includes('cross')) return -1;
+    if (c.includes('filled') || c.includes('cell-on') || child.tagName === 'IMG') return 1;
+  }
+
+  const bg = window.getComputedStyle(cell).backgroundColor;
+  if (bg && bg !== 'transparent' && bg !== 'rgba(0,0,0,0)') {
+    const m = bg.match(/\d+/g);
+    if (m) {
+      const brightness = (m[0] * 299 + m[1] * 587 + m[2] * 114) / 1000;
+      if (brightness < 150) return 1;
+    }
+  }
+
+  const cls = (' ' + cell.className + ' ').toLowerCase();
+  if (/ (off|cross|cell-off|x) /i.test(cls)) return -1;
+  if (/ (on|filled|black|cell-on) /i.test(cls)) return 1;
+
+  return 0;
+}
+
+const FILLED_CLASSES = ['cell-on', 'on', 'filled'];
+const CROSS_CLASSES = ['cell-off', 'off', 'cross', 'x'];
+
+function genericSetCellDOM(cell, val) {
+  if (val === 1) {
+    FILLED_CLASSES.forEach(c => cell.classList.add(c));
+    CROSS_CLASSES.forEach(c => cell.classList.remove(c));
+    cell.dataset.state = '1';
+    cell.dataset.value = 'filled';
+    cell.style.backgroundColor = '#000';
+  } else if (val === -1) {
+    CROSS_CLASSES.forEach(c => cell.classList.add(c));
+    FILLED_CLASSES.forEach(c => cell.classList.remove(c));
+    cell.dataset.state = '-1';
+    cell.dataset.value = 'cross';
+    cell.style.backgroundColor = '#fff';
+  } else {
+    FILLED_CLASSES.forEach(c => cell.classList.remove(c));
+    CROSS_CLASSES.forEach(c => cell.classList.remove(c));
+    cell.dataset.state = '0';
+    cell.dataset.value = '';
+    cell.style.backgroundColor = '';
+  }
+
+  const prevX = cell.querySelector('.ns-xmark');
+  if (prevX) prevX.remove();
+
+  if (val === -1) {
+    if (!cell.querySelector('.ns-xmark, .x-mark, [class*="cross"], [class*="cancel"]')) {
+      const x = document.createElement('span');
+      x.className = 'ns-xmark';
+      x.textContent = '\u00D7';
+      x.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:inherit;line-height:1;pointer-events:none;';
+      cell.style.position = 'relative';
+      cell.appendChild(x);
+    }
+  }
+
+  const input = cell.querySelector('input[type="checkbox"], input[type="radio"]');
+  if (input) input.checked = val === 1;
+}

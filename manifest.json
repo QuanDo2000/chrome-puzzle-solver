@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Puzzle Solver",
+  "version": "1.0",
+  "description": "Solves puzzles",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": ["https://www.puzzles-mobile.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Puzzle Solver"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.puzzles-mobile.com/*"],
+      "js": ["utils.js", "solver.js", "handler.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["solver.js", "utils.js", "handler.js"],
+      "matches": ["https://www.puzzles-mobile.com/*"]
+    }
+  ]
+}
