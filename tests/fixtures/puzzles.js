@@ -39,4 +39,18 @@ module.exports = {
     rows: 4,
     cols: 4,
   },
+
+  // 7x7 galaxies, 3 stars positioned to force _search to actually recurse
+  // (5 nodes per probe). Used to exercise the trail-based undo path —
+  // galaxiesTiny solves via propagation alone and never triggers rollback.
+  // Doubled coords for 7x7 range 0..12; even = cell center, odd = between.
+  galaxiesSmall: {
+    stars: [
+      { row: 6, col: 6 },     // cell center (3,3) — middle of the grid
+      { row: 2, col: 2 },     // cell center (1,1)
+      { row: 10, col: 10 },   // cell center (5,5)
+    ],
+    rows: 7,
+    cols: 7,
+  },
 };

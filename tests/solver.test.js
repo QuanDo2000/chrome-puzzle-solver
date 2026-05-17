@@ -38,3 +38,9 @@ test('GalaxiesSolver: tiny 4x4 matches golden', () => {
   const result = clean(new GalaxiesSolver(p.stars, p.rows, p.cols).solve(null));
   assert.deepEqual(result, golden.galaxiesTiny);
 });
+
+test('GalaxiesSolver: small 7x7 matches golden (exercises _search backtracking)', () => {
+  const p = fixtures.galaxiesSmall;
+  const result = clean(new GalaxiesSolver(p.stars, p.rows, p.cols).solve(null));
+  assert.deepEqual(result, golden.galaxiesSmall);
+});

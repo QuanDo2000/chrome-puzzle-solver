@@ -22,6 +22,7 @@ const raw = {
   nonogramCorners3:  solveNonogram(fixtures.nonogramCorners3),
   aquariumTiny:      solveAquarium(fixtures.aquariumTiny),
   galaxiesTiny:      solveGalaxies(fixtures.galaxiesTiny),
+  galaxiesSmall:     solveGalaxies(fixtures.galaxiesSmall),
 };
 
 // Strip any non-deterministic fields (timing, internal counters) before writing.
