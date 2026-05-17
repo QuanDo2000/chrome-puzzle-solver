@@ -57,11 +57,12 @@ class NonogramSolver {
   }
 
   solve(initialGrid) {
+    this.trail.length = 0;
     if (initialGrid) {
       for (let r = 0; r < this.rows; r++) {
         for (let c = 0; c < this.cols; c++) {
           if (initialGrid[r] && initialGrid[r][c] !== undefined) {
-            this.grid[r][c] = initialGrid[r][c];
+            this._set(r, c, initialGrid[r][c]);
           }
         }
       }
@@ -105,14 +106,10 @@ class NonogramSolver {
       dirtyCols.clear();
 
       for (const r of rowsToProcess) {
-        const line = this.grid[r];
-        const result = this.solveLine(this.rowClues[r], line);
-        if (!result) return;
+        const result = this.solveLine(this.rowClues[r], this.grid[r]);
+        if (!result) return false;
         for (let c = 0; c < this.cols; c++) {
-          if (result[c] !== 0 && this.grid[r][c] !== result[c]) {
-            this.grid[r][c] = result[c];
-            dirtyCols.add(c);
-          }
+          if (result[c] !== 0 && this._assign(r, c, result[c])) dirtyCols.add(c);
         }
       }
 
@@ -120,21 +117,13 @@ class NonogramSolver {
         const line = [];
         for (let r = 0; r < this.rows; r++) line.push(this.grid[r][c]);
         const result = this.solveLine(this.colClues[c], line);
-        if (!result) return;
+        if (!result) return false;
         for (let r = 0; r < this.rows; r++) {
-          if (result[r] !== 0 && this.grid[r][c] !== result[r]) {
-            this.grid[r][c] = result[r];
-            dirtyRows.add(r);
-          }
+          if (result[r] !== 0 && this._assign(r, c, result[r])) dirtyRows.add(r);
         }
       }
     }
-  }
-
-  clone() {
-    const s = new NonogramSolver(this.rowClues, this.colClues);
-    s.grid = this.grid.map(row => [...row]);
-    return s;
+    return true;
   }
 
   solveLine(clues, line) {
@@ -330,33 +319,18 @@ class NonogramSolver {
     }
 
     for (const guess of [1, -1]) {
-      const copy = this.clone();
-      copy.grid[bestR][bestC] = guess;
-      copy.propagate();
-      if (!copy.isContradiction()) {
-        this.rememberPartial(copy.grid);
-        const result = copy.backtrack(depth + 1);
-        if (result.solved) {
-          this.grid = result.grid;
-          return result;
-        }
+      const mark = this.trail.length;
+      this._assign(bestR, bestC, guess);
+      if (this.propagate()) {
+        this.rememberPartial(this.grid);
+        const result = this.backtrack(depth + 1);
+        if (result.solved) return result;
         if (result.partialGrid) this.rememberPartial(result.partialGrid);
       }
+      this._rollback(mark);
     }
 
     return { solved: false, grid: null };
-  }
-
-  isContradiction() {
-    for (let r = 0; r < this.rows; r++) {
-      if (this.solveLine(this.rowClues[r], this.grid[r]) === null) return true;
-    }
-    for (let c = 0; c < this.cols; c++) {
-      const line = [];
-      for (let r = 0; r < this.rows; r++) line.push(this.grid[r][c]);
-      if (this.solveLine(this.colClues[c], line) === null) return true;
-    }
-    return false;
   }
 
   getHint(grid) {
