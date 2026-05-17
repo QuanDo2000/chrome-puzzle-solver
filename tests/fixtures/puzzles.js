@@ -18,7 +18,8 @@ module.exports = {
     colClues: [[1, 1], [1], [1, 1]],
   },
 
-  // 2x2 aquarium from test_instrument.js (known working input).
+  // 2x2 aquarium with row clues [0,2], col clues [1,1], and two vertical
+  // single-column regions. The unique solution fills the bottom row.
   aquariumTiny: {
     rowClues: [0, 2],
     colClues: [1, 1],
