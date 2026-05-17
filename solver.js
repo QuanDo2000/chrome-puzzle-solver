@@ -395,10 +395,12 @@ class GalaxiesSolver {
     this.maxDeadCache = rows * cols >= 900 ? 0 : 200000;
     this.staticCandidates = [];
     this.forbiddenPartials = [];
+    // owner: Map<flatIndex, starIndex|-1>. Flat index = row * cols + col,
+    // not a "r,c" string key, so lookups in _canUseCell don't allocate.
     this.owner = new Map();
     for (let i = 0; i < this.stars.length; i++) {
       for (const cell of this._seedCells(this.stars[i])) {
-        const key = cell.row + ',' + cell.col;
+        const key = cell.row * cols + cell.col;
         if (this.owner.has(key)) this.owner.set(key, -1);
         else this.owner.set(key, i);
       }
@@ -818,7 +820,7 @@ class GalaxiesSolver {
 
   _canUseCell(row, col, starIndex) {
     if (!this._inside(row, col)) return false;
-    const owner = this.owner.get(row + ',' + col);
+    const owner = this.owner.get(row * this.cols + col);
     return owner === undefined || owner === starIndex;
   }
 
@@ -982,11 +984,18 @@ class GalaxiesSolver {
   }
 
   _stateKey() {
-    let out = '';
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) out += (this.grid[r][c] + 1).toString(36) + '.';
+    // Each cell value (range -1..numStars-1) maps to a single 16-bit char code,
+    // so the key is a fixed-length string of (rows*cols) chars. Faster than the
+    // previous += / toString(36) approach because we avoid (a) per-cell number
+    // formatting and (b) the O(N²) cost of repeated string concatenation.
+    const rows = this.rows, cols = this.cols, grid = this.grid;
+    const codes = new Array(rows * cols);
+    let i = 0;
+    for (let r = 0; r < rows; r++) {
+      const row = grid[r];
+      for (let c = 0; c < cols; c++) codes[i++] = row[c] + 1;
     }
-    return out;
+    return String.fromCharCode.apply(null, codes);
   }
 
   _rememberDead(key) {
@@ -1042,31 +1051,56 @@ class GalaxiesSolver {
   }
 
   _regionReachable(starIndex) {
+    // Hot path: called per star per _search node. Avoid string-key Sets and
+    // per-step object allocations by encoding (row, col) into a flat int and
+    // using a Uint8Array as the visited bitmap.
+    const rows = this.rows, cols = this.cols, grid = this.grid;
     let assigned = 0;
-    let start = null;
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) {
-        if (this.grid[r][c] === starIndex) {
+    let startIdx = -1;
+    for (let r = 0; r < rows; r++) {
+      const row = grid[r];
+      for (let c = 0; c < cols; c++) {
+        if (row[c] === starIndex) {
           assigned++;
-          if (!start) start = { row: r, col: c };
+          if (startIdx === -1) startIdx = r * cols + c;
         }
       }
     }
-    if (!start) return false;
+    if (startIdx === -1) return false;
 
-    const q = [start];
-    const seen = new Set([start.row + ',' + start.col]);
+    const seen = new Uint8Array(rows * cols);
+    const q = [startIdx];
+    seen[startIdx] = 1;
     let reachedAssigned = 0;
     for (let qi = 0; qi < q.length; qi++) {
-      const p = q[qi];
-      if (this.grid[p.row][p.col] === starIndex) reachedAssigned++;
-      for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
-        const nr = p.row + d[0], nc = p.col + d[1];
-        const key = nr + ',' + nc;
-        if (!this._inside(nr, nc) || seen.has(key)) continue;
-        if (this.grid[nr][nc] !== starIndex && !this._canAssignPair(nr, nc, starIndex)) continue;
-        seen.add(key);
-        q.push({ row: nr, col: nc });
+      const idx = q[qi];
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      if (grid[r][c] === starIndex) reachedAssigned++;
+      // Four-neighbour expansion, inlined to avoid the per-iteration array literal.
+      if (r > 0) {
+        const ni = idx - cols;
+        if (!seen[ni] && (grid[r - 1][c] === starIndex || this._canAssignPair(r - 1, c, starIndex))) {
+          seen[ni] = 1; q.push(ni);
+        }
+      }
+      if (r < rows - 1) {
+        const ni = idx + cols;
+        if (!seen[ni] && (grid[r + 1][c] === starIndex || this._canAssignPair(r + 1, c, starIndex))) {
+          seen[ni] = 1; q.push(ni);
+        }
+      }
+      if (c > 0) {
+        const ni = idx - 1;
+        if (!seen[ni] && (grid[r][c - 1] === starIndex || this._canAssignPair(r, c - 1, starIndex))) {
+          seen[ni] = 1; q.push(ni);
+        }
+      }
+      if (c < cols - 1) {
+        const ni = idx + 1;
+        if (!seen[ni] && (grid[r][c + 1] === starIndex || this._canAssignPair(r, c + 1, starIndex))) {
+          seen[ni] = 1; q.push(ni);
+        }
       }
     }
     return reachedAssigned === assigned;
