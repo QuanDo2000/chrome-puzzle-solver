@@ -1297,8 +1297,7 @@ class AquariumSolver {
     }
 
     this._dpPreprocess();
-    this._dpPairwise();
-    if (!this._propagate()) {
+    if (!this._dpPairwise() || !this._propagate()) {
       // DP may have partially modified ranges — restore to pre-DP state
       this._deadCache.clear();
       this._dpCache.clear();
@@ -1768,7 +1767,6 @@ class AquariumSolver {
     };
 
     // Process adjacent row pairs
-    let anyChange = false;
     for (let r = 0; r < H - 1; r++) {
       const adj1 = rc[r] - baseR[r], adj2 = rc[r + 1] - baseR[r + 1];
       if (adj1 < 0 || adj2 < 0) return false;
@@ -1798,7 +1796,6 @@ class AquariumSolver {
 
       const res = narrowLevels(adj1, adj2, vars, getPair, ranges, 'rr' + r);
       if (!res.ok) return false;
-      if (res.changed) anyChange = true;
     }
 
     // Process adjacent column pairs
@@ -1837,10 +1834,9 @@ class AquariumSolver {
 
       const res = narrowLevels(adj1, adj2, vars, getPair, ranges, 'cc' + c);
       if (!res.ok) return false;
-      if (res.changed) anyChange = true;
     }
 
-    return anyChange || true;
+    return true;
   }
 
   _levelOrder(mn, mx) {
@@ -2263,7 +2259,7 @@ forLoop:
       if (!this._propagate()) { this._learnNogood(branchTokens); this._restore(snap); continue; }
       this._rememberPartial();
       this._dpPreprocess();
-      this._dpPairwise();
+      if (!this._dpPairwise()) { this._learnNogood(branchTokens); this._restore(snap); continue forLoop; }
       this._rememberPartial();
       for (const aq of this.aquariums) {
         if (this.waterLevel[aq.id] < 0 && this.d[aq.id].mn > this.d[aq.id].mx)
