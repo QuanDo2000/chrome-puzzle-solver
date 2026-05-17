@@ -46,3 +46,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
+
+// With the popup removed, clicking the toolbar icon should still do something:
+// ask the content script (if loaded on this tab) to expand the widget. Tabs
+// outside the manifest's content_scripts.matches won't have the listener and
+// the sendMessage error is swallowed.
+chrome.action.onClicked.addListener((tab) => {
+  if (!tab?.id) return;
+  chrome.tabs.sendMessage(tab.id, { action: 'expandWidget' }, () => {
+    void chrome.runtime.lastError;
+  });
+});

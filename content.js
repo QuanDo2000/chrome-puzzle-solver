@@ -63,6 +63,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'getUndoRedoState':
       sendResponse({ undoCount: undoStack.length, redoCount: redoStack.length });
       break;
+    case 'expandWidget':
+      widgetExpandFn?.(true);
+      sendResponse({ ok: !!widgetExpandFn });
+      break;
   }
   return true;
 });
@@ -997,6 +1001,11 @@ async function handleRedo() {
 
 const WIDGET_STORAGE_KEY = 'ns_widget_state';
 
+// Reference set by makeWidget() so the top-level message listener (for the
+// toolbar-icon click → expandWidget action) can drive the widget without
+// reaching into its closure.
+let widgetExpandFn = null;
+
 function loadWidgetPref() {
   try {
     const v = localStorage.getItem(WIDGET_STORAGE_KEY);
@@ -1520,6 +1529,7 @@ function makeWidget() {
     root.classList.toggle('ns-collapsed', !val);
     saveWidgetPref({ expanded: val });
   }
+  widgetExpandFn = setExpanded;
 
   root.addEventListener('click', (e) => {
     if (!expanded) {
