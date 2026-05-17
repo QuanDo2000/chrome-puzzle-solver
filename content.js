@@ -1147,6 +1147,7 @@ function makeWidget() {
         <button data-action="undo" disabled>↩ Undo</button>
         <button data-action="redo" disabled>↪ Redo</button>
         <button data-action="fixTimer">⏱ Fix Timer</button>
+        <button data-action="dump">📋 Dump</button>
       </div>
     </div>
     <div class="ns-status" id="ns-status">Ready</div>
@@ -1566,6 +1567,7 @@ function makeWidget() {
     else if (action === 'undo') undoHandler();
     else if (action === 'redo') redoHandler();
     else if (action === 'fixTimer') timerFixHandler();
+    else if (action === 'dump') dumpHandler();
   });
 
   async function detectHandler() {
@@ -1990,6 +1992,28 @@ function makeWidget() {
       setStatus('Timer fixed!', 'success');
     } else {
       setStatus('Timer fix: no Game API found on this page.', 'info');
+    }
+  }
+
+  // Capture the current puzzle in tests/fixtures/puzzles.js format and copy it
+  // to the clipboard for pasting into a bench fixture. Logs to console too so
+  // it's recoverable if the clipboard write fails.
+  async function dumpHandler() {
+    setStatus('Dumping puzzle...', 'info');
+    const data = await callMainWorld('dumpPuzzleForBench', []);
+    if (!data || data.error) {
+      const msg = data?.error ? `Dump failed: ${data.error}` : 'Dump failed.';
+      setStatus(msg, 'error');
+      console.warn('[puzzle-solver dump]', data);
+      return;
+    }
+    const json = JSON.stringify(data, null, 2);
+    console.log('[puzzle-solver dump]\n' + json);
+    try {
+      await navigator.clipboard.writeText(json);
+      setStatus(`Dumped ${data.type} ${data.rows}×${data.cols} to clipboard.`, 'success');
+    } catch (e) {
+      setStatus(`Dumped ${data.type} ${data.rows}×${data.cols} to console (clipboard blocked).`, 'info');
     }
   }
 

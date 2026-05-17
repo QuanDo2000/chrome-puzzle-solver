@@ -509,3 +509,96 @@ function fixGameTimer() {
     return false;
   }
 }
+
+// Dump the current puzzle in our test/fixtures format, for capturing real
+// puzzles to feed into bench-real.js. Returns null if Game isn't loaded or the
+// puzzle shape isn't recognized.
+function dumpPuzzleForBench() {
+  try {
+    var g = window.Game;
+    if (!g) return null;
+    var width = g.puzzleWidth || (g.getSetting && g.getSetting('puzzleWidth'));
+    var height = g.puzzleHeight || (g.getSetting && g.getSetting('puzzleHeight'));
+    if (!width || !height) return null;
+    var path = location.pathname;
+
+    function normalizeClue(arr) {
+      if (arr == null) return [];
+      if (typeof arr === 'number') return [arr];
+      if (typeof arr === 'string') { var n = parseInt(arr, 10); return isNaN(n) ? [] : [n]; }
+      if (Array.isArray(arr)) {
+        return arr.map(function (v) {
+          if (typeof v === 'number') return v;
+          if (typeof v === 'string') { var n = parseInt(v, 10); return isNaN(n) ? NaN : n; }
+          if (v && typeof v.run === 'number') return v.run;
+          if (v && Array.isArray(v.runs) && v.runs.length > 0) return v.runs[0];
+          return NaN;
+        }).filter(function (v) { return !isNaN(v); });
+      }
+      if (typeof arr === 'object' && typeof arr.run === 'number') return [arr.run];
+      return [];
+    }
+
+    function extractDualClueArrays() {
+      if (g.task && Array.isArray(g.task.columns) && Array.isArray(g.task.rows)) {
+        return {
+          colClues: g.task.columns.slice(0, width).map(normalizeClue),
+          rowClues: g.task.rows.slice(0, height).map(normalizeClue),
+        };
+      }
+      var flat = g.currentState && (g.currentState.colors || g.currentState.clues);
+      if (Array.isArray(flat) && flat.length >= width + height) {
+        var colClues = [], rowClues = [];
+        for (var i = 0; i < width; i++) colClues.push(normalizeClue(flat[i]));
+        for (var i = width; i < width + height; i++) rowClues.push(normalizeClue(flat[i]));
+        return { colClues: colClues, rowClues: rowClues };
+      }
+      return null;
+    }
+
+    if (path.indexOf('/galaxies/') !== -1) {
+      var taskStr =
+        (g.currentState && typeof g.currentState.task === 'string' && g.currentState.task) ||
+        (typeof g.task === 'string' ? g.task : null);
+      if (!taskStr) return { error: 'galaxies: no task string', path: path };
+      var cols = 2 * width - 1;
+      var rows = 2 * height - 1;
+      var stars = [];
+      var pos = 0;
+      for (var i = 0; i < taskStr.length; i++) {
+        if (taskStr[i] === 'z') { pos += 25; continue; }
+        pos += taskStr.charCodeAt(i) - 97;
+        var r = Math.floor(pos / cols);
+        var c = pos % cols;
+        if (r >= rows) break;
+        stars.push({ row: r, col: c });
+        pos++;
+      }
+      return { type: 'galaxies', rows: height, cols: width, stars: stars, path: path };
+    }
+
+    if (path.indexOf('/aquarium/') !== -1) {
+      var clues = extractDualClueArrays();
+      if (!clues) return { error: 'aquarium: no clues', path: path };
+      function flatten(a) { return a.map(function (v) { return Array.isArray(v) ? (v[0] || 0) : (v | 0); }); }
+      var regions = g.areas || (g.currentState && g.currentState.areas);
+      if (!Array.isArray(regions) || regions.length < height) return { error: 'aquarium: no regionMap', path: path };
+      var regionMap = [];
+      for (var r = 0; r < height; r++) regionMap.push(regions[r].slice(0, width));
+      return {
+        type: 'aquarium', rows: height, cols: width,
+        rowClues: flatten(clues.rowClues), colClues: flatten(clues.colClues),
+        regionMap: regionMap, path: path,
+      };
+    }
+
+    var clues2 = extractDualClueArrays();
+    if (!clues2) return { error: 'nonogram: no clues', path: path };
+    return {
+      type: 'nonogram', rows: height, cols: width,
+      rowClues: clues2.rowClues, colClues: clues2.colClues, path: path,
+    };
+  } catch (e) {
+    return { error: e && e.message ? e.message : String(e) };
+  }
+}
