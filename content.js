@@ -88,16 +88,7 @@ async function readGridState() {
   if (!handler) return { success: false, error: 'No handler available' };
   const grid = await handler.readState(detectedGrid);
   if (grid) return { success: true, grid, rows: detectedGrid.rows, cols: detectedGrid.cols };
-  const { rows, cols, _cells: cells } = detectedGrid;
-  if (!cells || cells.length < rows * cols) return { success: false, error: 'Cannot read grid state' };
-  const fallback = Array.from({ length: rows }, () => Array(cols).fill(0));
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const idx = r * cols + c;
-      if (idx < cells.length) fallback[r][c] = genericGetCellState(cells[idx]);
-    }
-  }
-  return { success: true, grid: fallback, rows, cols };
+  return { success: false, error: 'Cannot read grid state' };
 }
 
 async function applySolution(solution, skipUndo = false) {
@@ -938,19 +929,8 @@ async function getHint(request = {}) {
     }
     const { rows, cols, rowClues, colClues } = detectedGrid;
     const handler = getHandler();
-    let grid = null;
-    if (handler) grid = await handler.readState(detectedGrid);
-    if (!grid) {
-      const { _cells: cells } = detectedGrid;
-      if (!cells || cells.length < rows * cols) return { success: false, error: 'Cannot read grid state' };
-      grid = Array.from({ length: rows }, () => Array(cols).fill(0));
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const idx = r * cols + c;
-          if (idx < cells.length) grid[r][c] = genericGetCellState(cells[idx]);
-        }
-      }
-    }
+    const grid = handler ? await handler.readState(detectedGrid) : null;
+    if (!grid) return { success: false, error: 'Cannot read grid state' };
     const solution = request.solution || null;
     let hintSolution = solution;
     let hint = null;

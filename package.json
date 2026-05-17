@@ -4,6 +4,11 @@
   "private": true,
   "scripts": {
     "test": "node --test 'tests/**/*.test.js'",
+    "lint": "eslint .",
     "capture": "node tests/capture.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0"
   }
 }
