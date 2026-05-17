@@ -27,6 +27,35 @@ module.exports = {
     cols: 2,
   },
 
+  // 15x15 aquarium with ~37 irregular regions. Generated from a fixed seed
+  // (see tests/dump-aquarium-seed42.js if regenerating) so the puzzle is
+  // reproducible. Solves via DP preprocessing (0 search nodes) but the DP
+  // itself does enough work to be measurable for benchmarking — ~40ms on
+  // baseline. Used for golden coverage AND as the bench puzzle.
+  aquariumLarge: {
+    rowClues: [6, 6, 1, 4, 8, 11, 11, 6, 9, 11, 12, 14, 8, 9, 12],
+    colClues: [8, 9, 11, 8, 10, 11, 8, 10, 7, 4, 10, 10, 10, 5, 7],
+    regionMap: [
+      [24, 24,  8,  8, 17, 17, 17, 17, 16, 16, 30, 30, 30, 30, 23],
+      [24, 11,  8,  8, 17, 17, 17, 17, 16, 16, 30, 30, 23, 23, 23],
+      [11, 11, 11, 11, 10, 10, 10, 17, 16, 16, 13, 13, 13, 31, 31],
+      [11, 11, 21, 11, 10, 10, 10,  3, 36, 16, 13, 13, 13, 15, 31],
+      [12, 21, 21, 11, 10, 10, 10,  3,  3, 16, 13, 13, 13, 15, 15],
+      [12, 21, 21, 11, 10, 10,  3,  3,  3, 19, 28, 25, 25, 15, 15],
+      [12, 27, 27, 11, 10, 10,  3,  3, 19, 19, 19,  2, 25,  6,  6],
+      [34, 27, 27, 26, 26, 10,  5,  5, 32, 32, 32,  2,  6,  6,  6],
+      [34, 34, 27, 26, 26, 10,  5,  5, 32, 32,  2,  2,  2,  6,  6],
+      [34,  9,  9,  9, 26, 10,  5, 20, 20, 32,  2,  2,  2,  6,  6],
+      [34, 34, 33, 33, 33, 10,  5, 20, 20, 20,  2,  2,  2,  6,  6],
+      [34, 33, 33, 33, 33, 22, 22, 20, 20, 20,  2,  2,  2,  0,  6],
+      [ 4,  4,  4, 33, 14, 22, 22,  1, 29, 29, 18, 18,  0,  0,  0],
+      [35, 14,  4, 14, 14,  1,  1,  1, 29, 29, 18, 18,  0,  0,  0],
+      [14, 14, 14, 14, 14,  1,  1, 29, 29, 29, 18,  7,  7,  7,  0],
+    ],
+    rows: 15,
+    cols: 15,
+  },
+
   // 4x4 galaxies with two stars. Doubled-coord grid is (2*4-1) x (2*4-1) = 7x7,
   // so star coords range 0..6. Odd coord = between cells, even = cell center.
   // Stars at (1,3) and (5,3) sit between top two rows and between bottom two

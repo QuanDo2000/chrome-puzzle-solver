@@ -21,6 +21,7 @@ const raw = {
   nonogramDiagonal5: solveNonogram(fixtures.nonogramDiagonal5),
   nonogramCorners3:  solveNonogram(fixtures.nonogramCorners3),
   aquariumTiny:      solveAquarium(fixtures.aquariumTiny),
+  aquariumLarge:     solveAquarium(fixtures.aquariumLarge),
   galaxiesTiny:      solveGalaxies(fixtures.galaxiesTiny),
   galaxiesSmall:     solveGalaxies(fixtures.galaxiesSmall),
 };

@@ -33,6 +33,14 @@ test('AquariumSolver: tiny 2x2 matches golden', () => {
   assert.deepEqual(result, golden.aquariumTiny);
 });
 
+test('AquariumSolver: large 15x15 matches golden (exercises DP machinery)', () => {
+  const p = fixtures.aquariumLarge;
+  const result = clean(
+    new AquariumSolver(p.rowClues, p.colClues, p.regionMap, p.rows, p.cols).solve(null)
+  );
+  assert.deepEqual(result, golden.aquariumLarge);
+});
+
 test('GalaxiesSolver: tiny 4x4 matches golden', () => {
   const p = fixtures.galaxiesTiny;
   const result = clean(new GalaxiesSolver(p.stars, p.rows, p.cols).solve(null));
