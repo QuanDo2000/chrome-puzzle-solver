@@ -21,7 +21,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["solver.js", "utils.js", "handler.js"],
+      "resources": ["solver.js", "solver.worker.js", "utils.js", "handler.js"],
       "matches": ["https://www.puzzles-mobile.com/*"]
     }
   ]

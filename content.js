@@ -14,9 +14,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       readGridState().then(sendResponse).catch(() => sendResponse({ success: false, error: 'State read failed' }));
       return true;
     case 'solve':
-      sendResponse(runSolve(request.rowClues, request.colClues, request.initialGrid,
-        request.solverType, request.extraData));
-      break;
+      runSolve(request.rowClues, request.colClues, request.initialGrid,
+        request.solverType, request.extraData)
+        .then(sendResponse)
+        .catch((e) => sendResponse({ solved: false, grid: null, error: e.message }));
+      return true;
     case 'applySolution':
       applySolution(request.solution).then(sendResponse).catch(() => sendResponse({ success: false, error: 'Apply failed' }));
       return true;
@@ -94,32 +96,45 @@ async function applySolution(solution, skipUndo = false) {
   return { success: true };
 }
 
+let solverWorker = null;
+let solverNextId = 1;
+const solverPending = new Map();
+
+function getSolverWorker() {
+  if (solverWorker) return solverWorker;
+  solverWorker = new Worker(chrome.runtime.getURL('solver.worker.js'));
+  solverWorker.onmessage = (e) => {
+    const { id, result } = e.data || {};
+    const pending = solverPending.get(id);
+    if (!pending) return;
+    solverPending.delete(id);
+    pending.resolve(result);
+  };
+  solverWorker.onerror = (err) => {
+    // Reject everything in flight, then drop the worker so the next call recreates it.
+    for (const pending of solverPending.values()) {
+      pending.resolve({ solved: false, grid: null, error: err.message || 'worker error' });
+    }
+    solverPending.clear();
+    try { solverWorker.terminate(); } catch (_) {}
+    solverWorker = null;
+  };
+  return solverWorker;
+}
+
 function runSolve(rowClues, colClues, initialGrid, solverType, extraData) {
-  try {
-    if (solverType === 'galaxies' && extraData) {
-      const solver = new GalaxiesSolver(extraData.stars, extraData.rows, extraData.cols);
-      return solver.solve(extraData.partialGrid || null, {
-        forbiddenPartials: extraData.failedPartials || [],
-        frontierGrids: extraData.frontierGrids || [],
+  return new Promise((resolve) => {
+    const id = solverNextId++;
+    solverPending.set(id, { resolve });
+    try {
+      getSolverWorker().postMessage({
+        id, type: solverType, rowClues, colClues, initialGrid, extraData,
       });
+    } catch (e) {
+      solverPending.delete(id);
+      resolve({ solved: false, grid: null, error: e.message });
     }
-    if (solverType === 'aquarium' && extraData) {
-      const solver = new AquariumSolver(
-        extraData.rowCluesFlat || rowClues,
-        extraData.colCluesFlat || colClues,
-        extraData.regionMap,
-        extraData.rows,
-        extraData.cols
-      );
-      const result = solver.solve(initialGrid || null);
-      return result;
-    }
-    const solver = new NonogramSolver(rowClues, colClues);
-    const result = solver.solve(initialGrid || null);
-    return result;
-  } catch (e) {
-    return { solved: false, grid: null, error: e.message };
-  }
+  });
 }
 
 function firstMismatch(grid, solution) {
@@ -1468,12 +1483,12 @@ function makeWidget() {
     setStatus('Solving...', 'info');
     const stateResult = await readGridState();
     const initialGrid = chooseInitialGrid(puzzleData, stateResult?.success ? stateResult.grid : null);
-    const result = runSolve(puzzleData.rowClues, puzzleData.colClues, initialGrid,
+    const result = await runSolve(puzzleData.rowClues, puzzleData.colClues, initialGrid,
       puzzleData.type, solveExtraData());
     if (puzzleData.type === 'galaxies' && result?.error === 'invalid partial state') {
       clearPartial(puzzleData);
       clearGalaxiesFrontier(puzzleData);
-      const retry = runSolve(puzzleData.rowClues, puzzleData.colClues, stateResult?.success ? stateResult.grid : null,
+      const retry = await runSolve(puzzleData.rowClues, puzzleData.colClues, stateResult?.success ? stateResult.grid : null,
         puzzleData.type, solveExtraData());
       if (retry?.solved) {
         retryResultToPuzzle(retry);
@@ -1632,7 +1647,7 @@ function makeWidget() {
       setStatus('Solving...', 'info');
       const stateResult = await readGridState();
       const initialGrid = chooseInitialGrid(puzzleData, stateResult?.success ? stateResult.grid : null);
-      const result = runSolve(puzzleData.rowClues, puzzleData.colClues, initialGrid,
+      const result = await runSolve(puzzleData.rowClues, puzzleData.colClues, initialGrid,
         puzzleData.type, solveExtraData());
       if (!result?.solved) {
         setStatus(`Solve failed${result?.error ? ': ' + result.error : ''}`, 'error');
