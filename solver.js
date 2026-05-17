@@ -465,11 +465,6 @@ class GalaxiesSolver {
     this.maxDeadCache = rows * cols >= 900 ? 0 : 200000;
     this.staticCandidates = [];
     this.forbiddenPartials = [];
-    this.frontier = [];
-    // TODO: the _pushFrontier/_frontierOutput resume mechanism is currently a
-    // no-op because maxFrontier is 0 — set to a positive value (matching
-    // NonogramSolver's `rows*cols >= 900 ? 80 : 0`) to actually engage it.
-    this.maxFrontier = 0;
     // owner: Map<flatIndex, starIndex|-1>. Flat index = row * cols + col,
     // not a "r,c" string key, so lookups in _canUseCell don't allocate.
     this.owner = new Map();
@@ -489,8 +484,8 @@ class GalaxiesSolver {
 
   /**
    * @param {number[][] | null} initialGrid  Optional partial state ((star+1)/0).
-   * @param {{ frontierGrids?: number[][][], forbiddenPartials?: any[] }} [options]
-   * @returns {SolveResult & { frontierGrids?: number[][][], failedPartialGrid?: number[][] | null }}
+   * @param {{ forbiddenPartials?: any[] }} [options]
+   * @returns {SolveResult & { failedPartialGrid?: number[][] | null }}
    */
   solve(initialGrid, options = {}) {
     if (!this.rows || !this.cols || !this.stars.length) {
@@ -508,39 +503,6 @@ class GalaxiesSolver {
         return exact;
       }
     }
-    this.startedAt = Date.now();
-    this.forbiddenPartials = this._normalizeForbiddenPartials(options.forbiddenPartials || []);
-    this.frontier = [];
-
-    const frontierGrids = options.frontierGrids || [];
-    for (let i = frontierGrids.length - 1; i >= 0; i--) {
-      const fgrid = this._newSeededGrid();
-      if (!fgrid) continue;
-      this.grid = fgrid;
-      this.trail = [];
-      if (!this._applyInitialGrid(frontierGrids[i])) continue;
-      this._rememberPartial();
-      const solvedFrontier = this._search(null);
-      if (solvedFrontier) {
-        const out = this._toOutputGrid(this.grid);
-        this._storeSolution(cacheKey, out);
-        return { solved: true, grid: out };
-      }
-      if (this.timedOut) break;
-    }
-    if (this.timedOut) {
-      const partialGrid = this.timeoutPartial
-        ? this._toOutputGrid(this.timeoutPartial)
-        : (this.bestPartial ? this._toOutputGrid(this.bestPartial) : null);
-      return {
-        solved: false,
-        grid: null,
-        partialGrid,
-        partialFilled: this.bestPartialFilled,
-        frontierGrids: this._frontierOutput(),
-        error: 'time limit exceeded'
-      };
-    }
 
     const seedGrid = this._newSeededGrid();
     if (!seedGrid) return { solved: false, grid: null, error: 'Invalid Galaxies star layout' };
@@ -548,9 +510,7 @@ class GalaxiesSolver {
     this.trail = [];
     this.timedOut = false;
     this.startedAt = Date.now();
-    this.frontier = [];
     this.forbiddenPartials = this._normalizeForbiddenPartials(options.forbiddenPartials || []);
-    for (const f of frontierGrids) this._pushFrontierFromOutput(f);
     const resumed = !!initialGrid;
     if (initialGrid && !this._applyInitialGrid(initialGrid)) {
       return { solved: false, grid: null, error: 'invalid partial state' };
@@ -559,7 +519,7 @@ class GalaxiesSolver {
     const solved = this._search(null);
     if (!solved) {
       if (resumed && !this.timedOut && this.nodes <= 2) {
-        return { solved: false, grid: null, failedPartialGrid: initialGrid, frontierGrids: this._frontierOutput(), error: 'partial state exhausted' };
+        return { solved: false, grid: null, failedPartialGrid: initialGrid, error: 'partial state exhausted' };
       }
       const partialGrid = this.timeoutPartial
         ? this._toOutputGrid(this.timeoutPartial)
@@ -569,7 +529,6 @@ class GalaxiesSolver {
         grid: null,
         partialGrid,
         partialFilled: this.bestPartialFilled,
-        frontierGrids: this._frontierOutput(),
         error: this.timedOut ? 'time limit exceeded' : 'search limit exceeded'
       };
     }
@@ -998,16 +957,6 @@ class GalaxiesSolver {
     }
 
     bestCandidates.sort((a, b) => this._distance(best.row, best.col, a) - this._distance(best.row, best.col, b));
-    // Save alternative branches to the frontier (so they can resume later if
-    // this branch fails). Each "save" is: trail mark, assign, snapshot, rollback.
-    for (let i = bestCandidates.length - 1; i > 0; i--) {
-      const mark = this.trail.length;
-      const altChanged = new Set([bestCandidates[i]]);
-      if (this._assignPair(best.row, best.col, bestCandidates[i], altChanged)) {
-        this._pushFrontier();
-      }
-      this._rollback(mark);
-    }
     // Try each candidate in distance order. Trail-based undo replaces the
     // per-recursion grid clone — _rollback unwinds every write _assignPair and
     // _propagate made during the failed branch.
@@ -1022,20 +971,6 @@ class GalaxiesSolver {
     }
     this._rememberDead(key);
     return null;
-  }
-
-  _pushFrontier() {
-    if (!this.maxFrontier || this.frontier.length >= this.maxFrontier) return;
-    this.frontier.push(this.grid.map(row => row.slice()));
-  }
-
-  _pushFrontierFromOutput(outputGrid) {
-    if (!this.maxFrontier || this.frontier.length >= this.maxFrontier || !outputGrid) return;
-    this.frontier.push(outputGrid.map(row => row.map(v => v - 1)));
-  }
-
-  _frontierOutput() {
-    return this.frontier.map(grid => this._toOutputGrid(grid));
   }
 
   _matchesForbiddenPartial() {

@@ -682,7 +682,6 @@ function solveExtraData() {
       rows: data.rows,
       cols: data.cols,
       partialGrid: getCachedGalaxiesPartial(data),
-      frontierGrids: getGalaxiesFrontier(data),
       failedPartials: getFailedGalaxiesPartials(data),
     };
   }
@@ -703,11 +702,6 @@ function galaxiesPartialKey(data) {
 function galaxiesFailedKey(data) {
   const key = galaxiesCacheKey(data);
   return key ? key.replace('galaxies-solution:', 'galaxies-failed:') : null;
-}
-
-function galaxiesFrontierKey(data) {
-  const key = galaxiesCacheKey(data);
-  return key ? key.replace('galaxies-solution:', 'galaxies-frontier:') : null;
 }
 
 function getCachedGalaxiesSolution(data) {
@@ -836,34 +830,6 @@ function cacheFailedGalaxiesPartial(data, grid) {
 
 function clearFailedGalaxiesPartials(data) {
   const key = galaxiesFailedKey(data);
-  if (!key) return;
-  try { localStorage.removeItem(key); } catch {}
-}
-
-function getGalaxiesFrontier(data) {
-  const key = galaxiesFrontierKey(data);
-  if (!key) return [];
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map(grid => grid.map(row => row.slice()));
-  } catch {
-    return [];
-  }
-}
-
-function cacheGalaxiesFrontier(data, frontier) {
-  const key = galaxiesFrontierKey(data);
-  if (!key || !Array.isArray(frontier)) return;
-  try {
-    localStorage.setItem(key, JSON.stringify(frontier.slice(-80)));
-  } catch {}
-}
-
-function clearGalaxiesFrontier(data) {
-  const key = galaxiesFrontierKey(data);
   if (!key) return;
   try { localStorage.removeItem(key); } catch {}
 }
@@ -1639,7 +1605,6 @@ function makeWidget() {
       puzzleData.type, solveExtraData());
     if (puzzleData.type === 'galaxies' && result?.error === 'invalid partial state') {
       clearPartial(puzzleData);
-      clearGalaxiesFrontier(puzzleData);
       const retry = await runSolve(puzzleData.rowClues, puzzleData.colClues, stateResult?.success ? stateResult.grid : null,
         puzzleData.type, solveExtraData());
       if (retry?.solved) {
@@ -1652,12 +1617,10 @@ function makeWidget() {
     if (!result || !result.solved) {
       if (result?.partialGrid) {
         cachePartial(puzzleData, result.partialGrid, result.partialFilled);
-        if (puzzleData.type === 'galaxies') cacheGalaxiesFrontier(puzzleData, result.frontierGrids || []);
       } else if (result?.error === 'partial state exhausted') {
         if (puzzleData.type === 'galaxies' && result.failedPartialGrid) {
           cacheFailedGalaxiesPartial(puzzleData, result.failedPartialGrid);
         }
-        if (puzzleData.type === 'galaxies') cacheGalaxiesFrontier(puzzleData, result.frontierGrids || []);
         clearPartial(puzzleData);
       }
       setStatus(`Solve failed${result?.error ? ': ' + result.error : ''}`, 'error');
@@ -1667,15 +1630,14 @@ function makeWidget() {
   }
 
   // Move from "solving" into "ready to apply": cache the solution, clear
-  // outstanding partial/frontier state, and put the widget into confirm mode
-  // showing a preview. Used by both the fresh-solve and the retry path.
+  // outstanding partial state, and put the widget into confirm mode showing
+  // a preview. Used by both the fresh-solve and the retry path.
   function applySolveResult(result) {
     loopConfirming = false;
     puzzleData.solution = result.grid;
     cacheGalaxiesSolution(puzzleData, result.grid);
     clearPartial(puzzleData);
     clearFailedGalaxiesPartials(puzzleData);
-    clearGalaxiesFrontier(puzzleData);
     clearPendingHint();
     solveBtn.textContent = 'Confirm';
     confirming = true;
@@ -1790,7 +1752,6 @@ function makeWidget() {
       cacheGalaxiesSolution(puzzleData, result.grid);
       clearPartial(puzzleData);
       clearFailedGalaxiesPartials(puzzleData);
-      clearGalaxiesFrontier(puzzleData);
     }
 
     setStatus('Computing hint...', 'info');
