@@ -24,6 +24,9 @@ for (const name of Object.keys(fixtures)) {
   let solved = null;
   let nodes = null;
   for (let i = 0; i < N; i++) {
+    // GalaxiesSolver has a static solution cache — clear it so each iteration
+    // measures a real solve rather than a cache hit.
+    GalaxiesSolver._solutionCache?.clear?.();
     let s;
     if (p.type === 'nonogram') {
       s = new NonogramSolver(p.rowClues, p.colClues);
