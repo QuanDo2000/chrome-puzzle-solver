@@ -1,0 +1,9 @@
+{
+  "name": "chrome-puzzle-solver",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/",
+    "capture": "node tests/capture.js"
+  }
+}

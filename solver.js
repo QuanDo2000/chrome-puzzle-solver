@@ -2212,5 +2212,5 @@ forLoop:
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver };
 }
