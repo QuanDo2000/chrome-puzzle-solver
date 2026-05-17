@@ -1716,6 +1716,8 @@ function makeWidget() {
       stopLooping = false;
       loopBtn.textContent = 'Stop';
       setButtonsDisabled(true);
+      // The Loop button doubles as Stop while looping — keep it clickable.
+      loopBtn.disabled = false;
       setStatus('Step 1', 'info');
       let steps = 1;
       const state1 = await readGridState();
