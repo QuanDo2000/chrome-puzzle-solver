@@ -1278,7 +1278,11 @@ class AquariumSolver {
     this._propagate();
     this._rememberPartial();
 
-    if (this._allAssigned()) { this._buildGrid(); return { solved: true, grid: this.grid }; }
+    if (this._allAssigned()) {
+      this._buildGrid();
+      if (!this._verify()) return { solved: false, error: 'verification failed' };
+      return { solved: true, grid: this.grid };
+    }
 
     this._dpPreprocess();
     this._dpPairwise();
@@ -1294,7 +1298,11 @@ class AquariumSolver {
     }
     this._rememberPartial();
 
-    if (this._allAssigned()) { this._buildGrid(); return { solved: true, grid: this.grid }; }
+    if (this._allAssigned()) {
+      this._buildGrid();
+      if (!this._verify()) return { solved: false, error: 'verification failed' };
+      return { solved: true, grid: this.grid };
+    }
 
     const repair = this._solveRepair();
     if (repair?.solved) {
