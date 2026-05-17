@@ -1183,99 +1183,181 @@ function makeWidget() {
     statusEl.className = 'ns-status' + (type ? ' ns-' + type : '');
   }
 
+  // Cached state for drawPreview's incremental rendering.
+  // - lastDrawSig: full signature of the last successful draw. Identical input
+  //   skips the entire redraw (state-watch fires every 200ms even when nothing
+  //   visually changed).
+  // - staticLayer: offscreen canvas holding region borders, nonogram every-5
+  //   guides, and galaxies stars — pixels that depend only on puzzle shape, not
+  //   on the live grid contents. Rebuilt only when cellSize / regionMap / stars
+  //   change.
+  let lastDrawSig = null;
+  let staticLayer = null;
+  let staticLayerSig = null;
+
+  function regionMapSig(rm) {
+    if (!rm) return '';
+    let s = '';
+    for (let r = 0; r < rm.length; r++) {
+      const row = rm[r];
+      for (let c = 0; c < row.length; c++) { s += row[c]; s += ','; }
+      s += ';';
+    }
+    return s;
+  }
+
+  function gridDataSig(grid) {
+    let s = '';
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r];
+      for (let c = 0; c < row.length; c++) { s += row[c]; s += ','; }
+    }
+    if (grid.galaxies) {
+      const g = grid.galaxies;
+      if (g.horizontal) for (const row of g.horizontal) s += '|h' + row.join(',');
+      if (g.vertical)   for (const row of g.vertical)   s += '|v' + row.join(',');
+    }
+    return s;
+  }
+
+  function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    drawRegionBordersOn(ctx, rows, cols, cellSize, pd?.regionMap);
+    drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd);
+    if (pd?.type === 'galaxies' && pd.stars) {
+      ctx.fillStyle = '#111827';
+      for (const star of pd.stars) {
+        const cx = ((star.col + 1) / 2) * cellSize;
+        const cy = ((star.row + 1) / 2) * cellSize;
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(3, cellSize / 7), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    return c;
+  }
+
+  function drawRegionBordersOn(ctx, rows, cols, cellSize, rm) {
+    if (!rm) return;
+    ctx.save();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
+    ctx.lineCap = 'square';
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = c * cellSize, y = r * cellSize;
+        const id = rm[r][c];
+        if (c + 1 < cols && rm[r][c + 1] !== id) {
+          ctx.beginPath();
+          ctx.moveTo(x + cellSize, y);
+          ctx.lineTo(x + cellSize, y + cellSize);
+          ctx.stroke();
+        }
+        if (r + 1 < rows && rm[r + 1][c] !== id) {
+          ctx.beginPath();
+          ctx.moveTo(x, y + cellSize);
+          ctx.lineTo(x + cellSize, y + cellSize);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.strokeStyle = '#6b7280';
+    ctx.lineWidth = Math.max(1, Math.floor(cellSize / 12));
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = c * cellSize, y = r * cellSize;
+        const id = rm[r][c];
+        if (c + 1 < cols && rm[r][c + 1] !== id) {
+          ctx.beginPath();
+          ctx.moveTo(x + cellSize, y);
+          ctx.lineTo(x + cellSize, y + cellSize);
+          ctx.stroke();
+        }
+        if (r + 1 < rows && rm[r + 1][c] !== id) {
+          ctx.beginPath();
+          ctx.moveTo(x, y + cellSize);
+          ctx.lineTo(x + cellSize, y + cellSize);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
+    if (pd?.regionMap || pd?.type === 'galaxies') return;
+    ctx.save();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
+    ctx.lineCap = 'square';
+    for (let c = 5; c < cols; c += 5) {
+      ctx.beginPath();
+      ctx.moveTo(c * cellSize, 0);
+      ctx.lineTo(c * cellSize, h);
+      ctx.stroke();
+    }
+    for (let r = 5; r < rows; r += 5) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * cellSize);
+      ctx.lineTo(w, r * cellSize);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#6b7280';
+    ctx.lineWidth = Math.max(1, Math.floor(cellSize / 12));
+    for (let c = 5; c < cols; c += 5) {
+      ctx.beginPath();
+      ctx.moveTo(c * cellSize, 0);
+      ctx.lineTo(c * cellSize, h);
+      ctx.stroke();
+    }
+    for (let r = 5; r < rows; r += 5) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * cellSize);
+      ctx.lineTo(w, r * cellSize);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawPreview(grid, hint) {
     const rows = grid.length;
     const cols = grid[0].length;
     const bodyWidth = q('.ns-body').clientWidth || 300;
     const cellSize = Math.min(Math.floor((bodyWidth - 4) / cols), Math.floor(350 / rows), 24);
     const w = cols * cellSize, h = rows * cellSize;
+
+    // Idempotent: ensure the preview is visible whether or not we redraw.
+    previewWrap.classList.add('ns-visible');
+
+    // Early bail: if everything that affects pixels is identical to the
+    // previous draw, skip the entire redraw. The state-watch MutationObserver
+    // fires on every DOM tick (~200ms) — most of those don't change cell values.
+    const pd = puzzleData;
+    const sig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
+                '|rm=' + regionMapSig(pd?.regionMap) +
+                '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
+                '|g=' + gridDataSig(grid) +
+                '|h=' + (hint ? JSON.stringify(hint) : '');
+    if (sig === lastDrawSig) return;
+    lastDrawSig = sig;
+
+    // (Re)build the static layer if puzzle shape or size changed.
+    const staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
+                      '|rm=' + regionMapSig(pd?.regionMap) +
+                      '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '');
+    if (staticSig !== staticLayerSig) {
+      staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
+      staticLayerSig = staticSig;
+    }
+
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext('2d');
 
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
-
-    const drawRegionBorders = () => {
-      if (!puzzleData?.regionMap) return;
-      const rm = puzzleData.regionMap;
-      ctx.save();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
-      ctx.lineCap = 'square';
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const x = c * cellSize, y = r * cellSize;
-          const id = rm[r][c];
-          if (c + 1 < cols && rm[r][c + 1] !== id) {
-            ctx.beginPath();
-            ctx.moveTo(x + cellSize, y);
-            ctx.lineTo(x + cellSize, y + cellSize);
-            ctx.stroke();
-          }
-          if (r + 1 < rows && rm[r + 1][c] !== id) {
-            ctx.beginPath();
-            ctx.moveTo(x, y + cellSize);
-            ctx.lineTo(x + cellSize, y + cellSize);
-            ctx.stroke();
-          }
-        }
-      }
-      ctx.strokeStyle = '#6b7280';
-      ctx.lineWidth = Math.max(1, Math.floor(cellSize / 12));
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const x = c * cellSize, y = r * cellSize;
-          const id = rm[r][c];
-          if (c + 1 < cols && rm[r][c + 1] !== id) {
-            ctx.beginPath();
-            ctx.moveTo(x + cellSize, y);
-            ctx.lineTo(x + cellSize, y + cellSize);
-            ctx.stroke();
-          }
-          if (r + 1 < rows && rm[r + 1][c] !== id) {
-            ctx.beginPath();
-            ctx.moveTo(x, y + cellSize);
-            ctx.lineTo(x + cellSize, y + cellSize);
-            ctx.stroke();
-          }
-        }
-      }
-      ctx.restore();
-    };
-    const drawNonogramGuides = () => {
-      if (puzzleData?.regionMap || puzzleData?.type === 'galaxies') return;
-      ctx.save();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
-      ctx.lineCap = 'square';
-      for (let c = 5; c < cols; c += 5) {
-        ctx.beginPath();
-        ctx.moveTo(c * cellSize, 0);
-        ctx.lineTo(c * cellSize, h);
-        ctx.stroke();
-      }
-      for (let r = 5; r < rows; r += 5) {
-        ctx.beginPath();
-        ctx.moveTo(0, r * cellSize);
-        ctx.lineTo(w, r * cellSize);
-        ctx.stroke();
-      }
-      ctx.strokeStyle = '#6b7280';
-      ctx.lineWidth = Math.max(1, Math.floor(cellSize / 12));
-      for (let c = 5; c < cols; c += 5) {
-        ctx.beginPath();
-        ctx.moveTo(c * cellSize, 0);
-        ctx.lineTo(c * cellSize, h);
-        ctx.stroke();
-      }
-      for (let r = 5; r < rows; r += 5) {
-        ctx.beginPath();
-        ctx.moveTo(0, r * cellSize);
-        ctx.lineTo(w, r * cellSize);
-        ctx.stroke();
-      }
-      ctx.restore();
-    };
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -1320,14 +1402,7 @@ function makeWidget() {
           }
         }
       }
-      ctx.fillStyle = '#111827';
-      for (const star of puzzleData.stars || []) {
-        const cx = ((star.col + 1) / 2) * cellSize;
-        const cy = ((star.row + 1) / 2) * cellSize;
-        ctx.beginPath();
-        ctx.arc(cx, cy, Math.max(3, cellSize / 7), 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // Stars themselves are part of the cached static layer (puzzle-shape only).
       ctx.restore();
     }
 
@@ -1401,10 +1476,9 @@ function makeWidget() {
       }
     }
 
-    drawRegionBorders();
-    drawNonogramGuides();
-
-    previewWrap.classList.add('ns-visible');
+    // Region borders + nonogram-5 guides + galaxies stars (all puzzle-shape
+    // dependent only) come from the cached static layer.
+    if (staticLayer) ctx.drawImage(staticLayer, 0, 0);
   }
 
   function setExpanded(val) {
