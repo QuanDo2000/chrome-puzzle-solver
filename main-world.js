@@ -511,15 +511,44 @@ function fixGameTimer() {
 }
 
 // Dump the current puzzle in our test/fixtures format, for capturing real
-// puzzles to feed into bench-real.js. Returns null if Game isn't loaded or the
-// puzzle shape isn't recognized.
+// puzzles to feed into bench-real.js. On failure returns
+// { error, diagnostic, path } where `diagnostic` describes the shape of
+// window.Game so the extractor can be patched.
 function dumpPuzzleForBench() {
+  function diagnostic(g) {
+    function shape(v, depth) {
+      if (v == null) return v === null ? 'null' : 'undefined';
+      if (typeof v !== 'object') {
+        return typeof v + (typeof v === 'string' ? '(' + v.length + ')' : '');
+      }
+      if (Array.isArray(v)) {
+        var head = v.length > 0 ? (depth > 0 ? shape(v[0], depth - 1) : typeof v[0]) : 'empty';
+        return 'array[' + v.length + ' of ' + head + ']';
+      }
+      return 'object{' + Object.keys(v).slice(0, 20).join(',') + '}';
+    }
+    if (!g) return { game: 'undefined' };
+    return {
+      gameKeys: Object.keys(g).slice(0, 50),
+      task: shape(g.task, 2),
+      taskSample: typeof g.task === 'string' ? g.task.slice(0, 200)
+        : (Array.isArray(g.task) ? g.task.slice(0, 8)
+        : (g.task && typeof g.task === 'object' ? Object.keys(g.task).slice(0, 20) : null)),
+      currentState: shape(g.currentState, 2),
+      currentStateKeys: g.currentState ? Object.keys(g.currentState).slice(0, 50) : null,
+      areas: shape(g.areas, 1),
+      width: g.puzzleWidth, height: g.puzzleHeight,
+    };
+  }
+
   try {
     var g = window.Game;
-    if (!g) return null;
+    if (!g) return { error: 'window.Game not found', diagnostic: diagnostic(null), path: location.pathname };
     var width = g.puzzleWidth || (g.getSetting && g.getSetting('puzzleWidth'));
     var height = g.puzzleHeight || (g.getSetting && g.getSetting('puzzleHeight'));
-    if (!width || !height) return null;
+    if (!width || !height) {
+      return { error: 'dimensions not found', diagnostic: diagnostic(g), path: location.pathname };
+    }
     var path = location.pathname;
 
     function normalizeClue(arr) {
@@ -560,7 +589,7 @@ function dumpPuzzleForBench() {
       var taskStr =
         (g.currentState && typeof g.currentState.task === 'string' && g.currentState.task) ||
         (typeof g.task === 'string' ? g.task : null);
-      if (!taskStr) return { error: 'galaxies: no task string', path: path };
+      if (!taskStr) return { error: 'galaxies: no task string', diagnostic: diagnostic(g), path: path };
       var cols = 2 * width - 1;
       var rows = 2 * height - 1;
       var stars = [];
@@ -579,10 +608,10 @@ function dumpPuzzleForBench() {
 
     if (path.indexOf('/aquarium/') !== -1) {
       var clues = extractDualClueArrays();
-      if (!clues) return { error: 'aquarium: no clues', path: path };
+      if (!clues) return { error: 'aquarium: no clues', diagnostic: diagnostic(g), path: path };
       function flatten(a) { return a.map(function (v) { return Array.isArray(v) ? (v[0] || 0) : (v | 0); }); }
       var regions = g.areas || (g.currentState && g.currentState.areas);
-      if (!Array.isArray(regions) || regions.length < height) return { error: 'aquarium: no regionMap', path: path };
+      if (!Array.isArray(regions) || regions.length < height) return { error: 'aquarium: no regionMap', diagnostic: diagnostic(g), path: path };
       var regionMap = [];
       for (var r = 0; r < height; r++) regionMap.push(regions[r].slice(0, width));
       return {
@@ -593,7 +622,7 @@ function dumpPuzzleForBench() {
     }
 
     var clues2 = extractDualClueArrays();
-    if (!clues2) return { error: 'nonogram: no clues', path: path };
+    if (!clues2) return { error: 'nonogram: no clues', diagnostic: diagnostic(g), path: path };
     return {
       type: 'nonogram', rows: height, cols: width,
       rowClues: clues2.rowClues, colClues: clues2.colClues, path: path,

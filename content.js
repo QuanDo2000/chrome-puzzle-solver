@@ -2004,7 +2004,9 @@ function makeWidget() {
     if (!data || data.error) {
       const msg = data?.error ? `Dump failed: ${data.error}` : 'Dump failed.';
       setStatus(msg, 'error');
-      console.warn('[puzzle-solver dump]', data);
+      console.warn('[puzzle-solver dump]\n' + JSON.stringify(data, null, 2));
+      // Also try to copy the diagnostic so the user can paste it back.
+      try { await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); } catch (_) {}
       return;
     }
     const json = JSON.stringify(data, null, 2);
