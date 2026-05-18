@@ -152,3 +152,15 @@ test('BinairoSolver: getHint returns first forced cell when applied to fresh giv
   assert.ok(['no-triples', 'balance', 'uniqueness'].includes(hint.rule),
     `hint rule must be a known deduction name, got ${hint.rule}`);
 });
+
+test('BinairoSolver: static _solutionCache returns prior solve on identical givens', () => {
+  BinairoSolver.clearSolutionCache();
+  const p = fixtures.binairo6x6;
+  const r1 = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve();
+  assert.equal(r1.solved, true);
+  // Second call must come from cache — no exception, same grid.
+  const r2 = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve();
+  assert.equal(r2.solved, true);
+  assert.deepEqual(r2.grid, r1.grid);
+  BinairoSolver.clearSolutionCache();
+});

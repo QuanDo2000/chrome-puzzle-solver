@@ -2787,11 +2787,23 @@ class BinairoSolver {
    * @returns {{ solved: boolean, grid: number[][] | null, error?: string }}
    */
   solve() {
+    const key = this._cacheKey();
+    const cached = BinairoSolver._solutionCache.get(key);
+    if (cached) return { solved: true, grid: cached.map(row => row.slice()) };
+
     if (!this.propagate()) {
       return { solved: false, grid: null, error: 'contradiction on initial propagation' };
     }
-    if (this._isComplete()) return { solved: true, grid: this._gridTo2D() };
-    if (this._backtrack()) return { solved: true, grid: this._gridTo2D() };
+    if (this._isComplete()) {
+      const grid = this._gridTo2D();
+      this._storeInCache(key, grid);
+      return { solved: true, grid };
+    }
+    if (this._backtrack()) {
+      const grid = this._gridTo2D();
+      this._storeInCache(key, grid);
+      return { solved: true, grid };
+    }
     return { solved: false, grid: null, error: 'no solution found' };
   }
 
@@ -2886,6 +2898,36 @@ class BinairoSolver {
       this._rollback(mark);
     }
     return false;
+  }
+
+  static _solutionCache = new Map();
+  static _maxSolutionCache = 50;
+
+  static clearSolutionCache() {
+    BinairoSolver._solutionCache.clear();
+  }
+
+  _cacheKey() {
+    // FNV-1a over (rows, cols, flattened givens). Returns a 32-bit unsigned int as string.
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(this.rows);
+    mix(this.cols);
+    for (let r = 0; r < this.rows; r++) {
+      const row = this.givens[r] || [];
+      for (let c = 0; c < this.cols; c++) mix((row[c] | 0) + 2); // +2 to map -1..1 to 1..3
+    }
+    return String(h >>> 0);
+  }
+
+  _storeInCache(key, grid) {
+    const m = BinairoSolver._solutionCache;
+    if (m.size >= BinairoSolver._maxSolutionCache) {
+      const first = m.keys().next().value;
+      m.delete(first);
+    }
+    // Store a deep copy so callers can't mutate the cached grid.
+    m.set(key, grid.map(row => row.slice()));
   }
 }
 
