@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { NonogramSolver, AquariumSolver, GalaxiesSolver } = require('../solver.js');
+const { BinairoSolver } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -51,4 +52,11 @@ test('GalaxiesSolver: small 7x7 matches golden (exercises _search backtracking)'
   const p = fixtures.galaxiesSmall;
   const result = clean(new GalaxiesSolver(p.stars, p.rows, p.cols).solve(null));
   assert.deepEqual(result, golden.galaxiesSmall);
+});
+
+test('BinairoSolver: constructor accepts givens and exposes rows/cols', () => {
+  const p = fixtures.binairo6x6;
+  const s = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
+  assert.equal(s.rows, 6);
+  assert.equal(s.cols, 6);
 });
