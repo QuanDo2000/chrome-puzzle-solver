@@ -83,15 +83,6 @@ Content scripts share the page's origin, so `new Worker(chrome.runtime.getURL('s
 - The Loop button repurposes as Stop while looping — `setButtonsDisabled(true)` must be followed by `loopBtn.disabled = false`. The inter-step 300ms sleep is cancellable via `stopLoopWait` so Stop is instant.
 - Lifecycle: `pagehide(persisted=false)` drains `solverPending`, terminates the worker, stops the state-watch observer. `pagehide(persisted=true)` no-ops (BFCache). `pageshow(persisted=true)` nulls the (now-dead) worker so the next call rebuilds lazily.
 
-## Tests and benches
-
-- `npm test` runs the `node:test` suite under `tests/`.
-- `tests/fixtures/puzzles.js` — small deterministic puzzles with golden snapshots in `tests/golden.js`. Regenerate via `npm run capture`.
-- `tests/fixtures/real-puzzles.js` — full-size puzzles captured from puzzles-mobile.com via the widget's **📋 Dump** button. Used by `tests/bench-real.js` only.
-- `tests/solveline.test.js` — property-style cross-check of `NonogramSolver.solveLine` against a brute-force enumerator (200 fuzz trials). Add similar cross-checks if you change line-DP logic.
-- Bench scripts: `tests/bench.js` (synthetic nonogram), `tests/bench-galaxies.js`, `tests/bench-aquarium.js`, `tests/bench-real.js`.
-- Comparing perf vs a prior revision: `jj file show -r <change-id> solver.js > /tmp/solver-baseline.js`, swap into place, run bench, swap back.
-
 ## Capturing new real puzzles
 
 Click the widget's **📋 Dump** button on any puzzle page. It writes a JSON snippet (matching the `real-puzzles.js` format) to the clipboard and to `console.log` with prefix `[puzzle-solver dump]`. On extractor failure the snippet includes a `diagnostic` block with the shape of `window.Game` — paste that back to patch `dumpPuzzleForBench()` in `main-world.js`.
@@ -105,11 +96,12 @@ Click the widget's **📋 Dump** button on any puzzle page. It writes a JSON sni
 
 ## Tests and benches
 
-- `npm test` runs the `node:test` suite. `npm run lint`, `npm run typecheck` are gated in CI.
+- `npm test` runs the `node:test` suite under `tests/`. `npm run lint`, `npm run typecheck` are gated in CI.
 - `tests/fixtures/puzzles.js` — small deterministic puzzles with golden snapshots in `tests/golden.js`. Regenerate via `npm run capture`.
 - `tests/fixtures/real-puzzles.js` — full-size puzzles captured from puzzles-mobile.com via the widget's **📋 Dump** button. Used by `tests/bench-real.js` only.
 - `tests/solveline.test.js` — brute-force cross-check of `solveLine`. Two fuzz tests: small (N≤3) and large (N=4..7, exercises the bitmap fast-path).
-- Bench scripts (`tests/bench.js`, `bench-galaxies.js`, `bench-aquarium.js`, `bench-real.js`) discard 2 warmup iterations and `process.exit(1)` on unsolved puzzles. `bench.js`'s synthetic puzzle is intentionally ambiguous; `solved=false` is expected.
+- Bench scripts (`tests/bench.js`, `bench-galaxies.js`, `bench-aquarium.js`, `bench-real.js`) discard 2 warmup iterations. `bench-galaxies.js`, `bench-aquarium.js`, and `bench-real.js` `process.exit(1)` on unsolved puzzles; `bench.js`'s synthetic nonogram is intentionally ambiguous so `solved=false` is expected and it does not exit non-zero.
+- Comparing perf vs a prior revision: `jj file show -r <change-id> solver.js > /tmp/solver-baseline.js`, swap into place, run bench, swap back.
 - Nightly CI workflow (`.github/workflows/bench-nightly.yml`) runs all four; no `continue-on-error`.
 
 ## Things explicitly removed (don't reintroduce)
