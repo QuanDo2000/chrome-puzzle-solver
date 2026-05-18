@@ -77,3 +77,23 @@ test('BinairoSolver: no-triples propagation forces opposite when two same in a r
   assert.equal(ok, true);
   assert.equal(s._get(0, 2), 2, 'cell (0,2) must be forced to 2 (zero)');
 });
+
+test('BinairoSolver: balance rule fills row when half is reached (6-cell row, 3 ones placed)', () => {
+  // Row 0 has three 1s; the remaining three empty cells must all become 2.
+  const s = new BinairoSolver({
+    rows: 6, cols: 6,
+    givens: [
+      [1, -1, 1, -1, 1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+    ],
+  });
+  const ok = s.propagate();
+  assert.equal(ok, true);
+  for (let c = 0; c < 6; c++) {
+    if (c % 2 === 1) assert.equal(s._get(0, c), 2, `row 0 col ${c} should be 2`);
+  }
+});

@@ -2626,7 +2626,42 @@ class BinairoSolver {
   }
 
   // Stubs — Tasks 4 and 5 replace these.
-  _applyBalance(_onChange) { return true; }
+  // If a line already has rowHalf of one value, every empty cell in it must take
+  // the other value. Uses the incrementally-maintained rowOnes/rowZeros etc.
+  _applyBalance(onChange) {
+    const R = this.rows, C = this.cols, rowHalf = this.rowHalf, colHalf = this.colHalf;
+
+    for (let r = 0; r < R; r++) {
+      const ones  = this.rowOnes[r];
+      const zeros = this.rowZeros[r];
+      if (ones > rowHalf || zeros > rowHalf) return false;
+      if (ones === rowHalf) {
+        for (let c = 0; c < C; c++) {
+          if (this._get(r, c) === 0) { if (this._assign(r, c, 2)) onChange(); }
+        }
+      } else if (zeros === rowHalf) {
+        for (let c = 0; c < C; c++) {
+          if (this._get(r, c) === 0) { if (this._assign(r, c, 1)) onChange(); }
+        }
+      }
+    }
+
+    for (let c = 0; c < C; c++) {
+      const ones  = this.colOnes[c];
+      const zeros = this.colZeros[c];
+      if (ones > colHalf || zeros > colHalf) return false;
+      if (ones === colHalf) {
+        for (let r = 0; r < R; r++) {
+          if (this._get(r, c) === 0) { if (this._assign(r, c, 2)) onChange(); }
+        }
+      } else if (zeros === colHalf) {
+        for (let r = 0; r < R; r++) {
+          if (this._get(r, c) === 0) { if (this._assign(r, c, 1)) onChange(); }
+        }
+      }
+    }
+    return true;
+  }
   _applyUniqueness(_onChange) { return true; }
 }
 
