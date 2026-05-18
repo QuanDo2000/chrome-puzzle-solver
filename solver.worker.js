@@ -5,6 +5,17 @@ importScripts('solver.js');
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
+  // Without an id the response can't be correlated back to a pending awaiter
+  // on the content-script side (solverPending.get(undefined) returns nothing),
+  // so the originating promise would hang forever. Reply on a synthetic id
+  // so any debug listener can see it, but don't pretend to dispatch.
+  if (typeof id !== 'number') {
+    self.postMessage({
+      id: null,
+      result: { solved: false, grid: null, error: 'worker received message without id' },
+    });
+    return;
+  }
   let result;
   try {
     if (type === 'galaxies' && extraData) {
