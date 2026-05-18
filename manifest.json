@@ -3,7 +3,7 @@
   "name": "Puzzle Solver",
   "version": "1.0",
   "description": "Solves puzzles",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": ["scripting"],
   "host_permissions": ["https://www.puzzles-mobile.com/*"],
   "icons": {
     "16": "icons/icon-16.png",
