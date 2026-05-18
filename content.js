@@ -1147,16 +1147,23 @@ function makeWidget() {
   // Returns an array of DOM nodes / strings describing a row/col nonogram hint,
   // for use with setStatusNodes(). Replaces the old html-string approach so we
   // never pass dynamic content through innerHTML.
-  // Write status text + redraw the preview for a freshly computed hint.
-  // Three callers share this rendering tail: hintHandler, loopHandler,
-  // and the state-watch debounce. Per-caller state (pendingHint, applyHint
-  // button enable, puzzleData.solution updates) stays at the call site.
-  function renderHintStatusAndPreview(h, grid) {
+  // Write the status text for a hint (galaxies → "Draw the X.", others →
+  // hintStatusNodes). Optional `prefix` is prepended verbatim — the loop body
+  // uses `Step N: ` so it threads through one branch.
+  function setHintStatus(h, prefix = '') {
     if (h.type === 'galaxies') {
-      setStatusNodes('info', 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
+      setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
     } else {
-      setStatusNodes('info', ...hintStatusNodes(h));
+      setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
+  }
+
+  // Status + preview after a freshly computed hint. Used by hintHandler,
+  // previewFirstLoopStep, and the state-watch debounce. Per-caller state
+  // (pendingHint, applyHint button enable, puzzleData.solution updates)
+  // stays at the call site.
+  function renderHintStatusAndPreview(h, grid) {
+    setHintStatus(h);
     if (grid) drawPreview(grid, h);
   }
 
@@ -1718,113 +1725,120 @@ function makeWidget() {
     drawPreview(result.grid);
   }
 
+  // The Loop button cycles through three states. loopHandler dispatches; the
+  // per-state work lives in dedicated helpers below.
   async function loopHandler() {
     if (!puzzleData) { setStatus('Detect first.', 'error'); return; }
+    if (looping) { stopLoop(); return; }
+    if (loopConfirming) { await applyAndRunLoop(); return; }
+    await previewFirstLoopStep();
+  }
 
-    if (looping) {
-      stopLooping = true;
-      loopBtn.disabled = true;
-      loopBtn.textContent = 'Stopping...';
-      // If the loop is currently sleeping between steps, wake it up so it
-      // checks stopLooping on the next iteration instead of waiting out the
-      // remaining 300ms.
-      if (stopLoopWait) stopLoopWait();
-      return;
-    }
+  // Branch 1 — user clicked Loop while looping. Cancel the inter-step sleep
+  // if any so Stop is instant; the loop body checks stopLooping each iter.
+  function stopLoop() {
+    stopLooping = true;
+    loopBtn.disabled = true;
+    loopBtn.textContent = 'Stopping...';
+    if (stopLoopWait) stopLoopWait();
+  }
 
-    if (loopConfirming) {
-      confirming = false;
-      solveBtn.textContent = 'Solve';
-      loopConfirming = false;
+  // Cancellable inter-step pause. Settles as soon as the user clicks Stop
+  // instead of waiting out the full delay.
+  function sleepWithStop(ms) {
+    return new Promise(resolve => {
+      const timer = setTimeout(() => { stopLoopWait = null; resolve(); }, ms);
+      stopLoopWait = () => { clearTimeout(timer); stopLoopWait = null; resolve(); };
+    });
+  }
 
-      // Apply the pending hint first. If it fails we bail out before starting
-      // the loop — starting auto-solve from an inconsistent state would mask
-      // the real error and likely fail every subsequent step too.
-      if (puzzleData.pendingHint) {
-        setStatus('Applying...', 'info');
-        let ok;
-        if (puzzleData.pendingHint.type === 'galaxies') {
-          const r = await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
-          ok = !!r?.success;
-        } else {
-          const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
-          ok = !!(await callMainWorld('applyHintCells', [hintCells]));
-        }
-        if (!ok) {
-          setStatus('Hint apply failed; loop aborted.', 'error');
-          return;
-        }
-      }
-      clearPendingHint();
+  // Branch 2 — user clicked Confirm. Apply the pending hint, then enter the
+  // auto-loop body. If the apply fails we bail before starting, because
+  // running the loop from an inconsistent state would just mask the real
+  // error and likely fail every subsequent step.
+  async function applyAndRunLoop() {
+    confirming = false;
+    solveBtn.textContent = 'Solve';
+    loopConfirming = false;
 
-      // Start auto-loop
-      looping = true;
-      stopLooping = false;
-      loopBtn.textContent = 'Stop';
-      setButtonsDisabled(true);
-      // The Loop button doubles as Stop while looping — keep it clickable.
-      loopBtn.disabled = false;
-      setStatus('Step 1', 'info');
-      let steps = 1;
-      const state1 = await readGridState();
-      if (state1?.success) drawPreview(state1.grid);
-
-      while (true) {
-        if (stopLooping) break;
-        const gs = await readGridState();
-        if (!gs?.success) break;
-        if (puzzleData.type !== 'galaxies' && gs.grid.every(row => row.every(c => c !== 0))) break;
-
-        const hr = await getHint({ solution: puzzleData.solution });
-        if (!hr?.success) break;
-        if (hr.hint?.type !== 'galaxies' && !hr.hint?.cells?.length) break;
-
-        const h = hr.hint;
-        applyHintToGrid(gs.grid, h);
-        const ar = h.type === 'galaxies'
-          ? await applySolution({ type: 'galaxies-lines', lines: h.lines })
-          : await applySolution(gs.grid);
-        if (!ar?.success) break;
-
-        steps++;
-        if (h.type === 'galaxies') {
-          const line = galaxiesHintLineDesc(h);
-          setStatusNodes('info', `Step ${steps}: Draw the `, bold(line), '.');
-        } else {
-          setStatusNodes('info', `Step ${steps}: `, ...hintStatusNodes(h));
-        }
-        const ss = await readGridState();
-        if (ss?.success) drawPreview(ss.grid);
-        // Cancellable 300ms inter-step pause: settle as soon as the user
-        // clicks Stop instead of forcing them to wait out the full delay.
-        await new Promise(resolve => {
-          const timer = setTimeout(() => {
-            stopLoopWait = null;
-            resolve();
-          }, 300);
-          stopLoopWait = () => { clearTimeout(timer); stopLoopWait = null; resolve(); };
-        });
-      }
-      stopLoopWait = null;
-
-      loopBtn.textContent = 'Loop';
-      loopBtn.disabled = false;
-      looping = false;
-      setButtonsDisabled(false);
-      updateUndoRedoButtons();
-      setHintLabel('Hint');
-      if (stopLooping) {
-        setStatus(`Stopped after ${steps} step${steps !== 1 ? 's' : ''}.`, 'info');
+    if (puzzleData.pendingHint) {
+      setStatus('Applying...', 'info');
+      let ok;
+      if (puzzleData.pendingHint.type === 'galaxies') {
+        const r = await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
+        ok = !!r?.success;
       } else {
-        const end = await readGridState();
-        if (end?.success) drawPreview(end.grid);
-        const done = end?.grid && puzzleData.type !== 'galaxies' && end.grid.every(row => row.every(c => c !== 0));
-        setStatus(done ? 'Solved!' : 'No more hints available.', done ? 'success' : 'info');
+        const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
+        ok = !!(await callMainWorld('applyHintCells', [hintCells]));
       }
-      stopLooping = false;
-      return;
+      if (!ok) {
+        setStatus('Hint apply failed; loop aborted.', 'error');
+        return;
+      }
     }
+    clearPendingHint();
+    await runLoop();
+  }
 
+  async function runLoop() {
+    looping = true;
+    stopLooping = false;
+    loopBtn.textContent = 'Stop';
+    setButtonsDisabled(true);
+    // The Loop button doubles as Stop while looping — keep it clickable.
+    loopBtn.disabled = false;
+    setStatus('Step 1', 'info');
+    let steps = 1;
+    const state1 = await readGridState();
+    if (state1?.success) drawPreview(state1.grid);
+
+    while (true) {
+      if (stopLooping) break;
+      const gs = await readGridState();
+      if (!gs?.success) break;
+      if (puzzleData.type !== 'galaxies' && gs.grid.every(row => row.every(c => c !== 0))) break;
+
+      const hr = await getHint({ solution: puzzleData.solution });
+      if (!hr?.success) break;
+      if (hr.hint?.type !== 'galaxies' && !hr.hint?.cells?.length) break;
+
+      const h = hr.hint;
+      applyHintToGrid(gs.grid, h);
+      const ar = h.type === 'galaxies'
+        ? await applySolution({ type: 'galaxies-lines', lines: h.lines })
+        : await applySolution(gs.grid);
+      if (!ar?.success) break;
+
+      steps++;
+      setHintStatus(h, `Step ${steps}: `);
+      const ss = await readGridState();
+      // Loop's per-step refresh: just the updated grid, no hint overlay.
+      if (ss?.success) drawPreview(ss.grid);
+      await sleepWithStop(300);
+    }
+    stopLoopWait = null;
+
+    loopBtn.textContent = 'Loop';
+    loopBtn.disabled = false;
+    looping = false;
+    setButtonsDisabled(false);
+    updateUndoRedoButtons();
+    setHintLabel('Hint');
+    if (stopLooping) {
+      setStatus(`Stopped after ${steps} step${steps !== 1 ? 's' : ''}.`, 'info');
+    } else {
+      const end = await readGridState();
+      if (end?.success) drawPreview(end.grid);
+      const done = end?.grid && puzzleData.type !== 'galaxies' && end.grid.every(row => row.every(c => c !== 0));
+      setStatus(done ? 'Solved!' : 'No more hints available.', done ? 'success' : 'info');
+    }
+    stopLooping = false;
+  }
+
+  // Branch 3 — fresh Loop press. Compute one hint, show its preview, switch
+  // the button to Confirm. The actual loop doesn't start until the user
+  // approves by clicking Confirm.
+  async function previewFirstLoopStep() {
     confirming = false;
     solveBtn.textContent = 'Solve';
 
