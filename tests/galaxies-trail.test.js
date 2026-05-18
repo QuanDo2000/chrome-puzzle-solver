@@ -77,8 +77,27 @@ test('solve with forbiddenPartials bypasses the static solution cache', () => {
     'solver should not return a cached solution that is in forbiddenPartials');
 });
 
+test('solve() on a reused instance resets per-solve state', () => {
+  const p = fixtures.galaxiesSmall;
+  GalaxiesSolver._solutionCache.clear();
+  const s = new GalaxiesSolver(p.stars, p.rows, p.cols);
+  // First solve carries nodes/bestPartial/timeoutPartial/deadCache forward
+  // unless solve() explicitly resets them.
+  s.solve(null);
+  const nodesAfterFirst = s.nodes;
+  assert.ok(nodesAfterFirst > 0, 'first solve should record nodes visited');
+  GalaxiesSolver._solutionCache.clear();
+  // Second solve on same instance — must look like a fresh run.
+  s.solve(null);
+  assert.ok(s.nodes <= nodesAfterFirst,
+    `nodes should restart (got ${s.nodes}, prior run ${nodesAfterFirst})`);
+});
+
 test('solve drains its own search trail (search returns with grid solved)', () => {
   const p = fixtures.galaxiesSmall;
+  // Cache short-circuit returns without populating trail; clear so this test
+  // actually exercises the search path no matter what order tests ran in.
+  GalaxiesSolver._solutionCache.clear();
   const s = new GalaxiesSolver(p.stars, p.rows, p.cols);
   const trailBefore = s.trail.length;  // 0 (constructor)
   const result = s.solve(null);

@@ -564,8 +564,17 @@ class GalaxiesSolver {
 
     const seedGrid = this._newSeededGrid();
     if (!seedGrid) return { solved: false, grid: null, error: 'Invalid Galaxies star layout' };
+    // Reset every per-solve field so a reused instance behaves like a fresh
+    // one. Mirrors NonogramSolver.solve()'s reset block; AquariumSolver.solve
+    // is the third example. Production constructs a fresh solver per worker
+    // message, but the inconsistency was a latent footgun.
     this.grid = seedGrid;
     this.trail = [];
+    this.nodes = 0;
+    this.bestPartial = null;
+    this.bestPartialFilled = 0;
+    this.timeoutPartial = null;
+    this.deadCache.clear();
     this.timedOut = false;
     this.startedAt = Date.now();
     this.forbiddenPartials = this._normalizeForbiddenPartials(options.forbiddenPartials || []);
