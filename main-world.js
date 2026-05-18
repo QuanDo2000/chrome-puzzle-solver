@@ -456,13 +456,35 @@ function applyHintCells(hintCells) {
   try {
     if (!window.Game || !window.Game.currentState || !window.Game.currentState.cellStatus) return false;
     const cs = window.Game.currentState.cellStatus;
+
+    // Commit pre-write state into the page's internal model so the mutations
+    // below register as real changes. Without this, aquarium silently keeps
+    // its prior visible state even though cs[r][c] is updated. applyGameState
+    // (the full-solution path that works for aquarium) does the same dance.
+    if (typeof window.Game.saveState === 'function') {
+      window.Game.saveState(true);
+    }
+
     for (let i = 0; i < hintCells.length; i++) {
       const cell = hintCells[i];
       if (cell.row !== undefined && cell.col !== undefined && cell.row < cs.length && cell.col < cs[cell.row].length) {
         cs[cell.row][cell.col] = cell.value === 1 ? 1 : cell.value === -1 ? 2 : 0;
       }
     }
-    if (typeof window.Game.render === 'function') window.Game.render();
+
+    // Render fallback: Game.render isn't present (or doesn't redraw cells) on
+    // every puzzle type — aquarium needs Game.redraw / Game.redrawGrid. Mirror
+    // applyGameState's fallback ladder.
+    if (typeof window.Game.render === 'function') {
+      window.Game.render();
+    } else if (typeof window.Game.redraw === 'function') {
+      window.Game.redraw();
+    } else if (typeof window.Game.redrawGrid === 'function') {
+      window.Game.redrawGrid();
+    } else if (window.Game.getSaved && window.Game.loadGame) {
+      const saved = window.Game.getSaved();
+      if (saved) window.Game.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Hint apply failed:', e);
