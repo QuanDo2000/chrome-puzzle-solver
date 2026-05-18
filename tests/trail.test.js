@@ -65,12 +65,50 @@ test('solve() on a reused instance resets per-solve state', () => {
   const rowClues = [[2], [1, 1], [2]];
   const colClues = [[2], [1, 1], [2]];
   const s = new NonogramSolver(rowClues, colClues);
-  const first = s.solve(null);
-  // Second call on the SAME instance: must not be contaminated by first run's
-  // gridBuf / rowKnown / colKnown / bestPartial state.
+  // Directly pollute every per-solve field with poison. If solve()'s reset
+  // block misses any of them, the poison persists into search and either
+  // breaks the solve or shows up in the post-solve state.
+  s.trail.push(0xdead, 0xbeef, 0xface);
+  s.gridBuf[0] = -1;
+  s.grid[0][0] = -1;
+  s.rowKnown[0] = 99;
+  s.colKnown[0] = 99;
+  s.bestPartial = [['poison'], ['poison'], ['poison']];
+  s.bestPartialFilled = Number.MAX_SAFE_INTEGER;
+  s.timeoutPartial = [['poison']];
+  s.frontier.push('poison');
+  s.timedOut = true;
+
+  const result = s.solve(null);
+  // 1. Solve correctness — only possible if grid/gridBuf/counters were reset.
+  if (result.solved) {
+    for (let r = 0; r < 3; r++) {
+      let cnt = 0;
+      for (let c = 0; c < 3; c++) if (s.grid[r][c] !== 0) cnt++;
+      assert.equal(s.rowKnown[r], cnt, `rowKnown[${r}] desynced from grid`);
+    }
+    for (let c = 0; c < 3; c++) {
+      let cnt = 0;
+      for (let r = 0; r < 3; r++) if (s.grid[r][c] !== 0) cnt++;
+      assert.equal(s.colKnown[c], cnt, `colKnown[${c}] desynced from grid`);
+    }
+  }
+  // 2. Per-solve tracking fields can't retain poison.
+  assert.notEqual(s.bestPartialFilled, Number.MAX_SAFE_INTEGER,
+    'bestPartialFilled should be reset');
+  if (s.bestPartial) {
+    assert.notDeepEqual(s.bestPartial[0], ['poison'],
+      'bestPartial should not retain poison rows');
+  }
+  assert.equal(s.timedOut, false, 'timedOut should be reset');
+  // 3. frontier was poisoned with a non-numeric entry; if solve() didn't
+  // reset it the type would diverge from a fresh solver's Int8Array-style
+  // numeric state. Length 0 here (since this puzzle is small enough that
+  // frontier never gets used) is the expected post-reset state.
+  assert.equal(s.frontier.length, 0, 'frontier should be reset');
+
+  // 4. End-to-end: a second clean solve agrees with a fresh-solver baseline.
   const second = s.solve(null);
-  assert.deepEqual(second, first);
-  // And the per-line counters must match a fresh-solver baseline.
   const fresh = new NonogramSolver(rowClues, colClues).solve(null);
   assert.deepEqual(second, fresh);
 });
