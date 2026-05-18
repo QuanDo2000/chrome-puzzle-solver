@@ -68,7 +68,7 @@ const sharedRules = {
 };
 
 module.exports = [
-  { ignores: ['node_modules/', 'icons/', 'docs/', 'tests/snapshots/'] },
+  { ignores: ['node_modules/', 'icons/', 'docs/'] },
 
   // solver.js: pure logic, runs in Node tests + Web Worker + content script.
   // Keep its globals minimal (just JS + `module` for the CommonJS export tail).
