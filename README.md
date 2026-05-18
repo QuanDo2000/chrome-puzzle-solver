@@ -24,21 +24,35 @@ Open any supported puzzle page. A floating widget appears in the bottom-right co
 Requirements: Node 20+, `npm`.
 
 ```sh
-npm install        # installs ESLint
-npm test           # node:test suite, ~4s
-npm run lint       # ESLint flat config, no errors expected
+npm install         # installs ESLint + tsc
+npm test            # node:test suite, ~4s
+npm run lint        # ESLint flat config
+npm run typecheck   # tsc --noEmit; CI gates on this too
+npm run capture     # regenerate tests/golden.js after solver changes
 ```
+
+### Iterating on the extension
+
+After editing any file under the project root, reload the extension to pick up changes:
+
+1. Go to `chrome://extensions`.
+2. Click the circular **reload** icon on the **Puzzle Solver** card.
+3. Reload the puzzles-mobile.com tab — the content script only injects on page load.
+
+UI bugs surface in DevTools opened on the *puzzle page* (the widget is a content script, not a popup). Service worker logs live under **service worker** on the `chrome://extensions` card.
 
 ### Bench scripts
 
 ```sh
-node tests/bench.js            # synthetic nonograms
-node tests/bench-galaxies.js
-node tests/bench-aquarium.js
-node tests/bench-real.js       # captured real puzzles
+node tests/bench.js            # synthetic 15×15 nonogram (intentionally ambiguous; solved=false is expected)
+node tests/bench-galaxies.js   # 12×12 / 5-star galaxies
+node tests/bench-aquarium.js   # 15×15 aquariumLarge fixture
+node tests/bench-real.js       # all puzzles in tests/fixtures/real-puzzles.js
 ```
 
-Capture a new real puzzle: click the widget's **📋 Dump** button on a puzzle page; it copies a JSON snippet (matching `tests/fixtures/real-puzzles.js`) to the clipboard.
+`bench-real.js` requires `tests/fixtures/real-puzzles.js` to be populated. To add a captured puzzle: open any supported puzzle page, click the widget's **📋 Dump** button — it writes a JSON snippet (matching the file's format) both to the clipboard and to `console.log` with prefix `[puzzle-solver dump]`. Paste it into `tests/fixtures/real-puzzles.js`.
+
+Each bench warms up for 2 untimed iterations and exits nonzero on missing fixtures or unsolved puzzles (except `bench.js`, see comment above).
 
 ### Version control
 
