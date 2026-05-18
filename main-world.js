@@ -7,6 +7,9 @@
 // Every top-level function here is invoked reflectively via
 // globalThis[request.funcName] — ESLint can't see those call sites, so
 // disable no-unused-vars for the file rather than annotating each function.
+// ts-nocheck because window.Game's shape is the page's, not ours — typing it
+// would just be `any` everywhere.
+// @ts-nocheck
 /* eslint-disable no-unused-vars */
 
 function readGameState(rows, cols) {

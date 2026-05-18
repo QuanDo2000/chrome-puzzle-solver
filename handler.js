@@ -448,7 +448,7 @@ function genericGetCellState(cell) {
   if (bg && bg !== 'transparent' && bg !== 'rgba(0,0,0,0)') {
     const m = bg.match(/\d+/g);
     if (m) {
-      const brightness = (m[0] * 299 + m[1] * 587 + m[2] * 114) / 1000;
+      const brightness = (+m[0] * 299 + +m[1] * 587 + +m[2] * 114) / 1000;
       if (brightness < 150) return 1;
     }
   }

@@ -13,6 +13,6 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["solver.js"],
+  "include": ["solver.js", "solver.worker.js", "content.js", "handler.js", "background.js", "main-world.js", "globals.d.ts"],
   "exclude": ["node_modules", "tests", "docs"]
 }
