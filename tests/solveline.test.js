@@ -112,26 +112,44 @@ test('solveLine rejects pre-filled cell with empty clue', () => {
   assert.equal(r, null);
 });
 
+// Shared puzzle generator. Bounded by (Lmax, Nmax) and the per-block size cap.
+function genFuzzCase(rand, Lmin, Lspan, Nmin, Ncap, blockCap) {
+  const L = Lmin + (rand() % Lspan);
+  const N = Nmin + (rand() % Math.min(Ncap, Math.floor(L / 2) + 1));
+  const clues = [];
+  let remaining = L - (N - 1);
+  for (let k = 0; k < N; k++) {
+    const maxBlock = Math.max(1, remaining - (N - k - 1));
+    const block = 1 + (rand() % Math.min(maxBlock, blockCap));
+    clues.push(block);
+    remaining -= block;
+    if (remaining <= 0) break;
+  }
+  const line = new Array(L);
+  for (let i = 0; i < L; i++) {
+    const r = rand() % 5;
+    line[i] = r === 0 ? 1 : (r === 1 ? -1 : 0);
+  }
+  return { clues, line };
+}
+
 test('fuzz: random small lines and clues', () => {
   let rng = 1;
   const rand = () => { rng = (rng * 1664525 + 1013904223) >>> 0; return rng; };
   for (let trial = 0; trial < 200; trial++) {
-    const L = 3 + (rand() % 6);
-    const N = 1 + (rand() % Math.min(3, Math.floor(L / 2) + 1));
-    const clues = [];
-    let remaining = L - (N - 1);  // gaps
-    for (let k = 0; k < N; k++) {
-      const maxBlock = Math.max(1, remaining - (N - k - 1));
-      const block = 1 + (rand() % Math.min(maxBlock, 3));
-      clues.push(block);
-      remaining -= block;
-      if (remaining <= 0) break;
-    }
-    const line = new Array(L);
-    for (let i = 0; i < L; i++) {
-      const r = rand() % 5;
-      line[i] = r === 0 ? 1 : (r === 1 ? -1 : 0);
-    }
+    const { clues, line } = genFuzzCase(rand, 3, 6, 1, 3, 3);
+    check(clues, line);
+  }
+});
+
+// Exercises the solveLine bitmap fast-path (N >= 4) — the small-fuzz above
+// caps N at 3, so a bitmap bug at the higher k bits would never trip it.
+// Real puzzles run with N up to ~12 on 50×50 boards; this covers up to N=7.
+test('fuzz: larger lines exercise the bitmap canEmpty path', () => {
+  let rng = 42;
+  const rand = () => { rng = (rng * 1664525 + 1013904223) >>> 0; return rng; };
+  for (let trial = 0; trial < 80; trial++) {
+    const { clues, line } = genFuzzCase(rand, 10, 5, 4, 4, 3);
     check(clues, line);
   }
 });
