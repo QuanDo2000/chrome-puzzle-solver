@@ -1540,27 +1540,10 @@ function makeWidget() {
         ctx.fillStyle = highlightColor;
         ctx.fillRect(hint.index * cellSize, 0, cellSize, h);
       }
-      for (const cell of hint.cells || []) {
-        const cx = hint.type === 'row' ? cell.index * cellSize : hint.index * cellSize;
-        const cy = hint.type === 'row' ? hint.index * cellSize : cell.index * cellSize;
-        if (cell.value === 1) {
-          ctx.fillStyle = fillColor;
-          ctx.fillRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-        } else if (cell.value === -1) {
-          ctx.fillStyle = crossColor;
-          ctx.fillRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-          ctx.strokeStyle = '#e63946';
-          ctx.lineWidth = 1.5;
-          const p = Math.max(1, Math.floor(cellSize / 5));
-          ctx.beginPath();
-          ctx.moveTo(cx + p, cy + p);
-          ctx.lineTo(cx + cellSize - p, cy + cellSize - p);
-          ctx.moveTo(cx + cellSize - p, cy + p);
-          ctx.lineTo(cx + p, cy + cellSize - p);
-          ctx.stroke();
-        }
-      }
-      for (const cell of hint.extraCells || []) {
+      // hintAbsoluteCells normalizes hint.cells (row/col-indexed via
+      // hint.type+hint.index) and hint.extraCells (already absolute) into one
+      // {row, col, value} list, so the paint logic stays single-source.
+      for (const cell of hintAbsoluteCells(hint)) {
         const cx = cell.col * cellSize;
         const cy = cell.row * cellSize;
         if (cell.value === 1) {
