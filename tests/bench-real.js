@@ -75,3 +75,9 @@ for (const r of rows) {
     r.solved,
   );
 }
+
+const unsolved = rows.filter(r => !r.solved);
+if (unsolved.length > 0) {
+  console.error(`FAIL: ${unsolved.length} real puzzle(s) did not solve: ${unsolved.map(r => r.name).join(', ')}`);
+  process.exit(1);
+}

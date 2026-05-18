@@ -29,3 +29,8 @@ console.log('12x12 (5 stars) galaxies solve times (ms):',
   times.map(t => t.toFixed(2)).join(', '));
 console.log('median:', times[Math.floor(N / 2)].toFixed(2), 'ms');
 console.log('solved:', solvedFlag, 'nodes:', nodes);
+
+if (!solvedFlag) {
+  console.error('FAIL: galaxies bench puzzle did not solve');
+  process.exit(1);
+}

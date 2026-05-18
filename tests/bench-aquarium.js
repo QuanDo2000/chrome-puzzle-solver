@@ -23,3 +23,8 @@ times.sort((a, b) => a - b);
 log('15x15 aquarium solve times (ms):', times.map(t => t.toFixed(2)).join(', '));
 log('median:', times[Math.floor(N / 2)].toFixed(2), 'ms');
 log('solved:', solvedFlag);
+
+if (!solvedFlag) {
+  console.error('FAIL: aquarium bench puzzle did not solve');
+  process.exit(1);
+}

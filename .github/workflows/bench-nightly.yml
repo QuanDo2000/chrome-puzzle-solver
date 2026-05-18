@@ -22,10 +22,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      # No continue-on-error: each bench exits nonzero on crash, missing
+      # fixture, or solver returning solved=false on a puzzle that must
+      # solve. Perf-only regressions don't fail the job — that needs a
+      # tracked baseline, deferred for now.
       - run: node tests/bench-real.js
       - run: node tests/bench.js
-        continue-on-error: true
       - run: node tests/bench-galaxies.js
-        continue-on-error: true
       - run: node tests/bench-aquarium.js
-        continue-on-error: true
