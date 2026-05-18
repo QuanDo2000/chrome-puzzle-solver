@@ -1165,6 +1165,19 @@ function makeWidget() {
   // Returns an array of DOM nodes / strings describing a row/col nonogram hint,
   // for use with setStatusNodes(). Replaces the old html-string approach so we
   // never pass dynamic content through innerHTML.
+  // Write status text + redraw the preview for a freshly computed hint.
+  // Three callers share this rendering tail: hintHandler, loopHandler,
+  // and the state-watch debounce. Per-caller state (pendingHint, applyHint
+  // button enable, puzzleData.solution updates) stays at the call site.
+  function renderHintStatusAndPreview(h, grid) {
+    if (h.type === 'galaxies') {
+      setStatusNodes('info', 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
+    } else {
+      setStatusNodes('info', ...hintStatusNodes(h));
+    }
+    if (grid) drawPreview(grid, h);
+  }
+
   function hintStatusNodes(h) {
     const label = h.type === 'row' ? 'Row' : 'Column';
     const clueStr = h.clue.join(', ');
@@ -1876,15 +1889,8 @@ function makeWidget() {
     const h = hintResult.hint;
     puzzleData.pendingHint = h;
 
-    if (h.type === 'galaxies') {
-      if (hintResult.solution) puzzleData.solution = hintResult.solution;
-      const line = galaxiesHintLineDesc(h);
-      setStatusNodes('info', 'Draw the ', bold(line), '.');
-      if (hintResult.grid) drawPreview(hintResult.grid, h);
-    } else {
-      setStatusNodes('info', ...hintStatusNodes(h));
-      if (hintResult.grid) drawPreview(hintResult.grid, h);
-    }
+    if (h.type === 'galaxies' && hintResult.solution) puzzleData.solution = hintResult.solution;
+    renderHintStatusAndPreview(h, hintResult.grid);
 
     loopBtn.textContent = 'Confirm';
     loopConfirming = true;
@@ -1904,19 +1910,10 @@ function makeWidget() {
       return;
     }
     const h = result.hint;
-    if (h.type === 'galaxies') {
-      if (result.solution) puzzleData.solution = result.solution;
-      puzzleData.pendingHint = h;
-      q('[data-action="applyHint"]').disabled = false;
-      const line = galaxiesHintLineDesc(h);
-      setStatusNodes('info', 'Draw the ', bold(line), '.');
-      if (result.grid) drawPreview(result.grid, h);
-      return;
-    }
+    if (h.type === 'galaxies' && result.solution) puzzleData.solution = result.solution;
     puzzleData.pendingHint = h;
     q('[data-action="applyHint"]').disabled = false;
-    setStatusNodes('info', ...hintStatusNodes(h));
-    if (result.grid) drawPreview(result.grid, h);
+    renderHintStatusAndPreview(h, result.grid);
   }
 
   async function applyHintHandler() {
@@ -2011,16 +2008,8 @@ function makeWidget() {
         }
         const h = hintResult.hint;
         puzzleData.pendingHint = h;
-        if (h.type === 'galaxies') {
-          const line = galaxiesHintLineDesc(h);
-          q('[data-action="applyHint"]').disabled = false;
-          setStatusNodes('info', 'Draw the ', bold(line), '.');
-          drawPreview(state.grid, h);
-          return;
-        }
         q('[data-action="applyHint"]').disabled = false;
-        setStatusNodes('info', ...hintStatusNodes(h));
-        drawPreview(state.grid, h);
+        renderHintStatusAndPreview(h, state.grid);
       }, 200);
     });
     stateObserver.observe(target, { attributes: true, attributeFilter: ['class', 'style'], subtree: true });
