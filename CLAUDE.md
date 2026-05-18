@@ -36,6 +36,18 @@ When dispatching subagents that need to commit work, tell them explicitly to use
 | `background.js` | Service worker entry. Only contains the `chrome.runtime.onMessage` listener + `importScripts('main-world.js')` | MV3 service worker |
 | `main-world.js` | Library of functions that get **serialized via `chrome.scripting.executeScript({world: 'MAIN', func})`** and executed in the page context. They reference `window.Game`, `document`, `localStorage` — none of which exist in the service worker. | Page MAIN world (per call) |
 
+## Build output (`dist/`)
+
+`dist/` is the minimized extension folder Chrome loads — only the files referenced by `manifest.json` plus `main-world.js` (which `background.js` `importScripts`). It's gitignored and rebuilt by `npm run build`.
+
+**After editing any of these source files, run `npm run build`** so Chrome picks up the change on the next reload:
+
+- `manifest.json`, `background.js`, `main-world.js`
+- `content.js`, `handler.js`, `solver.js`, `solver.worker.js`
+- anything under `icons/` that's referenced by `manifest.json`
+
+Edits to tests, lint config, docs, `package.json`, etc. do **not** need a rebuild.
+
 ## Architectural notes (the non-obvious bits)
 
 ### MV3 Worker cross-origin gotcha

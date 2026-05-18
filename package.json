@@ -6,7 +6,8 @@
     "test": "node --test 'tests/**/*.test.js'",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "capture": "node tests/capture.js"
+    "capture": "node tests/capture.js",
+    "build": "rm -rf dist && mkdir -p dist/icons && cp manifest.json background.js main-world.js content.js handler.js solver.js solver.worker.js dist/ && cp icons/icon-16.png icons/icon-32.png icons/icon-48.png icons/icon-128.png dist/icons/"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
