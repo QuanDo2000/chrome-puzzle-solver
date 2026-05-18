@@ -44,6 +44,8 @@ const nodeGlobals = {
   Buffer: 'readonly',
   setTimeout: 'readonly',
   clearTimeout: 'readonly',
+  setInterval: 'readonly',
+  clearInterval: 'readonly',
   global: 'readonly',
 };
 

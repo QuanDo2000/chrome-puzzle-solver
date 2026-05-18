@@ -2,7 +2,7 @@
 // Used by tests/bench-real.js. NOT used by the golden-snapshot suite — these
 // can be added/removed freely without breaking tests.
 
-// 30x30 galaxies, 195 stars. /galaxies/special/monthly.
+// 30x30 galaxies, 196 stars. /galaxies/special/monthly.
 const galaxies_30x30_monthly_stars = [
   {row:0,col:17},{row:0,col:24},{row:0,col:34},{row:0,col:45},
   {row:1,col:7},{row:1,col:12},{row:1,col:27},{row:1,col:36},
