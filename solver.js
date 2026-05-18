@@ -1064,17 +1064,57 @@ class GalaxiesSolver {
   }
 
   _propagate(changedStars) {
-    let didChange = true;
-    while (didChange) {
-      didChange = false;
-      for (let r = 0; r < this.rows; r++) {
-        for (let c = 0; c < this.cols; c++) {
-          if (this.grid[r][c] !== -1) continue;
-          const candidates = this._candidates(r, c);
-          if (candidates.length === 0) return false;
-          if (candidates.length === 1) {
-            if (!this._assignPair(r, c, candidates[0], changedStars)) return false;
-            didChange = true;
+    // Dirty-cell queue: candidates(r, c) depends on grid[r][c] itself and on
+    // grid[mirror_Y(r, c)] for each Y in staticCandidates[r][c]. So when an
+    // assignment lands at (r, c), the only cells whose _candidates result can
+    // change are those whose mirror under some star is (r, c) — at most one
+    // per star. Re-scan only those instead of the whole grid.
+    const rows = this.rows, cols = this.cols, stars = this.stars;
+    const N = rows * cols;
+    const queue = [];
+    const inQueue = new Uint8Array(N);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (this.grid[r][c] === -1) {
+          const idx = r * cols + c;
+          queue.push(idx);
+          inQueue[idx] = 1;
+        }
+      }
+    }
+    let qHead = 0;
+    while (qHead < queue.length) {
+      const idx = queue[qHead++];
+      inQueue[idx] = 0;
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      if (this.grid[r][c] !== -1) continue;
+      const candidates = this._candidates(r, c);
+      if (candidates.length === 0) return false;
+      if (candidates.length !== 1) continue;
+      const star = candidates[0];
+      // Resolve mirror inline (avoid the {row,col} allocation).
+      const sStar = stars[star];
+      const mr = sStar.row - r, mc = sStar.col - c;
+      if (!this._assignPair(r, c, star, changedStars)) return false;
+      // Enqueue every cell whose candidate-mirror set just lost a constraint:
+      // for each Y, the cell (sY.row - r, sY.col - c) had (r, c) as its
+      // mirror-under-Y, so its _candidates may have shrunk. Same for the
+      // freshly-assigned mirror cell at (mr, mc).
+      for (let y = 0; y < stars.length; y++) {
+        const sY = stars[y];
+        const nr1 = sY.row - r, nc1 = sY.col - c;
+        if (nr1 >= 0 && nr1 < rows && nc1 >= 0 && nc1 < cols) {
+          const ni = nr1 * cols + nc1;
+          if (this.grid[nr1][nc1] === -1 && !inQueue[ni]) {
+            queue.push(ni); inQueue[ni] = 1;
+          }
+        }
+        const nr2 = sY.row - mr, nc2 = sY.col - mc;
+        if (nr2 >= 0 && nr2 < rows && nc2 >= 0 && nc2 < cols) {
+          const ni = nr2 * cols + nc2;
+          if (this.grid[nr2][nc2] === -1 && !inQueue[ni]) {
+            queue.push(ni); inQueue[ni] = 1;
           }
         }
       }
