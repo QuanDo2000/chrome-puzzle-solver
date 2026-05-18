@@ -20,20 +20,39 @@ function getActiveHandler() {
 
 // ── callMainWorld: bridge to MAIN world via background script ─
 
+// MAIN-world poll functions (readGameClues, readGalaxiesData) wait up to ~10s
+// for window.Game to populate. The MV3 service worker can be killed at 30s
+// idle; if that happens before sendResponse fires, the sendMessage callback
+// never resolves and the UI hangs. Race against a wall-clock timeout so the
+// caller always gets a result (null on timeout) within a bounded window.
+const CALL_MAIN_WORLD_TIMEOUT_MS = 15000;
+
 function callMainWorld(funcName, args) {
   return new Promise((resolve) => {
+    let settled = false;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const timer = setTimeout(() => settle(null), CALL_MAIN_WORLD_TIMEOUT_MS);
     try {
       if (typeof chrome?.runtime?.sendMessage !== 'function') {
-        resolve(null);
+        clearTimeout(timer);
+        settle(null);
         return;
       }
       chrome.runtime.sendMessage({
         action: 'execMain',
         funcName: funcName,
         args: args || []
-      }, resolve);
+      }, (response) => {
+        clearTimeout(timer);
+        settle(response);
+      });
     } catch {
-      resolve(null);
+      clearTimeout(timer);
+      settle(null);
     }
   });
 }
