@@ -55,10 +55,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       clickCell(request.row, request.col, request.state).then(sendResponse).catch(() => sendResponse({ success: false, error: 'Click failed' }));
       return true;
     case 'undo':
-      handleUndo().then(sendResponse).catch(() => sendResponse({ success: false, error: 'Undo failed' }));
-      return true;
     case 'redo':
-      handleRedo().then(sendResponse).catch(() => sendResponse({ success: false, error: 'Redo failed' }));
+      handleHistory(request.action).then(sendResponse).catch(() => sendResponse({ success: false, error: `${request.action[0].toUpperCase()}${request.action.slice(1)} failed` }));
       return true;
     case 'getUndoRedoState':
       sendResponse({ undoCount: undoStack.length, redoCount: redoStack.length });
@@ -945,35 +943,19 @@ async function clickCell(row, col, _state) {
   return { success: true };
 }
 
-async function handleUndo() {
+async function handleHistory(direction) {
+  const fromStack = direction === 'undo' ? undoStack : redoStack;
+  const toStack = direction === 'undo' ? redoStack : undoStack;
   if (mutatingOp) {
     return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
   }
-  if (undoStack.length === 0) return { success: false, error: 'Nothing to undo' };
-  setMutatingOp('undo');
+  if (fromStack.length === 0) return { success: false, error: `Nothing to ${direction}` };
+  setMutatingOp(direction);
   try {
     const currentState = await readGridState();
     if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
-    redoStack.push(currentState.grid);
-    const prevState = undoStack.pop();
-    await applySolution(prevState, true, true);
-    return { success: true, grid: prevState, undoCount: undoStack.length, redoCount: redoStack.length };
-  } finally {
-    clearMutatingOp();
-  }
-}
-
-async function handleRedo() {
-  if (mutatingOp) {
-    return { success: false, error: `Busy (${mutatingOp}); try again in a moment` };
-  }
-  if (redoStack.length === 0) return { success: false, error: 'Nothing to redo' };
-  setMutatingOp('redo');
-  try {
-    const currentState = await readGridState();
-    if (!currentState?.success) return { success: false, error: 'Cannot read current state' };
-    undoStack.push(currentState.grid);
-    const nextState = redoStack.pop();
+    toStack.push(currentState.grid);
+    const nextState = fromStack.pop();
     await applySolution(nextState, true, true);
     return { success: true, grid: nextState, undoCount: undoStack.length, redoCount: redoStack.length };
   } finally {
@@ -1631,8 +1613,7 @@ function makeWidget() {
     else if (action === 'loop') loopHandler();
     else if (action === 'hint') hintHandler();
     else if (action === 'applyHint') applyHintHandler();
-    else if (action === 'undo') undoHandler();
-    else if (action === 'redo') redoHandler();
+    else if (action === 'undo' || action === 'redo') historyHandler(action);
     else if (action === 'fixTimer') timerFixHandler();
     else if (action === 'dump') dumpHandler();
   });
@@ -2020,31 +2001,19 @@ function makeWidget() {
     clearTimeout(watchDebounce);
   }
 
-  async function undoHandler() {
-    setStatus('Undoing...', 'info');
-    const result = await handleUndo();
+  // `direction` ∈ {'undo','redo'}. Wordforms: Undo+ing=Undoing, Undo+ne=Undone.
+  async function historyHandler(direction) {
+    const cap = direction === 'undo' ? 'Undo' : 'Redo';
+    setStatus(`${cap}ing...`, 'info');
+    const result = await handleHistory(direction);
     if (result?.success) {
       clearPendingHint();
       if (result.grid) drawPreview(result.grid);
       updateUndoRedoButtons();
-      setStatus('Undone.', 'success');
+      setStatus(`${cap}ne.`, 'success');
     } else {
-      setStatus('Undo failed.', 'error');
-      if (result?.error) setStatus('Undo failed: ' + result.error, 'error');
-    }
-  }
-
-  async function redoHandler() {
-    setStatus('Redoing...', 'info');
-    const result = await handleRedo();
-    if (result?.success) {
-      clearPendingHint();
-      if (result.grid) drawPreview(result.grid);
-      updateUndoRedoButtons();
-      setStatus('Redone.', 'success');
-    } else {
-      setStatus('Redo failed.', 'error');
-      if (result?.error) setStatus('Redo failed: ' + result.error, 'error');
+      const detail = result?.error ? `${cap} failed: ${result.error}` : `${cap} failed.`;
+      setStatus(detail, 'error');
     }
   }
 
