@@ -85,9 +85,7 @@ module.exports = {
   },
 
   // 6x6 Binairo captured from puzzles-mobile.com/binairo/random/6x6-easy on
-  // 2026-05-18. Givens: -1=blank, 0=given-zero, 1=given-one. The solver's
-  // internal grid uses the page's cellStatus encoding (0=empty, 1=one, 2=zero);
-  // BinairoSolver translates givens → state on input.
+  // 2026-05-18. Givens: -1=blank, 0=given-zero, 1=given-one.
   binairo6x6: {
     rows: 6,
     cols: 6,
