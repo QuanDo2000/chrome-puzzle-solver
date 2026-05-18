@@ -4,8 +4,33 @@
 // the active tab's MAIN world via chrome.scripting.executeScript.
 importScripts('main-world.js');
 
+// Only these functions may be invoked from the content script via execMain.
+// Without an allowlist, any caller that reaches onMessage could ask the SW to
+// ship arbitrary globals into the page MAIN world.
+const EXEC_MAIN_ALLOWLIST = new Set([
+  'readGameState',
+  'readGameClues',
+  'readGalaxiesData',
+  'readGalaxiesState',
+  'applyGalaxiesState',
+  'applyGameState',
+  'applyHintCells',
+  'fixGameTimer',
+  'dumpPuzzleForBench',
+]);
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Reject messages from anything other than this extension's own content
+  // scripts / pages. Without externally_connectable set, web pages can't
+  // reach this listener today, but the check costs nothing and forecloses
+  // a whole class of bugs the day someone adds it.
+  if (sender.id !== chrome.runtime.id) return;
+
   if (request.action === 'execMain') {
+    if (!EXEC_MAIN_ALLOWLIST.has(request.funcName)) {
+      sendResponse(null);
+      return;
+    }
     const fn = globalThis[request.funcName];
     if (typeof fn !== 'function') {
       sendResponse(null);
