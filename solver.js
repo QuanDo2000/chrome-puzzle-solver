@@ -2275,7 +2275,7 @@ class AquariumSolver {
 
     const { mn, mx } = this.d[best.id];
 forLoop:
-    for (let lvl of this._levelOrder(mn, mx)) {
+    for (const lvl of this._levelOrder(mn, mx)) {
       const snap = this._snap();
       this.waterLevel[best.id] = lvl;
       this.d[best.id].mn = this.d[best.id].mx = lvl;

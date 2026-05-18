@@ -72,6 +72,10 @@ module.exports = [
 
   // solver.js: pure logic, runs in Node tests + Web Worker + content script.
   // Keep its globals minimal (just JS + `module` for the CommonJS export tail).
+  // Stricter rules here than the rest of the codebase: solver.js is the
+  // perf-critical heart, contributors should stick to === / let / const.
+  // main-world.js legitimately needs `var` for legacy compat with the host
+  // page's expectations, so we DON'T enforce these globally.
   {
     files: ['solver.js'],
     languageOptions: {
@@ -79,7 +83,12 @@ module.exports = [
       sourceType: 'script',
       globals: { module: 'readonly', console: 'readonly' },
     },
-    rules: sharedRules,
+    rules: {
+      ...sharedRules,
+      'eqeqeq': ['error', 'always'],
+      'no-var': 'error',
+      'prefer-const': ['error', { destructuring: 'all' }],
+    },
   },
 
   // Web Worker context. Solver classes loaded via importScripts at runtime;
