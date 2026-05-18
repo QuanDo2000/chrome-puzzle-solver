@@ -1025,6 +1025,7 @@ function makeWidget() {
   let loopConfirming = false;
   let looping = false;
   let stopLooping = false;
+  let stopLoopWait = null;  // set to a cancellation fn while the loop is sleeping
   let solveBtn = null;
   let loopBtn = null;
 
@@ -1763,6 +1764,10 @@ function makeWidget() {
       stopLooping = true;
       loopBtn.disabled = true;
       loopBtn.textContent = 'Stopping...';
+      // If the loop is currently sleeping between steps, wake it up so it
+      // checks stopLooping on the next iteration instead of waiting out the
+      // remaining 300ms.
+      if (stopLoopWait) stopLoopWait();
       return;
     }
 
@@ -1829,8 +1834,17 @@ function makeWidget() {
         }
         const ss = await readGridState();
         if (ss?.success) drawPreview(ss.grid);
-        await new Promise(r => setTimeout(r, 300));
+        // Cancellable 300ms inter-step pause: settle as soon as the user
+        // clicks Stop instead of forcing them to wait out the full delay.
+        await new Promise(resolve => {
+          const timer = setTimeout(() => {
+            stopLoopWait = null;
+            resolve();
+          }, 300);
+          stopLoopWait = () => { clearTimeout(timer); stopLoopWait = null; resolve(); };
+        });
       }
+      stopLoopWait = null;
 
       loopBtn.textContent = 'Loop';
       loopBtn.disabled = false;
