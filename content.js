@@ -69,12 +69,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
-function getHandler() {
-  return getActiveHandler();
-}
-
 async function detectPuzzle() {
-  const handler = getHandler();
+  const handler = getActiveHandler();
   if (!handler) return { found: false, error: 'No handler available for this page' };
   const result = await handler.detect();
   if (result && result.found) detectedGrid = result;
@@ -86,7 +82,7 @@ async function readGridState() {
     const d = await detectPuzzle();
     if (!d.found) return { success: false, error: d.error || 'No puzzle detected' };
   }
-  const handler = getHandler();
+  const handler = getActiveHandler();
   if (!handler) return { success: false, error: 'No handler available' };
   const grid = await handler.readState(detectedGrid);
   if (grid) return { success: true, grid, rows: detectedGrid.rows, cols: detectedGrid.cols };
@@ -116,7 +112,7 @@ async function applySolution(solution, skipUndo = false, internal = false) {
         redoStack = [];
       }
     }
-    const handler = getHandler();
+    const handler = getActiveHandler();
     if (!handler) return { success: false, error: 'No handler for this page' };
     suppressStateWatch = true;
     let handlerResult;
@@ -893,7 +889,7 @@ async function getHint(request = {}) {
       if (!d.found) return { success: false, error: 'No puzzle detected' };
     }
     const { rows, cols, rowClues, colClues } = detectedGrid;
-    const handler = getHandler();
+    const handler = getActiveHandler();
     const grid = handler ? await handler.readState(detectedGrid) : null;
     if (!grid) return { success: false, error: 'Cannot read grid state' };
     const solution = request.solution || null;
@@ -2092,16 +2088,10 @@ function makeWidget() {
 
 }
 
-function shouldShowWidget() {
-  // genericHandler was removed (was never registered); any active handler
-  // matching the current page now qualifies.
-  return !!getActiveHandler();
-}
-
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    if (shouldShowWidget()) makeWidget();
+    if (getActiveHandler()) makeWidget();
   });
 } else {
-  if (shouldShowWidget()) makeWidget();
+  if (getActiveHandler()) makeWidget();
 }
