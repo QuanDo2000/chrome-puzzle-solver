@@ -1307,6 +1307,21 @@ function makeWidget() {
     c.width = w;
     c.height = h;
     const ctx = c.getContext('2d');
+    // Grid lattice: previously drawn per cell every tick (2500 strokeRect
+    // calls on 50×50). Static-shape only, so it lives here and we batch all
+    // rows / cols into a single Path2D — O(rows + cols) stroke calls.
+    ctx.strokeStyle = '#d1d5db';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    for (let r = 0; r <= rows; r++) {
+      ctx.moveTo(0, r * cellSize);
+      ctx.lineTo(w, r * cellSize);
+    }
+    for (let cc = 0; cc <= cols; cc++) {
+      ctx.moveTo(cc * cellSize, 0);
+      ctx.lineTo(cc * cellSize, h);
+    }
+    ctx.stroke();
     drawRegionBordersOn(ctx, rows, cols, cellSize, pd?.regionMap);
     drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd);
     if (pd?.type === 'galaxies' && pd.stars) {
@@ -1441,31 +1456,37 @@ function makeWidget() {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
 
+    // Dynamic fills only — the grid lattice is now part of staticLayer (drawn
+    // on top at the end). Empty-cell X marks are batched into one stroke pass
+    // so their shared strokeStyle/lineWidth set up only once.
+    const galaxiesColors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
+    const xPad = Math.max(1, Math.floor(cellSize / 5));
+    let xMarkPath = null;
+    ctx.fillStyle = '#1f2937';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
+        const v = grid[r][c];
+        if (v === 0) continue;
         const x = c * cellSize, y = r * cellSize;
-        ctx.strokeStyle = '#d1d5db';
-        ctx.lineWidth = .5;
-        ctx.strokeRect(x, y, cellSize, cellSize);
-        if (puzzleData?.type === 'galaxies' && grid[r][c] > 0) {
-          const colors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
-          ctx.fillStyle = colors[(grid[r][c] - 1) % colors.length];
+        if (puzzleData?.type === 'galaxies' && v > 0) {
+          ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
           ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
-        } else if (grid[r][c] === 1) {
+        } else if (v === 1) {
           ctx.fillStyle = '#1f2937';
           ctx.fillRect(x, y, cellSize, cellSize);
-        } else if (grid[r][c] === -1) {
-          ctx.strokeStyle = '#999';
-          ctx.lineWidth = 1;
-          const p = Math.max(1, Math.floor(cellSize / 5));
-          ctx.beginPath();
-          ctx.moveTo(x + p, y + p);
-          ctx.lineTo(x + cellSize - p, y + cellSize - p);
-          ctx.moveTo(x + cellSize - p, y + p);
-          ctx.lineTo(x + p, y + cellSize - p);
-          ctx.stroke();
+        } else if (v === -1) {
+          if (!xMarkPath) xMarkPath = new Path2D();
+          xMarkPath.moveTo(x + xPad, y + xPad);
+          xMarkPath.lineTo(x + cellSize - xPad, y + cellSize - xPad);
+          xMarkPath.moveTo(x + cellSize - xPad, y + xPad);
+          xMarkPath.lineTo(x + xPad, y + cellSize - xPad);
         }
       }
+    }
+    if (xMarkPath) {
+      ctx.strokeStyle = '#999';
+      ctx.lineWidth = 1;
+      ctx.stroke(xMarkPath);
     }
 
     if (puzzleData?.type === 'galaxies') {

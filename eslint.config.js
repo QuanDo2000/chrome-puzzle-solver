@@ -27,6 +27,7 @@ const browserGlobals = {
   Node: 'readonly',
   HTMLElement: 'readonly',
   HTMLCanvasElement: 'readonly',
+  Path2D: 'readonly',
   Image: 'readonly',
   Event: 'readonly',
   CustomEvent: 'readonly',
