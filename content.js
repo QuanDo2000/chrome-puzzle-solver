@@ -1229,6 +1229,22 @@ function makeWidget() {
   let staticLayer = null;
   let staticLayerSig = null;
 
+  // Identity-based hint signature: hints are typically replaced wholesale, not
+  // mutated, so reference identity is a safe proxy for "same hint as last
+  // tick". WeakMap+counter avoids JSON.stringify of the entire hint object
+  // (galaxies hints can carry hundreds of lineHints) on every 200ms tick.
+  let hintIdCounter = 0;
+  const hintIdCache = new WeakMap();
+  function hintSig(hint) {
+    if (!hint) return '';
+    let id = hintIdCache.get(hint);
+    if (id === undefined) {
+      id = ++hintIdCounter;
+      hintIdCache.set(hint, id);
+    }
+    return id;
+  }
+
   function regionMapSig(rm) {
     if (!rm) return '';
     let s = '';
@@ -1374,7 +1390,7 @@ function makeWidget() {
                 '|rm=' + regionMapSig(pd?.regionMap) +
                 '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
                 '|g=' + gridDataSig(grid) +
-                '|h=' + (hint ? JSON.stringify(hint) : '');
+                '|h=' + hintSig(hint);
     if (sig === lastDrawSig) return;
     lastDrawSig = sig;
 
