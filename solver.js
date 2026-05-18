@@ -2662,7 +2662,120 @@ class BinairoSolver {
     }
     return true;
   }
-  _applyUniqueness(_onChange) { return true; }
+  // Force a line whose only 2 empty cells admit exactly one completion that
+  // (a) keeps balance legal, (b) avoids no-triples, (c) avoids matching any
+  // already-completed parallel line.
+  _applyUniqueness(onChange) {
+    const R = this.rows, C = this.cols, rowHalf = this.rowHalf, colHalf = this.colHalf;
+
+    const filledRowMasks = this._filledLineMasks('row');
+    for (let r = 0; r < R; r++) {
+      const empty = this._emptyCellsInRow(r);
+      if (empty.length !== 2) continue;
+      const cands = this._completeLineCandidates(r, 'row', empty, filledRowMasks, rowHalf);
+      if (cands.length === 0) return false;
+      if (cands.length === 1) {
+        const [v0, v1] = cands[0];
+        if (this._assign(r, empty[0], v0)) onChange();
+        if (this._assign(r, empty[1], v1)) onChange();
+      }
+    }
+
+    const filledColMasks = this._filledLineMasks('col');
+    for (let c = 0; c < C; c++) {
+      const empty = this._emptyCellsInCol(c);
+      if (empty.length !== 2) continue;
+      const cands = this._completeLineCandidates(c, 'col', empty, filledColMasks, colHalf);
+      if (cands.length === 0) return false;
+      if (cands.length === 1) {
+        const [v0, v1] = cands[0];
+        if (this._assign(empty[0], c, v0)) onChange();
+        if (this._assign(empty[1], c, v1)) onChange();
+      }
+    }
+    return true;
+  }
+
+  _emptyCellsInRow(r) {
+    const out = [];
+    for (let c = 0; c < this.cols; c++) if (this._get(r, c) === 0) out.push(c);
+    return out;
+  }
+
+  _emptyCellsInCol(c) {
+    const out = [];
+    for (let r = 0; r < this.rows; r++) if (this._get(r, c) === 0) out.push(r);
+    return out;
+  }
+
+  // Encode a fully-filled line as a bitmask of bit-per-cell where 1=one and 0=zero.
+  // Returns a Set<number> of all currently-full lines along the given axis.
+  _filledLineMasks(axis) {
+    const set = new Set();
+    if (axis === 'row') {
+      for (let r = 0; r < this.rows; r++) {
+        let mask = 0, full = true;
+        for (let c = 0; c < this.cols; c++) {
+          const v = this._get(r, c);
+          if (v === 0) { full = false; break; }
+          if (v === 1) mask |= (1 << c);
+        }
+        if (full) set.add(mask);
+      }
+    } else {
+      for (let c = 0; c < this.cols; c++) {
+        let mask = 0, full = true;
+        for (let r = 0; r < this.rows; r++) {
+          const v = this._get(r, c);
+          if (v === 0) { full = false; break; }
+          if (v === 1) mask |= (1 << r);
+        }
+        if (full) set.add(mask);
+      }
+    }
+    return set;
+  }
+
+  // Try both orderings ([1,2] and [2,1]) for the two empty slots in line `index`.
+  // Returns an array of legal completions, each as a 2-tuple of values that
+  // would go into the empty slots in their listed order.
+  _completeLineCandidates(index, axis, emptySlots, filledMasks, _halfCount) {
+    const tryVals = [[1, 2], [2, 1]];
+    const out = [];
+    for (const [v0, v1] of tryVals) {
+      const mask = this._maskWith(index, axis, emptySlots, v0, v1);
+      if (mask === null) continue;                // balance / no-triples failed
+      if (filledMasks.has(mask)) continue;        // duplicate of a full line
+      out.push([v0, v1]);
+    }
+    return out;
+  }
+
+  // Build the would-be completed-line bitmask if (emptySlots[0]=v0, emptySlots[1]=v1).
+  // Returns null if the completion violates balance or no-triples.
+  _maskWith(index, axis, emptySlots, v0, v1) {
+    const N = axis === 'row' ? this.cols : this.rows;
+    let mask = 0, ones = 0, zeros = 0;
+    const tempVals = new Int8Array(N);
+    for (let i = 0; i < N; i++) {
+      const v = axis === 'row' ? this._get(index, i) : this._get(i, index);
+      tempVals[i] = v;
+    }
+    tempVals[emptySlots[0]] = v0;
+    tempVals[emptySlots[1]] = v1;
+    for (let i = 0; i < N; i++) {
+      const v = tempVals[i];
+      if (v === 1) { mask |= (1 << i); ones++; }
+      else if (v === 2) { zeros++; }
+      else return null;                           // shouldn't happen for 2-empty lines
+      if (i >= 2 && tempVals[i] !== 0 && tempVals[i] === tempVals[i - 1] && tempVals[i] === tempVals[i - 2]) {
+        return null;                              // no-triples violation
+      }
+    }
+    const half = axis === 'row' ? this.rowHalf : this.colHalf;
+    if (ones !== half || zeros !== half) return null;
+    return mask;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

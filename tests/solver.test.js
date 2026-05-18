@@ -97,3 +97,24 @@ test('BinairoSolver: balance rule fills row when half is reached (6-cell row, 3 
     if (c % 2 === 1) assert.equal(s._get(0, c), 2, `row 0 col ${c} should be 2`);
   }
 });
+
+test('BinairoSolver: uniqueness rule forces last two cells when matching another row', () => {
+  // Row 0 fully filled = [1,2,1,2,1,2]. Row 1 has [1,2,1,2,?,?]. The
+  // candidates {(1,2),(2,1)} both satisfy no-triples + balance. Uniqueness
+  // (matching row 0's filled pattern) eliminates (1,2). Force (2,1).
+  // Row 0 reaches its filled pattern via givens; cells in other rows are
+  // free enough that propagation doesn't trip on them. Givens for row 1
+  // are crafted to force balance/no-triples to NOT decide on their own.
+  const givens = Array.from({ length: 6 }, () => new Array(6).fill(-1));
+  // Row 0: 1, 0, 1, 0, 1, 0
+  givens[0] = [1, 0, 1, 0, 1, 0];
+  // Row 1: 1, 0, 1, 0, -, -  (last two open)
+  givens[1] = [1, 0, 1, 0, -1, -1];
+  const s = new BinairoSolver({ rows: 6, cols: 6, givens });
+  const ok = s.propagate();
+  assert.equal(ok, true);
+  // Uniqueness forces row 1 col 4 = 2 (zero), col 5 = 1 (one), giving
+  // [1,2,1,2,2,1] which differs from row 0.
+  assert.equal(s._get(1, 4), 2);
+  assert.equal(s._get(1, 5), 1);
+});
