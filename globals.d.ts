@@ -15,7 +15,21 @@ declare const AquariumSolver: any;
 declare const GalaxiesSolver: any;
 
 // Helpers from handler.js.
-declare function callMainWorld(funcName: string, args?: unknown[]): Promise<any>;
+// MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in
+// callMainWorld('readGameClue', ...) typechecks against `string` but silently
+// returns null at runtime because the SW's allowlist rejects unknown names.
+// Keep this union in sync with EXEC_MAIN_ALLOWLIST.
+type MainWorldFn =
+  | 'readGameState'
+  | 'readGameClues'
+  | 'readGalaxiesData'
+  | 'readGalaxiesState'
+  | 'applyGalaxiesState'
+  | 'applyGameState'
+  | 'applyHintCells'
+  | 'fixGameTimer'
+  | 'dumpPuzzleForBench';
+declare function callMainWorld(funcName: MainWorldFn, args?: unknown[]): Promise<any>;
 declare function getActiveHandler(): any;
 declare function parsePuzzleTask(): any;
 declare function parseGalaxiesTask(task: string | null, width: number, height: number): any;
