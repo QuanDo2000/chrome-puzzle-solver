@@ -1749,8 +1749,7 @@ function makeWidget() {
           await callMainWorld('applyHintCells', [hintCells]);
         }
       }
-      puzzleData.pendingHint = null;
-      q('[data-action="applyHint"]').disabled = true;
+      clearPendingHint();
 
       // Start auto-loop
       looping = true;
@@ -1865,8 +1864,7 @@ function makeWidget() {
     setStatus('Computing hint...', 'info');
     const result = await getHint({ solution: puzzleData.solution });
     if (!result?.success) {
-      puzzleData.pendingHint = null;
-      q('[data-action="applyHint"]').disabled = true;
+      clearPendingHint();
       setStatus(`Hint failed: ${result?.error || 'Unknown error'}`, 'error');
       return;
     }
@@ -1898,8 +1896,7 @@ function makeWidget() {
       result = { success: true };
     }
     if (result?.success) {
-      puzzleData.pendingHint = null;
-      q('[data-action="applyHint"]').disabled = true;
+      clearPendingHint();
       setStatus('Hint applied!', 'success');
       const newState = await readGridState();
       if (newState?.success) drawPreview(newState.grid);
