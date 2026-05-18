@@ -118,3 +118,20 @@ test('BinairoSolver: uniqueness rule forces last two cells when matching another
   assert.equal(s._get(1, 4), 2);
   assert.equal(s._get(1, 5), 1);
 });
+
+test('BinairoSolver: solves the captured 6x6 fixture', () => {
+  const p = fixtures.binairo6x6;
+  const s = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
+  const result = s.solve();
+  assert.equal(result.solved, true);
+  // Sanity: each row/col has exactly 3 ones and 3 zeros.
+  for (let r = 0; r < 6; r++) {
+    let ones = 0, zeros = 0;
+    for (let c = 0; c < 6; c++) {
+      if (result.grid[r][c] === 1) ones++;
+      else if (result.grid[r][c] === 2) zeros++;
+    }
+    assert.equal(ones, 3, `row ${r}: expected 3 ones, got ${ones}`);
+    assert.equal(zeros, 3, `row ${r}: expected 3 zeros, got ${zeros}`);
+  }
+});

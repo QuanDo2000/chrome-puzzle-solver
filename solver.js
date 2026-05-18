@@ -2672,6 +2672,10 @@ class BinairoSolver {
     for (let r = 0; r < R; r++) {
       const empty = this._emptyCellsInRow(r);
       if (empty.length !== 2) continue;
+      // Skip balance-forced rows: _applyBalance will fill them; uniqueness candidates
+      // won't include the balance-only completions ([2,2] or [1,1]), so we'd see 0
+      // candidates and falsely report a contradiction.
+      if (this.rowOnes[r] === rowHalf || this.rowZeros[r] === rowHalf) continue;
       const cands = this._completeLineCandidates(r, 'row', empty, filledRowMasks, rowHalf);
       if (cands.length === 0) return false;
       if (cands.length === 1) {
@@ -2685,6 +2689,8 @@ class BinairoSolver {
     for (let c = 0; c < C; c++) {
       const empty = this._emptyCellsInCol(c);
       if (empty.length !== 2) continue;
+      // Skip balance-forced cols for the same reason.
+      if (this.colOnes[c] === colHalf || this.colZeros[c] === colHalf) continue;
       const cands = this._completeLineCandidates(c, 'col', empty, filledColMasks, colHalf);
       if (cands.length === 0) return false;
       if (cands.length === 1) {
@@ -2775,6 +2781,61 @@ class BinairoSolver {
     const half = axis === 'row' ? this.rowHalf : this.colHalf;
     if (ones !== half || zeros !== half) return null;
     return mask;
+  }
+
+  /**
+   * @returns {{ solved: boolean, grid: number[][] | null, error?: string }}
+   */
+  solve() {
+    if (!this.propagate()) {
+      return { solved: false, grid: null, error: 'contradiction on initial propagation' };
+    }
+    if (this._isComplete()) return { solved: true, grid: this._gridTo2D() };
+    if (this._backtrack()) return { solved: true, grid: this._gridTo2D() };
+    return { solved: false, grid: null, error: 'no solution found' };
+  }
+
+  _isComplete() {
+    for (let i = 0; i < this.grid.length; i++) if (this.grid[i] === 0) return false;
+    return true;
+  }
+
+  _gridTo2D() {
+    const out = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = new Array(this.cols);
+      for (let c = 0; c < this.cols; c++) row[c] = this.grid[r * this.cols + c];
+      out[r] = row;
+    }
+    return out;
+  }
+
+  // Most-constrained empty cell: minimize (rowHalf - rowOnes[r]) + (colHalf - colOnes[c]).
+  // Returns [r, c] or null if no empty cell.
+  _pickBranchCell() {
+    let bestR = -1, bestC = -1, bestScore = Infinity;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this._get(r, c) !== 0) continue;
+        const score = (this.rowHalf - this.rowOnes[r]) + (this.colHalf - this.colOnes[c]);
+        if (score < bestScore) { bestScore = score; bestR = r; bestC = c; }
+      }
+    }
+    return bestR === -1 ? null : [bestR, bestC];
+  }
+
+  _backtrack() {
+    const cell = this._pickBranchCell();
+    if (!cell) return this._isComplete();
+    const [r, c] = cell;
+    for (const v of [1, 2]) {
+      const mark = this.trail.length;
+      if (this._assign(r, c, v) && this.propagate()) {
+        if (this._isComplete() || this._backtrack()) return true;
+      }
+      this._rollback(mark);
+    }
+    return false;
   }
 }
 
