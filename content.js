@@ -220,6 +220,28 @@ function firstMismatch(grid, solution) {
   return null;
 }
 
+// Fallback hint for aquarium/nonogram when their per-line heuristic exhausts:
+// pick the first row with cells still unknown vs the solver's solution and
+// emit those cells as a row hint. Returns null if every cell already matches
+// the solution. addAquariumRegionHints downstream expands each emitted cell
+// to its region (rows below/above as water/dry), so one fallback Hint
+// completes a meaningful contiguous chunk rather than a sparse row.
+function rowHintFromSolution(grid, solution) {
+  if (!grid || !solution) return null;
+  for (let r = 0; r < grid.length; r++) {
+    const cells = [];
+    for (let c = 0; c < grid[r].length; c++) {
+      if (grid[r][c] === 0 && solution[r]?.[c] !== 0 && solution[r][c] !== undefined) {
+        cells.push({ index: c, value: solution[r][c] });
+      }
+    }
+    if (cells.length > 0) {
+      return { type: 'row', index: r, clue: null, cells, count: cells.length };
+    }
+  }
+  return null;
+}
+
 function cloneGalaxiesLines(lines) {
   return {
     horizontal: (lines?.horizontal || []).map(row => row.slice()),
@@ -1081,6 +1103,26 @@ async function getHint(request = {}) {
       }
       const solver = new AquariumSolver(rowClues, colClues, detectedGrid.regionMap, rows, cols);
       hint = solver.getHint(grid);
+      // Solver fallback when AquariumSolver.getHint exhausts. The aquarium
+      // heuristic is purely per-line — on the 30x30 monthly it produces one
+      // hint and then stalls with 98% of cells still empty. The full solver
+      // gives ground truth in tens of ms; cache it in-memory via hintSolution
+      // (returned to the caller, captured into puzzleData.solution by the
+      // loop) and emit row-by-row diffs.
+      if (!hint) {
+        let sol = hintSolution;
+        if (!sol) {
+          const result = await runSolve(rowClues, colClues, grid, 'aquarium', solveExtraData());
+          if (result?.solved && result.grid) sol = result.grid;
+        }
+        if (sol) {
+          if (firstMismatch(grid, sol)) {
+            return { success: false, error: 'Current game state is wrong.' };
+          }
+          hintSolution = sol;
+          hint = rowHintFromSolution(grid, sol);
+        }
+      }
     } else if (solution) {
       if (firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1973,10 +2015,11 @@ function makeWidget() {
       if (hr.hint?.type !== 'galaxies' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
-      // getHint may lazily solve galaxies as a fallback; persist the
-      // returned solution (with its memoized galaxy-by-galaxy path) so
-      // subsequent iterations skip the solver call entirely.
-      if (h.type === 'galaxies' && hr.solution) puzzleData.solution = hr.solution;
+      // getHint may lazily solve as a fallback (galaxies + aquarium);
+      // persist the returned solution so subsequent iterations skip the
+      // solver call. Galaxies attaches a memoized _galaxyPath; aquarium
+      // reuses sol directly for row-by-row diffs.
+      if (hr.solution) puzzleData.solution = hr.solution;
       applyHintToGrid(gs.grid, h);
       const ar = h.type === 'galaxies'
         ? await applySolution({ type: 'galaxies-lines', lines: h.lines })
@@ -2041,7 +2084,7 @@ function makeWidget() {
     const h = hintResult.hint;
     puzzleData.pendingHint = h;
 
-    if (h.type === 'galaxies' && hintResult.solution) puzzleData.solution = hintResult.solution;
+    if (hintResult.solution) puzzleData.solution = hintResult.solution;
     renderHintStatusAndPreview(h, hintResult.grid);
 
     loopBtn.textContent = 'Confirm';
@@ -2062,7 +2105,7 @@ function makeWidget() {
       return;
     }
     const h = result.hint;
-    if (h.type === 'galaxies' && result.solution) puzzleData.solution = result.solution;
+    if (result.solution) puzzleData.solution = result.solution;
     puzzleData.pendingHint = h;
     q('[data-action="applyHint"]').disabled = false;
     renderHintStatusAndPreview(h, result.grid);
