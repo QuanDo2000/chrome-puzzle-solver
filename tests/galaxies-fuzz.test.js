@@ -150,7 +150,7 @@ function solutionsEqual(a, b) {
 }
 
 function runTrial(seed, R, C, K, mode = 'random') {
-  GalaxiesSolver._solutionCache?.clear?.();
+  GalaxiesSolver.clearSolutionCache();
   const rand = rng(seed);
   const puzzle = mode === 'constructive'
     ? constructiveSolvablePuzzle(rand, R, C)

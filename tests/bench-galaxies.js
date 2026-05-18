@@ -14,7 +14,7 @@ const WARMUP = 2;
 const N = 5;
 // Discard the first WARMUP iterations to skip V8 JIT cold-start cost.
 for (let i = 0; i < WARMUP; i++) {
-  GalaxiesSolver._solutionCache.clear?.();
+  GalaxiesSolver.clearSolutionCache();
   new GalaxiesSolver(config.stars, config.rows, config.cols).solve(null);
 }
 const times = [];
@@ -22,7 +22,7 @@ let solvedFlag = null;
 let nodes = 0;
 for (let i = 0; i < N; i++) {
   // Bypass the solution cache so each run does the full search work.
-  GalaxiesSolver._solutionCache.clear?.();
+  GalaxiesSolver.clearSolutionCache();
   const s = new GalaxiesSolver(config.stars, config.rows, config.cols);
   const t0 = process.hrtime.bigint();
   const r = s.solve(null);

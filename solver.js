@@ -533,6 +533,14 @@ class GalaxiesSolver {
   static _solutionCache = new Map();
   static _maxSolutionCache = 30;
 
+  // Static cache survives across solver instances and across tests, so a
+  // test that warms the cache with puzzle P silently affects a later test
+  // that also solves P. Tests / benches should call this between cases
+  // when they need a guaranteed cold solve.
+  static clearSolutionCache() {
+    GalaxiesSolver._solutionCache.clear();
+  }
+
   /**
    * @param {number[][] | null} initialGrid  Optional partial state ((star+1)/0).
    * @param {{ forbiddenPartials?: any[] }} [options]

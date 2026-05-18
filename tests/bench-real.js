@@ -34,7 +34,7 @@ for (const name of Object.keys(fixtures)) {
   }
   // Discard WARMUP iterations to skip V8 JIT cold-start cost.
   for (let i = 0; i < WARMUP; i++) {
-    GalaxiesSolver._solutionCache?.clear?.();
+    GalaxiesSolver.clearSolutionCache();
     buildSolver(p).solve(null);
   }
   const times = [];
@@ -43,7 +43,7 @@ for (const name of Object.keys(fixtures)) {
   for (let i = 0; i < N; i++) {
     // GalaxiesSolver has a static solution cache — clear it so each iteration
     // measures a real solve rather than a cache hit.
-    GalaxiesSolver._solutionCache?.clear?.();
+    GalaxiesSolver.clearSolutionCache();
     const s = buildSolver(p);
     const t0 = process.hrtime.bigint();
     const r = s.solve(null);
