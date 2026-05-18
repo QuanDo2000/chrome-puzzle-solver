@@ -135,3 +135,20 @@ test('BinairoSolver: solves the captured 6x6 fixture', () => {
     assert.equal(zeros, 3, `row ${r}: expected 3 zeros, got ${zeros}`);
   }
 });
+
+test('BinairoSolver: getHint returns first forced cell when applied to fresh givens', () => {
+  const p = fixtures.binairo6x6;
+  const s = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
+  // Grid argument: 0/1/2 encoding from the page. Mirror the givens →
+  // initialFromGivens translation.
+  const grid = s._gridTo2D();
+  const hint = s.getHint(grid);
+  assert.ok(hint, 'getHint should return at least one forced cell from these givens');
+  assert.equal(hint.type, 'row');
+  assert.ok(Number.isInteger(hint.index));
+  assert.equal(hint.cells.length, 1);
+  assert.ok(hint.cells[0].value === 1 || hint.cells[0].value === 2,
+    `hint value must be 1 or 2, got ${hint.cells[0].value}`);
+  assert.ok(['no-triples', 'balance', 'uniqueness'].includes(hint.rule),
+    `hint rule must be a known deduction name, got ${hint.rule}`);
+});

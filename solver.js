@@ -2795,6 +2795,56 @@ class BinairoSolver {
     return { solved: false, grid: null, error: 'no solution found' };
   }
 
+  /**
+   * Returns the first deductively-forced cell, or null if the state is
+   * already propagated to fixed point.
+   * @param {number[][]} currentGrid  2D in cellStatus encoding (0/1/2).
+   */
+  getHint(currentGrid) {
+    // Seed a fresh solver state from the current grid (which already
+    // includes givens). We use a clone so the caller's solver instance
+    // isn't mutated.
+    const clone = new BinairoSolver({
+      rows: this.rows, cols: this.cols,
+      givens: this.givens,
+      initialState: currentGrid,
+    });
+
+    // Try each rule in priority order. The first rule that makes a change
+    // attributes the hint. We snapshot the grid before, run one rule, find
+    // the first changed cell.
+    /** @type {Array<[string, (cb: () => void) => boolean]>} */
+    const rules = [
+      ['no-triples',  (onChange) => clone._applyNoTriples(onChange)],
+      ['balance',     (onChange) => clone._applyBalance(onChange)],
+      ['uniqueness',  (onChange) => clone._applyUniqueness(onChange)],
+    ];
+    for (const [name, run] of rules) {
+      const before = new Int8Array(clone.grid);
+      let changed = false;
+      const ok = run(() => { changed = true; });
+      if (!ok) return null;  // contradiction; caller should refuse the hint
+      if (!changed) continue;
+      // Find the first differing cell.
+      for (let i = 0; i < before.length; i++) {
+        if (before[i] !== clone.grid[i]) {
+          const r = (i / clone.cols) | 0;
+          const c = i % clone.cols;
+          return {
+            type: 'row',
+            index: r,
+            clue: null,
+            cells: [{ index: c, value: clone.grid[i] }],
+            extraCells: [],
+            count: 1,
+            rule: name,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
   _isComplete() {
     for (let i = 0; i < this.grid.length; i++) if (this.grid[i] === 0) return false;
     return true;
