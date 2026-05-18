@@ -238,6 +238,14 @@ function getGalaxiesHint(grid, stars) {
 
   propagateAllConstraints(components, grid, rows, cols, current, stars);
 
+  // Iterative per-cell forced-star propagation. Start from the per-cell
+  // possible-star sets (perCell ∩ reachable ∩ mirror-component) and repeat:
+  // if cell c has exactly one possible star X, X's mirror partner of c
+  // must also be X (galaxies are mirror-symmetric). Intersect the mirror
+  // cell's set to {X}, which may narrow further cells through subsequent
+  // iterations. Catches cases the one-shot narrowing misses.
+  const cellPossible = propagateForcedCells(grid, stars, rows, cols, seedOwner, reachable);
+
   const makeHint = (selected) => {
     const lines = cloneGalaxiesLines(current);
     for (const item of selected) lines[item.orientation][item.row][item.col] = 1;
@@ -257,18 +265,11 @@ function getGalaxiesHint(grid, stars) {
   const addCandidate = (orientation, row, col, aCell, bCell) => {
     const aComp = components.get(grid[aCell.row]?.[aCell.col]);
     const bComp = components.get(grid[bCell.row]?.[bCell.col]);
-    const aPerCell = possibleGalaxiesNodesForCell(aCell.row, aCell.col, stars, rows, cols, seedOwner);
-    const bPerCell = possibleGalaxiesNodesForCell(bCell.row, bCell.col, stars, rows, cols, seedOwner);
-    const aReach = reachable[aCell.row]?.[aCell.col] || new Set();
-    const bReach = reachable[bCell.row]?.[bCell.col] || new Set();
-    let aNodes = intersectSets(aPerCell, aReach);
-    let bNodes = intersectSets(bPerCell, bReach);
-    // Per-cell mirror narrowing: drop star X if the cell's mirror under X
-    // is in a different line-bounded component. Galaxies are connected, so
-    // a cell and its mirror partner must be in the same component or X
-    // can't own the cell.
-    aNodes = narrowByMirrorComponent(aCell.row, aCell.col, aNodes, stars, grid);
-    bNodes = narrowByMirrorComponent(bCell.row, bCell.col, bNodes, stars, grid);
+    // cellPossible already absorbs perCell, reachable, and mirror-component
+    // narrowing, plus the forced-mirror propagation loop. Use it as the
+    // per-cell baseline.
+    let aNodes = new Set(cellPossible.get(aCell.row + ',' + aCell.col) || []);
+    let bNodes = new Set(cellPossible.get(bCell.row + ',' + bCell.col) || []);
     if (aComp?.possibleNodes?.size) aNodes = intersectSets(aNodes, aComp.possibleNodes);
     if (bComp?.possibleNodes?.size) bNodes = intersectSets(bNodes, bComp.possibleNodes);
     if (aNodes.size === 0 || bNodes.size === 0) return;
@@ -458,6 +459,47 @@ function narrowByMirrorComponent(cellRow, cellCol, possibleSet, stars, grid) {
     if (grid[star.row - cellRow]?.[star.col - cellCol] === cellComp) out.add(X);
   }
   return out;
+}
+
+// Build per-cell possible-star sets, iteratively narrowed via mirror-forcing.
+// Initial set = perCell ∩ reachable ∩ mirror-component. Then repeatedly:
+// if a cell is forced (popcount 1) to star X, the mirror cell under X is
+// also forced to X — intersect its set to {X}. Continues to fixed point.
+// Catches forced-cell chains that the one-shot narrowing in addCandidate
+// misses. Returns Map<'r,c', Set<starIndex>>.
+function propagateForcedCells(grid, stars, rows, cols, seedOwner, reachable) {
+  const possible = new Map();
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const perCell = possibleGalaxiesNodesForCell(r, c, stars, rows, cols, seedOwner);
+      const rch = reachable[r]?.[c] || new Set();
+      let pos = intersectSets(perCell, rch);
+      pos = narrowByMirrorComponent(r, c, pos, stars, grid);
+      possible.set(r + ',' + c, pos);
+    }
+  }
+  // Forced-mirror propagation. Bounded by total cells × stars; in practice
+  // it converges in a handful of passes because each step strictly shrinks
+  // the union of all sets.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [key, pos] of possible) {
+      if (pos.size !== 1) continue;
+      const X = pos.values().next().value;
+      const star = stars[X];
+      const [rs, cs] = key.split(',');
+      const mr = star.row - +rs, mc = star.col - +cs;
+      if (mr < 0 || mc < 0 || mr >= rows || mc >= cols) continue;
+      const mirrorKey = mr + ',' + mc;
+      const mirrorPos = possible.get(mirrorKey);
+      if (!mirrorPos || mirrorPos.size === 1) continue;
+      if (!mirrorPos.has(X)) continue; // contradiction; skip narrowing
+      possible.set(mirrorKey, new Set([X]));
+      changed = true;
+    }
+  }
+  return possible;
 }
 
 function setsIntersect(a, b) {
