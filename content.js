@@ -260,9 +260,7 @@ function getGalaxiesHint(grid, stars) {
   };
 
   const candidates = [];
-  let stats = { total: 0, drawn: 0, noComp: 0, emptyNodes: 0, intersect: 0, weak: 0, found: 0 };
   const addCandidate = (orientation, row, col, aCell, bCell) => {
-    stats.total++;
     const aComp = components.get(grid[aCell.row]?.[aCell.col]);
     const bComp = components.get(grid[bCell.row]?.[bCell.col]);
     const aPerCell = possibleGalaxiesNodesForCell(aCell.row, aCell.col, stars, rows, cols, seedOwner);
@@ -273,24 +271,22 @@ function getGalaxiesHint(grid, stars) {
     let bNodes = intersectSets(bPerCell, bReach);
     if (aComp?.possibleNodes?.size) aNodes = intersectSets(aNodes, aComp.possibleNodes);
     if (bComp?.possibleNodes?.size) bNodes = intersectSets(bNodes, bComp.possibleNodes);
-    if (aNodes.size === 0 || bNodes.size === 0) { stats.emptyNodes++; return; }
-    if (aComp && bComp && aComp.id === bComp.id && !aComp.possibleNodes.size) { stats.weak++; }
-    if (setsIntersect(aNodes, bNodes)) { stats.intersect++; return; }
+    if (aNodes.size === 0 || bNodes.size === 0) return;
+    if (setsIntersect(aNodes, bNodes)) return;
     const nodeIds = new Set([...aNodes, ...bNodes]);
     const score = (aComp?.cells.length || 1) + (bComp?.cells.length || 1);
     candidates.push({ orientation, row, col, nodeIds, currentIds: new Set([aComp?.id, bComp?.id]), score });
-    stats.found++;
   };
 
   for (let r = 1; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      if (current.horizontal?.[r]?.[c] === 1) { stats.drawn++; continue; }
+      if (current.horizontal?.[r]?.[c] === 1) continue;
       addCandidate('horizontal', r, c, { row: r - 1, col: c }, { row: r, col: c });
     }
   }
   for (let r = 0; r < rows; r++) {
     for (let c = 1; c < cols; c++) {
-      if (current.vertical?.[r]?.[c] === 1) { stats.drawn++; continue; }
+      if (current.vertical?.[r]?.[c] === 1) continue;
       addCandidate('vertical', r, c, { row: r, col: c - 1 }, { row: r, col: c });
     }
   }

@@ -38,9 +38,6 @@ class NonogramSolver {
     this.maxIterations = 1000;
     this.bestPartial = null;
     this.bestPartialFilled = 0;
-    this.timeoutPartial = null;
-    this.frontier = [];
-    this.maxFrontier = this.rows * this.cols >= 900 ? 80 : 0;
     this.maxMs = this.rows * this.cols >= 900 ? 3000 : 0;
     this.startedAt = 0;
     this.timedOut = false;
@@ -105,8 +102,6 @@ class NonogramSolver {
     this.colKnown.fill(0);
     this.bestPartial = null;
     this.bestPartialFilled = 0;
-    this.timeoutPartial = null;
-    this.frontier.length = 0;
     this.startedAt = Date.now();
     this.timedOut = false;
     if (initialGrid) {
@@ -380,10 +375,6 @@ class NonogramSolver {
     return true;
   }
 
-  getRow(r) {
-    return [...this.grid[r]];
-  }
-
   getCol(c) {
     return this.grid.map(row => row[c]);
   }
@@ -393,7 +384,7 @@ class NonogramSolver {
       this.timedOut = true;
       return { solved: false, grid: null, error: 'time limit exceeded' };
     }
-    const maxDepth = this.maxDepth || Math.max(500, this.rows * this.cols);
+    const maxDepth = Math.max(500, this.rows * this.cols);
     if (depth > maxDepth) return { solved: false, grid: null, error: 'Backtrack limit reached' };
 
     let bestR = -1, bestC = -1;
@@ -1360,16 +1351,13 @@ class AquariumSolver {
     this._maxSearchNodes = 50000;
     this._deadCache = new Map();
     this._deadCacheMax = 200000;
-    this._deadCacheHits = 0;
     this._dpCache = new Map();
     this._dpCacheMax = 500000;
-    this._dpCacheHits = 0;
     this._nogoods = [];
     this._nogoodSet = new Set();
     this._nogoodIndex = new Map();
     this._nogoodMax = 50000;
     this._nogoodMaxTerms = 18;
-    this._nogoodHits = 0;
     this._bestPartial = null;
     this._bestPartialFilled = 0;
   }
@@ -1381,13 +1369,10 @@ class AquariumSolver {
   solve(initialGrid) {
     this._searchNodes = 0;
     this._deadCache.clear();
-    this._deadCacheHits = 0;
     this._dpCache.clear();
-    this._dpCacheHits = 0;
     this._nogoods = [];
     this._nogoodSet.clear();
     this._nogoodIndex.clear();
-    this._nogoodHits = 0;
     this._bestPartial = null;
     this._bestPartialFilled = 0;
     this._kc.fill(0);
@@ -1514,8 +1499,8 @@ class AquariumSolver {
     for (const aq of this.aquariums) {
       if (this.waterLevel[aq.id] >= 0) {
         const ct = aq.contribs[this.waterLevel[aq.id]];
-        for (let r = 0; r < rowC; r++) { const v = ct.rc[r] || 0; baseRL[r] += v; baseRH[r] += v; }
-        for (let c = 0; c < colC; c++) { const v = ct.cc[c] || 0; baseCL[c] += v; baseCH[c] += v; }
+        for (let r = 0; r < rowC; r++) { const v = ct.rc[r]; baseRL[r] += v; baseRH[r] += v; }
+        for (let c = 0; c < colC; c++) { const v = ct.cc[c]; baseCL[c] += v; baseCH[c] += v; }
       } else {
         vars.push(aq);
       }
@@ -1529,8 +1514,8 @@ class AquariumSolver {
         if (this.waterLevel[aq.id] >= 0) continue;
         const { mn, mx } = this.d[aq.id];
         const clo = aq.contribs[mn], chi = aq.contribs[mx];
-        for (let r = 0; r < rowC; r++) { rowLo[r] += clo.rc[r] || 0; rowHi[r] += chi.rc[r] || 0; }
-        for (let c = 0; c < colC; c++) { colLo[c] += clo.cc[c] || 0; colHi[c] += chi.cc[c] || 0; }
+        for (let r = 0; r < rowC; r++) { rowLo[r] += clo.rc[r]; rowHi[r] += chi.rc[r]; }
+        for (let c = 0; c < colC; c++) { colLo[c] += clo.cc[c]; colHi[c] += chi.cc[c]; }
       }
       for (let r = 0; r < rowC; r++) if (rowLo[r] > rc[r] || rowHi[r] < rc[r]) return false;
       for (let c = 0; c < colC; c++) if (colLo[c] > cc[c] || colHi[c] < cc[c]) return false;
@@ -1548,8 +1533,8 @@ class AquariumSolver {
         if (this.waterLevel[aq.id] >= 0) continue;
         const { mn, mx } = this.d[aq.id];
         const clo = aq.contribs[mn], chi = aq.contribs[mx];
-        for (let r = 0; r < rowC; r++) { rowLo[r] += clo.rc[r] || 0; rowHi[r] += chi.rc[r] || 0; }
-        for (let c = 0; c < colC; c++) { colLo[c] += clo.cc[c] || 0; colHi[c] += chi.cc[c] || 0; }
+        for (let r = 0; r < rowC; r++) { rowLo[r] += clo.rc[r]; rowHi[r] += chi.rc[r]; }
+        for (let c = 0; c < colC; c++) { colLo[c] += clo.cc[c]; colHi[c] += chi.cc[c]; }
       }
 
       for (let r = 0; r < rowC; r++) if (rowLo[r] > rc[r] || rowHi[r] < rc[r]) return false;
@@ -1559,13 +1544,13 @@ class AquariumSolver {
         if (this.waterLevel[aq.id] >= 0) continue;
         const { mn, mx } = this.d[aq.id];
         for (let r = 0; r < rowC; r++) {
-          const otherLo = rowLo[r] - (aq.contribs[mn].rc[r] || 0);
-          const otherHi = rowHi[r] - (aq.contribs[mx].rc[r] || 0);
+          const otherLo = rowLo[r] - (aq.contribs[mn].rc[r]);
+          const otherHi = rowHi[r] - (aq.contribs[mx].rc[r]);
           const needed = rc[r] - otherHi, avail = rc[r] - otherLo;
           if (needed > 0 || avail <= 0) {
             let nm = mx, nx = mn;
             for (let l = mn; l <= mx; l++) {
-              const c = aq.contribs[l].rc[r] || 0;
+              const c = aq.contribs[l].rc[r];
               if (c >= needed && c <= avail) {
                 if (l < nm) nm = l;
                 if (l > nx) nx = l;
@@ -1583,13 +1568,13 @@ class AquariumSolver {
         }
         const nmn = this.d[aq.id].mn, nmx = this.d[aq.id].mx;
         for (let c = 0; c < colC; c++) {
-          const otherLo = colLo[c] - (aq.contribs[nmn].cc[c] || 0);
-          const otherHi = colHi[c] - (aq.contribs[nmx].cc[c] || 0);
+          const otherLo = colLo[c] - (aq.contribs[nmn].cc[c]);
+          const otherHi = colHi[c] - (aq.contribs[nmx].cc[c]);
           const needed = cc[c] - otherHi, avail = cc[c] - otherLo;
           if (needed > 0 || avail <= 0) {
             let nm = nmx, nx = nmn;
             for (let l = nmn; l <= nmx; l++) {
-              const ccv = aq.contribs[l].cc[c] || 0;
+              const ccv = aq.contribs[l].cc[c];
               if (ccv >= needed && ccv <= avail) {
                 if (l < nm) nm = l;
                 if (l > nx) nx = l;
@@ -1612,8 +1597,8 @@ class AquariumSolver {
         if (mn === mx) {
           this.waterLevel[aq.id] = mn;
           const ct = aq.contribs[mn];
-          for (let r = 0; r < rowC; r++) { const v = ct.rc[r] || 0; baseRL[r] += v; baseRH[r] += v; rowLo[r] += v; rowHi[r] += v; }
-          for (let c = 0; c < colC; c++) { const v = ct.cc[c] || 0; baseCL[c] += v; baseCH[c] += v; colLo[c] += v; colHi[c] += v; }
+          for (let r = 0; r < rowC; r++) { const v = ct.rc[r]; baseRL[r] += v; baseRH[r] += v; rowLo[r] += v; rowHi[r] += v; }
+          for (let c = 0; c < colC; c++) { const v = ct.cc[c]; baseCL[c] += v; baseCH[c] += v; colLo[c] += v; colHi[c] += v; }
           vars.splice(vi, 1);
           ch = true;
           continue;
@@ -1636,8 +1621,8 @@ class AquariumSolver {
       for (const aq of this.aquariums) {
         if (this.waterLevel[aq.id] >= 0) {
           const ct = aq.contribs[this.waterLevel[aq.id]];
-          for (let r = 0; r < rowC; r++) { const v = ct.rc[r] || 0; baseR[r] += v; }
-          for (let c = 0; c < colC; c++) { const v = ct.cc[c] || 0; baseC[c] += v; }
+          for (let r = 0; r < rowC; r++) { const v = ct.rc[r]; baseR[r] += v; }
+          for (let c = 0; c < colC; c++) { const v = ct.cc[c]; baseC[c] += v; }
         } else {
           vars.push(aq);
         }
@@ -1727,7 +1712,7 @@ class AquariumSolver {
         const adj = rc[r] - baseR[r];
         if (adj < 0) return;
         if (rLookup[r].length > 1 && adj > 0) {
-          const nr = narrow(rLookup[r], (aq, l) => aq.contribs[l].rc[r] || 0, adj, 'r' + r);
+          const nr = narrow(rLookup[r], (aq, l) => aq.contribs[l].rc[r], adj, 'r' + r);
           if (!nr.ok) return;
           if (nr.narrowed) changed = true;
         }
@@ -1736,7 +1721,7 @@ class AquariumSolver {
         const adj = cc[c] - baseC[c];
         if (adj < 0) return;
         if (cLookup[c].length > 1 && adj > 0) {
-          const nr = narrow(cLookup[c], (aq, l) => aq.contribs[l].cc[c] || 0, adj, 'c' + c);
+          const nr = narrow(cLookup[c], (aq, l) => aq.contribs[l].cc[c], adj, 'c' + c);
           if (!nr.ok) return;
           if (nr.narrowed) changed = true;
         }
@@ -1766,8 +1751,8 @@ class AquariumSolver {
       idMap[aq.id] = allVars.length;
       if (this.waterLevel[aq.id] >= 0) {
         const ct = aq.contribs[this.waterLevel[aq.id]];
-        for (let r = 0; r < H; r++) { const v = ct.rc[r] || 0; baseR[r] += v; }
-        for (let c = 0; c < W; c++) { const v = ct.cc[c] || 0; baseC[c] += v; }
+        for (let r = 0; r < H; r++) { const v = ct.rc[r]; baseR[r] += v; }
+        for (let c = 0; c < W; c++) { const v = ct.cc[c]; baseC[c] += v; }
       } else {
         allVars.push(aq);
       }
@@ -1905,7 +1890,7 @@ class AquariumSolver {
       const getPair = (lvl, id) => {
         const aq = allVars[idMap[id]];
         const ct = aq.contribs[lvl];
-        return [(ct.rc[r] || 0), (ct.rc[r + 1] || 0)];
+        return [(ct.rc[r]), (ct.rc[r + 1])];
       };
 
       const res = narrowLevels(adj1, adj2, vars, getPair, ranges, 'rr' + r);
@@ -1943,7 +1928,7 @@ class AquariumSolver {
       const getPair = (lvl, id) => {
         const aq = allVars[idMap[id]];
         const ct = aq.contribs[lvl];
-        return [(ct.cc[c] || 0), (ct.cc[c + 1] || 0)];
+        return [(ct.cc[c]), (ct.cc[c + 1])];
       };
 
       const res = narrowLevels(adj1, adj2, vars, getPair, ranges, 'cc' + c);
@@ -2030,19 +2015,14 @@ class AquariumSolver {
         for (const t of entry.tokens) {
           if (!tokenSet.has(t)) { ok = false; break; }
         }
-        if (ok) {
-          this._nogoodHits++;
-          return true;
-        }
+        if (ok) return true;
       }
     }
     return false;
   }
 
   _cacheGet(key) {
-    const value = this._dpCache.get(key);
-    if (value !== undefined) this._dpCacheHits++;
-    return value;
+    return this._dpCache.get(key);
   }
 
   _cacheSet(key, value) {
@@ -2268,10 +2248,7 @@ class AquariumSolver {
     if (!best) return { solved: true };
 
     const cacheKey = this._cacheKey();
-    if (this._deadCache.has(cacheKey)) {
-      this._deadCacheHits++;
-      return { solved: false };
-    }
+    if (this._deadCache.has(cacheKey)) return { solved: false };
 
     const { mn, mx } = this.d[best.id];
 forLoop:

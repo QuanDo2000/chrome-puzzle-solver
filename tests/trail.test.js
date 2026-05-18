@@ -75,8 +75,6 @@ test('solve() on a reused instance resets per-solve state', () => {
   s.colKnown[0] = 99;
   s.bestPartial = [['poison'], ['poison'], ['poison']];
   s.bestPartialFilled = Number.MAX_SAFE_INTEGER;
-  s.timeoutPartial = [['poison']];
-  s.frontier.push('poison');
   s.timedOut = true;
 
   const result = s.solve(null);
@@ -101,13 +99,8 @@ test('solve() on a reused instance resets per-solve state', () => {
       'bestPartial should not retain poison rows');
   }
   assert.equal(s.timedOut, false, 'timedOut should be reset');
-  // 3. frontier was poisoned with a non-numeric entry; if solve() didn't
-  // reset it the type would diverge from a fresh solver's Int8Array-style
-  // numeric state. Length 0 here (since this puzzle is small enough that
-  // frontier never gets used) is the expected post-reset state.
-  assert.equal(s.frontier.length, 0, 'frontier should be reset');
 
-  // 4. End-to-end: a second clean solve agrees with a fresh-solver baseline.
+  // 3. End-to-end: a second clean solve agrees with a fresh-solver baseline.
   const second = s.solve(null);
   const fresh = new NonogramSolver(rowClues, colClues).solve(null);
   assert.deepEqual(second, fresh);
