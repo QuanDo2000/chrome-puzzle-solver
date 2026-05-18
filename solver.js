@@ -2581,9 +2581,9 @@ class BinairoSolver {
     return true;
   }
 
-  // For each empty cell, check both placements against the four 3-windows
-  // (two horizontal, two vertical) that contain it. If exactly one value is
-  // legal, force it. If neither is legal, contradiction.
+  // For each empty cell, check both placements against up to three horizontal
+  // and three vertical 3-windows that contain it (boundary windows skipped).
+  // If exactly one value is legal, force it. If neither is legal, contradiction.
   _applyNoTriples(onChange) {
     const R = this.rows, C = this.cols;
     for (let r = 0; r < R; r++) {
