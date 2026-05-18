@@ -94,7 +94,21 @@ class NonogramSolver {
    * @returns {SolveResult}
    */
   solve(initialGrid) {
+    // Reset every per-solve field so a reused instance behaves like a fresh
+    // one. AquariumSolver and GalaxiesSolver both reset on entry to solve();
+    // this matches that contract. Production constructs a fresh solver per
+    // call (solver.worker.js), but the inconsistency was a latent footgun.
     this.trail.length = 0;
+    this.gridBuf.fill(0);
+    for (let r = 0; r < this.rows; r++) this.grid[r].fill(0);
+    this.rowKnown.fill(0);
+    this.colKnown.fill(0);
+    this.bestPartial = null;
+    this.bestPartialFilled = 0;
+    this.timeoutPartial = null;
+    this.frontier.length = 0;
+    this.startedAt = Date.now();
+    this.timedOut = false;
     if (initialGrid) {
       for (let r = 0; r < this.rows; r++) {
         for (let c = 0; c < this.cols; c++) {
@@ -104,8 +118,6 @@ class NonogramSolver {
         }
       }
     }
-    this.startedAt = Date.now();
-    this.timedOut = false;
 
     if (!this.propagate()) {
       return { solved: false, grid: null, error: 'contradiction on initial propagation' };

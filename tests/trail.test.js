@@ -61,6 +61,20 @@ test('solve reports contradiction on an unsolvable puzzle without crashing', () 
   assert.ok(result.error || result.grid === null);
 });
 
+test('solve() on a reused instance resets per-solve state', () => {
+  const rowClues = [[2], [1, 1], [2]];
+  const colClues = [[2], [1, 1], [2]];
+  const s = new NonogramSolver(rowClues, colClues);
+  const first = s.solve(null);
+  // Second call on the SAME instance: must not be contaminated by first run's
+  // gridBuf / rowKnown / colKnown / bestPartial state.
+  const second = s.solve(null);
+  assert.deepEqual(second, first);
+  // And the per-line counters must match a fresh-solver baseline.
+  const fresh = new NonogramSolver(rowClues, colClues).solve(null);
+  assert.deepEqual(second, fresh);
+});
+
 test('backtrack rollback works end-to-end via solve()', () => {
   // 3x3 nonogram designed so the first guess sometimes fails.
   // Rows: [2], [1,1], [2]   Cols: [2], [1,1], [2]
