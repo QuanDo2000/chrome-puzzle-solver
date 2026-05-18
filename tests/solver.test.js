@@ -59,3 +59,21 @@ test('BinairoSolver: constructor accepts givens and exposes rows/cols', () => {
   assert.equal(s.rows, p.rows);
   assert.equal(s.cols, p.cols);
 });
+
+test('BinairoSolver: no-triples propagation forces opposite when two same in a row', () => {
+  // Row: [1, 1, ?, ?, ?, ?] — third cell must be 2 (zero).
+  const s = new BinairoSolver({
+    rows: 6, cols: 6,
+    givens: [
+      [1, 1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+    ],
+  });
+  const ok = s.propagate();
+  assert.equal(ok, true);
+  assert.equal(s._get(0, 2), 2, 'cell (0,2) must be forced to 2 (zero)');
+});

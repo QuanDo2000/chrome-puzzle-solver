@@ -2567,6 +2567,67 @@ class BinairoSolver {
     if (newV === 1) { this.rowOnes[r]++; this.colOnes[c]++; }
     else if (newV === 2) { this.rowZeros[r]++; this.colZeros[c]++; }
   }
+
+  // Fixed-point loop driving all three rules. Returns false on contradiction
+  // (a cell forced to a value already occupied by its complement).
+  propagate() {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      if (!this._applyNoTriples(() => { changed = true; })) return false;
+      if (!this._applyBalance(() => { changed = true; }))   return false;
+      if (!this._applyUniqueness(() => { changed = true; })) return false;
+    }
+    return true;
+  }
+
+  // For each empty cell, check both placements against the four 3-windows
+  // (two horizontal, two vertical) that contain it. If exactly one value is
+  // legal, force it. If neither is legal, contradiction.
+  _applyNoTriples(onChange) {
+    const R = this.rows, C = this.cols;
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) {
+        if (this._get(r, c) !== 0) continue;
+        const canOne  = !this._wouldCreateTriple(r, c, 1);
+        const canZero = !this._wouldCreateTriple(r, c, 2);
+        if (!canOne && !canZero) return false;
+        if (canOne && !canZero) { if (this._assign(r, c, 1)) onChange(); }
+        else if (canZero && !canOne) { if (this._assign(r, c, 2)) onChange(); }
+      }
+    }
+    return true;
+  }
+
+  // Does placing v at (r,c) create v,v,v in any of the four 3-windows that
+  // span this cell? Skip windows where any other slot is empty (0) — they
+  // can't force a triple yet.
+  _wouldCreateTriple(r, c, v) {
+    const R = this.rows, C = this.cols;
+    // Horizontal windows: (c-2,c-1,c), (c-1,c,c+1), (c,c+1,c+2)
+    for (let dc = -2; dc <= 0; dc++) {
+      const c0 = c + dc;
+      if (c0 < 0 || c0 + 2 >= C) continue;
+      const a = (c0     === c) ? v : this._get(r, c0);
+      const b = (c0 + 1 === c) ? v : this._get(r, c0 + 1);
+      const d = (c0 + 2 === c) ? v : this._get(r, c0 + 2);
+      if (a === v && b === v && d === v) return true;
+    }
+    // Vertical windows: (r-2,r-1,r), (r-1,r,r+1), (r,r+1,r+2)
+    for (let dr = -2; dr <= 0; dr++) {
+      const r0 = r + dr;
+      if (r0 < 0 || r0 + 2 >= R) continue;
+      const a = (r0     === r) ? v : this._get(r0, c);
+      const b = (r0 + 1 === r) ? v : this._get(r0 + 1, c);
+      const d = (r0 + 2 === r) ? v : this._get(r0 + 2, c);
+      if (a === v && b === v && d === v) return true;
+    }
+    return false;
+  }
+
+  // Stubs — Tasks 4 and 5 replace these.
+  _applyBalance(_onChange) { return true; }
+  _applyUniqueness(_onChange) { return true; }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
