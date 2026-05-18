@@ -749,9 +749,10 @@ class GalaxiesSolver {
         if (!this._inside(nr, nc)) continue;
         const a = nr * this.cols + nc;
         if (shape.has(a)) continue;
-        const m = this._mirror(nr, nc, starIndex);
-        if (!this._inside(m.row, m.col)) continue;
-        const b = m.row * this.cols + m.col;
+        const s = this.stars[starIndex];
+        const mr = s.row - nr, mc = s.col - nc;
+        if (!this._inside(mr, mc)) continue;
+        const b = mr * this.cols + mc;
         const group = a === b ? [a] : [a, b].sort((x, y) => x - y);
         const key = group.join(',');
         if (seen.has(key)) continue;
@@ -911,9 +912,13 @@ class GalaxiesSolver {
 
   _canAssignPair(row, col, starIndex) {
     if (this.staticCandidates[row]?.[col] && !this.staticCandidates[row][col].includes(starIndex)) return false;
-    const m = this._mirror(row, col, starIndex);
-    if (!this._canUseCell(row, col, starIndex) || !this._canUseCell(m.row, m.col, starIndex)) return false;
-    const a = this.grid[row][col], b = this.grid[m.row][m.col];
+    // Inline _mirror to skip the per-call {row,col} object allocation; this is
+    // the deepest hot path in the solver (called millions of times via
+    // _candidates / _propagate / _regionReachable).
+    const s = this.stars[starIndex];
+    const mr = s.row - row, mc = s.col - col;
+    if (!this._canUseCell(row, col, starIndex) || !this._canUseCell(mr, mc, starIndex)) return false;
+    const a = this.grid[row][col], b = this.grid[mr][mc];
     return (a === -1 || a === starIndex) && (b === -1 || b === starIndex);
   }
 
@@ -942,9 +947,9 @@ class GalaxiesSolver {
 
   _assignPair(row, col, starIndex, changed) {
     if (!this._canAssignPair(row, col, starIndex)) return false;
-    const m = this._mirror(row, col, starIndex);
+    const s = this.stars[starIndex];
     this._assign(row, col, starIndex);
-    this._assign(m.row, m.col, starIndex);
+    this._assign(s.row - row, s.col - col, starIndex);
     if (changed) changed.add(starIndex);
     return true;
   }
