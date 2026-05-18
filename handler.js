@@ -152,8 +152,10 @@ const galaxiesHandler = {
     const lines = solution?.type === 'galaxies-lines'
       ? solution.lines
       : solution?.galaxies || buildGalaxiesLinesFromRegions(solution, ctx.rows, ctx.cols);
-    await callMainWorld('applyGalaxiesState', [lines]);
-    return true;
+    const ok = await callMainWorld('applyGalaxiesState', [lines]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Galaxies apply failed (no window.Game or MAIN-world timeout)' };
   },
 };
 
@@ -254,8 +256,10 @@ const aquariumHandler = {
   },
 
   async applySolution(solution, _ctx) {
-    await callMainWorld('applyGameState', [solution]);
-    return true;
+    const ok = await callMainWorld('applyGameState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Aquarium apply failed (no window.Game or MAIN-world timeout)' };
   },
 };
 
@@ -300,7 +304,8 @@ const puzzlesMobileHandler = {
 
   async applySolution(solution, ctx) {
     const { rows, cols, _cells: cells } = ctx;
-    if (cells && cells.length >= rows * cols) {
+    const haveCells = cells && cells.length >= rows * cols;
+    if (haveCells) {
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const idx = r * cols + c;
@@ -310,8 +315,13 @@ const puzzlesMobileHandler = {
         }
       }
     }
-    await callMainWorld('applyGameState', [solution]);
-    return true;
+    const ok = await callMainWorld('applyGameState', [solution]);
+    // DOM-click fallback counts as success: if window.Game isn't available
+    // the DOM mutations are the actual user-visible apply. Either path
+    // succeeding is enough.
+    return (ok || haveCells)
+      ? { success: true }
+      : { success: false, error: 'No cells to click and MAIN-world apply failed' };
   },
 
   _processTaskString(result, task, width, height) {

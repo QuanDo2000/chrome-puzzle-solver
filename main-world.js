@@ -344,10 +344,10 @@ async function applyGalaxiesState(lines) {
     }
   }
   try {
-    if (!window.Game || !window.Game.currentState || !lines) return;
+    if (!window.Game || !window.Game.currentState || !lines) return false;
     var hs = window.Game.currentState.cellHorizontalStatus;
     var vs = window.Game.currentState.cellVerticalStatus;
-    if (!hs || !vs || !lines.horizontal || !lines.vertical) return;
+    if (!hs || !vs || !lines.horizontal || !lines.vertical) return false;
     for (var r = 0; r < hs.length && r < lines.horizontal.length; r++) {
       for (var c = 0; c < hs[r].length && c < lines.horizontal[r].length; c++) {
         hs[r][c] = lines.horizontal[r][c] ? 1 : 0;
@@ -369,8 +369,10 @@ async function applyGalaxiesState(lines) {
       window.Game.currentState.solved = false;
       await window.Game.check(false, true);
     }
+    return true;
   } catch (e) {
     console.warn('Galaxies apply failed:', e);
+    return false;
   }
 }
 
@@ -401,47 +403,50 @@ function applyGameState(solution) {
   try {
     var rows = solution.length;
     var cols = solution[0].length;
-    if (window.Game && window.Game.currentState && window.Game.currentState.cellStatus) {
-      var cs = window.Game.currentState.cellStatus;
+    if (!(window.Game && window.Game.currentState && window.Game.currentState.cellStatus)) {
+      return false;
+    }
+    var cs = window.Game.currentState.cellStatus;
 
-      if (typeof window.Game.saveState === 'function') {
-        window.Game.saveState(true);
-      }
+    if (typeof window.Game.saveState === 'function') {
+      window.Game.saveState(true);
+    }
 
-      for (var r = 0; r < rows && r < cs.length; r++) {
-        for (var c = 0; c < cols && c < cs[r].length; c++) {
-          cs[r][c] = solution[r][c] === 1 ? 1 : solution[r][c] === -1 ? 2 : 0;
-        }
-      }
-      window.Game.currentState.solved = true;
-
-      if (typeof window.Game.render === 'function') {
-        window.Game.render();
-      } else if (typeof window.Game.redraw === 'function') {
-        window.Game.redraw();
-      } else if (typeof window.Game.redrawGrid === 'function') {
-        window.Game.redrawGrid();
-      } else if (window.Game.getSaved && window.Game.loadGame) {
-        var saved = window.Game.getSaved();
-        if (saved) window.Game.loadGame(saved);
-      }
-
-      var hasUnknown = false;
-      for (var r = 0; r < rows; r++) {
-        for (var c = 0; c < cols; c++) {
-          if (solution[r][c] === 0) { hasUnknown = true; break; }
-        }
-        if (hasUnknown) break;
-      }
-      if (!hasUnknown && typeof window.Game.check === 'function') {
-        syncTimer();
-        window.Game.solved = false;
-        window.Game.currentState.solved = false;
-        window.Game.check(false, true);
+    for (var r = 0; r < rows && r < cs.length; r++) {
+      for (var c = 0; c < cols && c < cs[r].length; c++) {
+        cs[r][c] = solution[r][c] === 1 ? 1 : solution[r][c] === -1 ? 2 : 0;
       }
     }
+    window.Game.currentState.solved = true;
+
+    if (typeof window.Game.render === 'function') {
+      window.Game.render();
+    } else if (typeof window.Game.redraw === 'function') {
+      window.Game.redraw();
+    } else if (typeof window.Game.redrawGrid === 'function') {
+      window.Game.redrawGrid();
+    } else if (window.Game.getSaved && window.Game.loadGame) {
+      var saved = window.Game.getSaved();
+      if (saved) window.Game.loadGame(saved);
+    }
+
+    var hasUnknown = false;
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        if (solution[r][c] === 0) { hasUnknown = true; break; }
+      }
+      if (hasUnknown) break;
+    }
+    if (!hasUnknown && typeof window.Game.check === 'function') {
+      syncTimer();
+      window.Game.solved = false;
+      window.Game.currentState.solved = false;
+      window.Game.check(false, true);
+    }
+    return true;
   } catch (e) {
     console.warn('Game API injection failed:', e);
+    return false;
   }
 }
 

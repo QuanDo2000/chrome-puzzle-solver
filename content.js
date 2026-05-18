@@ -119,15 +119,19 @@ async function applySolution(solution, skipUndo = false, internal = false) {
       }
     }
     const handler = getHandler();
-    if (handler) {
-      suppressStateWatch = true;
-      try {
-        await handler.applySolution(solution, detectedGrid);
-      } finally {
-        suppressStateWatch = false;
-      }
+    if (!handler) return { success: false, error: 'No handler for this page' };
+    suppressStateWatch = true;
+    let handlerResult;
+    try {
+      handlerResult = await handler.applySolution(solution, detectedGrid);
+    } finally {
+      suppressStateWatch = false;
     }
-    return { success: true };
+    // Backwards-compat: an older handler that still returns true (or nothing)
+    // is treated as success — but the three handlers in this repo now all
+    // return { success, error? }.
+    if (handlerResult === true || handlerResult == null) return { success: true };
+    return handlerResult;
   } finally {
     if (!internal) clearMutatingOp();
   }
