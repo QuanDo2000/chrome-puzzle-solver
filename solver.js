@@ -2479,11 +2479,14 @@ class BinairoSolver {
     if (rows % 2 !== 0 || cols % 2 !== 0) {
       throw new Error('BinairoSolver: rows/cols must be even (Binairo requires N/2 of each value per line)');
     }
+    if (!Array.isArray(givens)) {
+      throw new Error('BinairoSolver: givens must be an array');
+    }
     this.rows = rows;
     this.cols = cols;
-    this.half = cols / 2;        // per-row half count
-    this.halfRow = rows / 2;     // per-col half count
-    this.givens = givens;
+    this.rowHalf = cols / 2;     // half-count target for any single row
+    this.colHalf = rows / 2;     // half-count target for any single column
+    this.givens = givens.map(row => (Array.isArray(row) ? row.slice() : []));
 
     // Internal grid: 0=empty, 1=one, 2=zero. Flat Int8Array for fast access.
     this.grid = new Int8Array(rows * cols);
