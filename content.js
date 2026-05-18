@@ -1245,29 +1245,61 @@ function makeWidget() {
     return id;
   }
 
+  // FNV-1a 32-bit hash. Called per state-watch tick (every ~200ms) for grids
+  // up to 50×50; the prior O(N²) string concat dominated the early-bail check
+  // it fed. Cell values are shifted into a non-negative range before mixing.
+  const FNV_OFFSET = 0x811c9dc5 | 0;
+  const FNV_PRIME = 16777619;
+
   function regionMapSig(rm) {
-    if (!rm) return '';
-    let s = '';
+    if (!rm) return 0;
+    let h = FNV_OFFSET;
     for (let r = 0; r < rm.length; r++) {
       const row = rm[r];
-      for (let c = 0; c < row.length; c++) { s += row[c]; s += ','; }
-      s += ';';
+      for (let c = 0; c < row.length; c++) {
+        h ^= row[c];
+        h = Math.imul(h, FNV_PRIME);
+      }
+      // Row separator so [[1,2],[3]] and [[1],[2,3]] don't collide.
+      h ^= 0xff;
+      h = Math.imul(h, FNV_PRIME);
     }
-    return s;
+    return h;
   }
 
   function gridDataSig(grid) {
-    let s = '';
+    let h = FNV_OFFSET;
     for (let r = 0; r < grid.length; r++) {
       const row = grid[r];
-      for (let c = 0; c < row.length; c++) { s += row[c]; s += ','; }
+      for (let c = 0; c < row.length; c++) {
+        h ^= (row[c] + 2);  // shift {-1, 0, 1, star indices} into positives
+        h = Math.imul(h, FNV_PRIME);
+      }
     }
     if (grid.galaxies) {
       const g = grid.galaxies;
-      if (g.horizontal) for (const row of g.horizontal) s += '|h' + row.join(',');
-      if (g.vertical)   for (const row of g.vertical)   s += '|v' + row.join(',');
+      if (g.horizontal) {
+        for (const row of g.horizontal) {
+          for (const v of row) {
+            h ^= (v + 2);
+            h = Math.imul(h, FNV_PRIME);
+          }
+          h ^= 0xfe;
+          h = Math.imul(h, FNV_PRIME);
+        }
+      }
+      if (g.vertical) {
+        for (const row of g.vertical) {
+          for (const v of row) {
+            h ^= (v + 2);
+            h = Math.imul(h, FNV_PRIME);
+          }
+          h ^= 0xfd;
+          h = Math.imul(h, FNV_PRIME);
+        }
+      }
     }
-    return s;
+    return h;
   }
 
   function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
