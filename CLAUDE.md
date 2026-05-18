@@ -49,18 +49,27 @@ Content scripts share the page's origin, so `new Worker(chrome.runtime.getURL('s
 ### Performance patterns used
 - **Trail-based undo** in `NonogramSolver` (`_assign`/`_rollback` pushing flat 3-int groups) and `GalaxiesSolver` (same with 2D tuples) — replaces per-recursion grid cloning.
 - **Forward + backward line DP** in `NonogramSolver.solveLine` — single O(L·N·block) pass replaces the old per-cell solveLineValid reruns (was 36× slower on the 50×50 monthly).
+- **Bitmap canEmpty intersection** in `solveLine` — `bf[c] & bb[c+1]` k-bit intersection answers the per-cell can-be-empty check in O(1); requires N ≤ 31, asserted in code.
+- **Incremental `rowKnown`/`colKnown`** in `NonogramSolver` — Int32Array per-line counts maintained in `_set`/`_assign`/`_rollback` so `backtrack` picks its variable in O(R+C) instead of O(R·C) per recursion.
+- **Dirty-cell queue** in `GalaxiesSolver._propagate` — after each assignment, only enqueue cells whose mirror-under-some-star landed on the changed cell. Replaces the prior `while(didChange)` full grid sweep.
+- **Inlined `_mirror`** at the hottest sites (`_canAssignPair`, `_assignPair`, `_shapeFrontier`) — skips the per-call `{row, col}` object allocation.
 - **Flat-int `Map` keys** for `GalaxiesSolver.owner` (was `"r,c"` strings).
 - **`String.fromCharCode.apply`** for state-hash keys in `_stateKey` (was `+= toString(36) + '.'`).
 - **`Uint8Array`-backed BFS visited sets** in `_regionReachable`.
 - **Dense `Int32Array` contribs** in `AquariumSolver` (was sparse `{row: count}` objects).
-- **Canvas: early-bail + cached static layer** in `content.js drawPreview` — keyed by puzzle shape; only the dynamic cell layer is redrawn per state-watch tick.
+- **Static `_solutionCache`** on `GalaxiesSolver` — bypassed when `initialGrid` or `forbiddenPartials` is set (constraints invalidate the unconstrained cached result). Use `GalaxiesSolver.clearSolutionCache()` in tests to keep them order-independent.
+- **Canvas: two-layer cache** in `content.js drawPreview` — `latticeLayer` (grey cell-border lines) drawn UNDER dynamic fills; `staticLayer` (region borders / nonogram guides / galaxy stars) drawn ON TOP. Both rebuilt only on puzzle-shape changes. Dynamic fills + X-mark Path2D in between.
+- **FNV-1a numeric hashes** for `gridDataSig` / `regionMapSig` early-bail in `drawPreview` (was O(N²) string concat per 200ms tick).
 
 ### Widget conventions
 - `setStatusNodes(type, ...parts)` + `bold(text)` build status DOM via `appendChild`. Never use `innerHTML` for dynamic content.
 - `clearPendingHint()` resets the pending-hint UI state in one call (formerly a scattered 3-line pattern).
-- `applySolveResult(result)` is the canonical "solve succeeded → enter confirm mode" transition (used by both fresh-solve and retry paths).
-- `mutatingOp` token serializes apply/undo/redo so they can't interleave (closes the race where Undo mid-apply pushed half-applied state to redo).
-- The Loop button repurposes as Stop while looping — `setButtonsDisabled(true)` must be followed by `loopBtn.disabled = false`.
+- `recordSolveSuccess(result)` caches the solver output (puzzle solution, galaxies cache, partial clears). Shared by both `applySolveResult` and `loopHandler`'s intermediate solve so the cache invariants can't drift.
+- `applySolveResult(result)` = `recordSolveSuccess(result)` + the confirm-mode UI transition (status text, button label, preview). Used by fresh-solve and retry paths.
+- `applySolution(solution, skipUndo, internal)`: undo/redo pass `internal=true` so the nested apply doesn't drop the mutex (the outer caller already owns it). All three handler.applySolution implementations return `{ success, error? }`; applySolution propagates that, never lies about success.
+- `mutatingOp` token serializes apply/undo/redo so they can't interleave.
+- The Loop button repurposes as Stop while looping — `setButtonsDisabled(true)` must be followed by `loopBtn.disabled = false`. The inter-step 300ms sleep is cancellable via `stopLoopWait` so Stop is instant.
+- Lifecycle: `pagehide(persisted=false)` drains `solverPending`, terminates the worker, stops the state-watch observer. `pagehide(persisted=true)` no-ops (BFCache). `pageshow(persisted=true)` nulls the (now-dead) worker so the next call rebuilds lazily.
 
 ## Tests and benches
 
@@ -75,6 +84,22 @@ Content scripts share the page's origin, so `new Worker(chrome.runtime.getURL('s
 
 Click the widget's **📋 Dump** button on any puzzle page. It writes a JSON snippet (matching the `real-puzzles.js` format) to the clipboard and to `console.log` with prefix `[puzzle-solver dump]`. On extractor failure the snippet includes a `diagnostic` block with the shape of `window.Game` — paste that back to patch `dumpPuzzleForBench()` in `main-world.js`.
 
+## MV3 hardening contract
+
+- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (9 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
+- `callMainWorld` has a 15s wall-clock timeout via `Promise.race` — if the SW dies mid-call, the caller resolves `null` instead of hanging.
+- `execMain` targets `sender.tab.id`, not the active tab — handles tab-switch mid-call.
+- `manifest.json` permissions list is minimal (`scripting` only). Don't add `activeTab` / `storage` back without a concrete need.
+
+## Tests and benches
+
+- `npm test` runs the `node:test` suite. `npm run lint`, `npm run typecheck` are gated in CI.
+- `tests/fixtures/puzzles.js` — small deterministic puzzles with golden snapshots in `tests/golden.js`. Regenerate via `npm run capture`.
+- `tests/fixtures/real-puzzles.js` — full-size puzzles captured from puzzles-mobile.com via the widget's **📋 Dump** button. Used by `tests/bench-real.js` only.
+- `tests/solveline.test.js` — brute-force cross-check of `solveLine`. Two fuzz tests: small (N≤3) and large (N=4..7, exercises the bitmap fast-path).
+- Bench scripts (`tests/bench.js`, `bench-galaxies.js`, `bench-aquarium.js`, `bench-real.js`) discard 2 warmup iterations and `process.exit(1)` on unsolved puzzles. `bench.js`'s synthetic puzzle is intentionally ambiguous; `solved=false` is expected.
+- Nightly CI workflow (`.github/workflows/bench-nightly.yml`) runs all four; no `continue-on-error`.
+
 ## Things explicitly removed (don't reintroduce)
 
 - `utils.js` (held `PUZZLE_SELECTORS` used only by the never-registered `genericHandler`).
@@ -83,3 +108,8 @@ Click the widget's **📋 Dump** button on any puzzle page. It writes a JSON sni
 - `console.log` debug breadcrumbs from `AquariumSolver.solve` and the galaxies hint failure path.
 - `setStatusHtml(html, type)` + `hintStatusText` — replaced by `setStatusNodes` + `hintStatusNodes`.
 - `clone()` and `isContradiction()` in `NonogramSolver` (replaced by trail-based undo + bool return from `propagate`).
+- `AquariumSolver._solveMinConflicts` — random-restart heuristic from an earlier solver iteration; never called.
+- `solveLine` N>31 fallback scan — the bitmap path is the only path now (real puzzles cap at N≈12).
+- `sendToContent` action in `background.js` — was unused.
+- `syncGameTimerForCheck` top-level in `main-world.js` — closure is lost when serialized to MAIN world; inlined as nested `syncTimer` in each caller.
+- `tests/snapshots/` directory + its eslint ignore — dead infrastructure.
