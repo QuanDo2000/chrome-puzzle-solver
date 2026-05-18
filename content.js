@@ -220,24 +220,82 @@ function firstMismatch(grid, solution) {
   return null;
 }
 
-// Fallback hint for aquarium/nonogram when their per-line heuristic exhausts:
-// pick the first row with cells still unknown vs the solver's solution and
-// emit those cells as a row hint. Returns null if every cell already matches
-// the solution. addAquariumRegionHints downstream expands each emitted cell
-// to its region (rows below/above as water/dry), so one fallback Hint
-// completes a meaningful contiguous chunk rather than a sparse row.
-function rowHintFromSolution(grid, solution) {
-  if (!grid || !solution) return null;
-  for (let r = 0; r < grid.length; r++) {
+// Per-type path through a solver-produced solution: a deterministic ordered
+// list of "chunks" (sets of cells/lines) the fallback hint emits one chunk
+// per call. Memoized on the solution object so repeated Hint calls reuse
+// the same walk. Pattern mirrors galaxies' getGalaxyPath, generalised:
+//   galaxies: chunks = galaxies, smallest first, each chunk's "cells" are
+//             boundary lines (orientation/row/col).
+//   aquarium: chunks = regions, smallest first, each chunk's cells are the
+//             {row, col, value} of every cell in that region.
+//   nonogram: chunks = rows, in index order, each chunk's cells are the
+//             {row, col, value} for that row.
+
+function getAquariumPath(solution, regionMap) {
+  if (solution._aquariumPath) return solution._aquariumPath;
+  if (!Array.isArray(regionMap)) return [];
+  const byRegion = new Map();
+  for (let r = 0; r < regionMap.length; r++) {
+    const row = regionMap[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      const id = row[c];
+      if (id === undefined) continue;
+      let g = byRegion.get(id);
+      if (!g) { g = []; byRegion.set(id, g); }
+      g.push({ row: r, col: c, value: solution[r]?.[c] });
+    }
+  }
+  const path = [...byRegion.entries()]
+    .map(([id, cells]) => ({ id, size: cells.length, cells }))
+    .sort((a, b) => a.size - b.size || a.id - b.id);
+  solution._aquariumPath = path;
+  return path;
+}
+
+function getNonogramPath(solution) {
+  if (solution._nonogramPath) return solution._nonogramPath;
+  const path = [];
+  for (let r = 0; r < solution.length; r++) {
+    const row = solution[r] || [];
     const cells = [];
-    for (let c = 0; c < grid[r].length; c++) {
-      if (grid[r][c] === 0 && solution[r]?.[c] !== 0 && solution[r][c] !== undefined) {
-        cells.push({ index: c, value: solution[r][c] });
-      }
+    for (let c = 0; c < row.length; c++) {
+      if (row[c] === 1 || row[c] === -1) cells.push({ row: r, col: c, value: row[c] });
     }
-    if (cells.length > 0) {
-      return { type: 'row', index: r, clue: null, cells, count: cells.length };
-    }
+    if (cells.length) path.push({ id: r, size: cells.length, cells });
+  }
+  solution._nonogramPath = path;
+  return path;
+}
+
+// Convert a flat array of {row, col, value} cells (the next chunk in a path)
+// into the row-hint shape the rest of the pipeline expects: first cell becomes
+// the row anchor, same-row cells become hint.cells, the rest go in extraCells.
+// hintAbsoluteCells/applyHintCells handle both lists, so all cells get applied.
+function hintFromCellChunk(cells) {
+  if (!cells.length) return null;
+  const base = cells[0];
+  const sameRow = [];
+  const others = [];
+  for (const c of cells) {
+    if (c.row === base.row) sameRow.push({ index: c.col, value: c.value });
+    else others.push({ row: c.row, col: c.col, value: c.value });
+  }
+  return {
+    type: 'row',
+    index: base.row,
+    clue: null,
+    cells: sameRow,
+    extraCells: others,
+    count: cells.length,
+  };
+}
+
+// Pick the next chunk from a path with any cells still empty in `grid`.
+function nextChunkHint(grid, path) {
+  for (const chunk of path) {
+    const needed = chunk.cells.filter(c => grid[c.row]?.[c.col] === 0);
+    if (!needed.length) continue;
+    return hintFromCellChunk(needed);
   }
   return null;
 }
@@ -908,6 +966,51 @@ function cacheGalaxiesSolution(data, grid) {
   } catch {}
 }
 
+// Aquarium + nonogram cache. Same shape as galaxies (stable key derived from
+// puzzle definition + 2D grid in localStorage), without the galaxies-lines
+// side-property. Lets the loop / Hint button reuse a once-solved puzzle
+// across reloads, and also fuels the per-type path fallbacks below.
+function aquariumCacheKey(data) {
+  if (!data || data.type !== 'aquarium') return null;
+  const r = (data.rowClues || []).join(',');
+  const c = (data.colClues || []).join(',');
+  const m = (data.regionMap || []).map(row => row.join('-')).join(';');
+  return 'aquarium-solution:' + data.rows + 'x' + data.cols + ':' + r + ':' + c + ':' + m;
+}
+
+function nonogramCacheKey(data) {
+  if (!data || data.type !== 'nonogram') return null;
+  const r = (data.rowClues || []).map(rc => rc.join('-')).join(';');
+  const c = (data.colClues || []).map(cc => cc.join('-')).join(';');
+  return 'nonogram-solution:' + data.rows + 'x' + data.cols + ':' + r + ':' + c;
+}
+
+function getCachedGridSolution(data) {
+  const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
+    : data?.type === 'nonogram' ? nonogramCacheKey(data)
+    : null;
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed?.grid)) return null;
+    return parsed.grid.map(row => row.slice());
+  } catch {
+    return null;
+  }
+}
+
+function cacheGridSolution(data, grid) {
+  const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
+    : data?.type === 'nonogram' ? nonogramCacheKey(data)
+    : null;
+  if (!key || !Array.isArray(grid)) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ grid, savedAt: Date.now() }));
+  } catch {}
+}
+
 function puzzlePartialKey(data) {
   if (!data) return null;
   if (data.type === 'galaxies') return galaxiesPartialKey(data);
@@ -1105,33 +1208,53 @@ async function getHint(request = {}) {
       hint = solver.getHint(grid);
       // Solver fallback when AquariumSolver.getHint exhausts. The aquarium
       // heuristic is purely per-line — on the 30x30 monthly it produces one
-      // hint and then stalls with 98% of cells still empty. The full solver
-      // gives ground truth in tens of ms; cache it in-memory via hintSolution
-      // (returned to the caller, captured into puzzleData.solution by the
-      // loop) and emit row-by-row diffs.
+      // hint and then stalls with 98% of cells still empty. Use the full
+      // solver via localStorage cache → in-memory cache → fresh solve, and
+      // emit one region per Hint (smallest first) via the cached path.
       if (!hint) {
-        let sol = hintSolution;
+        let sol = hintSolution || getCachedGridSolution(detectedGrid);
         if (!sol) {
           const result = await runSolve(rowClues, colClues, grid, 'aquarium', solveExtraData());
-          if (result?.solved && result.grid) sol = result.grid;
+          if (result?.solved && result.grid) {
+            cacheGridSolution(detectedGrid, result.grid);
+            sol = result.grid;
+          }
         }
         if (sol) {
           if (firstMismatch(grid, sol)) {
             return { success: false, error: 'Current game state is wrong.' };
           }
           hintSolution = sol;
-          hint = rowHintFromSolution(grid, sol);
+          hint = nextChunkHint(grid, getAquariumPath(sol, detectedGrid.regionMap));
         }
       }
-    } else if (solution) {
-      if (firstMismatch(grid, solution)) {
+    } else {
+      if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
       }
       const solver = new NonogramSolver(rowClues, colClues);
       hint = solver.getHint(grid);
-    } else {
-      const solver = new NonogramSolver(rowClues, colClues);
-      hint = solver.getHint(grid);
+      // Same fallback pattern for nonogram: if the per-line solveLine
+      // narrowing dries up, fall back to the cached / freshly-solved
+      // solution and emit one row at a time. The 50x50 monthly finishes
+      // via the heuristic alone, but harder puzzles can stall.
+      if (!hint) {
+        let sol = hintSolution || getCachedGridSolution(detectedGrid);
+        if (!sol) {
+          const result = await runSolve(rowClues, colClues, grid, 'nonogram', solveExtraData());
+          if (result?.solved && result.grid) {
+            cacheGridSolution(detectedGrid, result.grid);
+            sol = result.grid;
+          }
+        }
+        if (sol) {
+          if (firstMismatch(grid, sol)) {
+            return { success: false, error: 'Current game state is wrong.' };
+          }
+          hintSolution = sol;
+          hint = nextChunkHint(grid, getNonogramPath(sol));
+        }
+      }
     }
     if (detectedGrid.type === 'aquarium') {
       hint = addAquariumRegionHints(hint, grid, hintSolution, detectedGrid.regionMap);
@@ -2059,9 +2182,19 @@ function makeWidget() {
     confirming = false;
     solveBtn.textContent = 'Solve';
 
-    const cached = getCachedGalaxiesSolution(puzzleData);
-    if (!puzzleData.solution && cached) puzzleData.solution = cached;
+    // Load any cached solution for this puzzle before deciding whether to
+    // pre-solve. Galaxies / aquarium / nonogram each have their own cache
+    // shape; getCachedGridSolution dispatches by type for the latter two.
+    if (!puzzleData.solution) {
+      const cached = puzzleData.type === 'galaxies'
+        ? getCachedGalaxiesSolution(puzzleData)
+        : getCachedGridSolution(puzzleData);
+      if (cached) puzzleData.solution = cached;
+    }
 
+    // Nonogram pre-solves so the loop's getHint can compare against the
+    // solution. With a cache hit we skip the solve; otherwise solve once
+    // up front and cache the result.
     if (puzzleData.type === 'nonogram' && !puzzleData.solution) {
       setStatus('Solving...', 'info');
       const stateResult = await readGridState();
@@ -2073,6 +2206,7 @@ function makeWidget() {
         return;
       }
       recordSolveSuccess(result);
+      cacheGridSolution(puzzleData, result.grid);
     }
 
     setStatus('Computing hint...', 'info');
