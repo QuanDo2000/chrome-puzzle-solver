@@ -2082,6 +2082,13 @@ function makeWidget() {
   window.addEventListener('pagehide', () => {
     stopStateWatch();
     if (solverWorker) {
+      // Resolve any in-flight solves before tearing down the worker —
+      // otherwise their awaiters hang forever and the widget gets stuck
+      // on "Solving..." if the user comes back to the page.
+      for (const pending of solverPending.values()) {
+        pending.resolve({ solved: false, grid: null, error: 'page unloaded' });
+      }
+      solverPending.clear();
       try { solverWorker.terminate(); } catch {}
       solverWorker = null;
       solverWorkerInit = null;
