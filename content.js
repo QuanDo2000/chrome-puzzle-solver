@@ -1708,15 +1708,23 @@ function makeWidget() {
     applySolveResult(result);
   }
 
-  // Move from "solving" into "ready to apply": cache the solution, clear
-  // outstanding partial state, and put the widget into confirm mode showing
-  // a preview. Used by both the fresh-solve and the retry path.
-  function applySolveResult(result) {
-    loopConfirming = false;
+  // Cache solver outputs so subsequent operations (apply, hint, loop) can
+  // reuse them. Stops short of the confirm-mode UI transition — applies
+  // anywhere we record a successful solve, including paths that aren't going
+  // into "preview ready" mode (e.g., loopHandler's own intermediate solve).
+  function recordSolveSuccess(result) {
     puzzleData.solution = result.grid;
     cacheGalaxiesSolution(puzzleData, result.grid);
     clearPartial(puzzleData);
     clearFailedGalaxiesPartials(puzzleData);
+  }
+
+  // Move from "solving" into "ready to apply": record the solve and put the
+  // widget into confirm mode showing a preview. Used by the fresh-solve and
+  // retry paths.
+  function applySolveResult(result) {
+    loopConfirming = false;
+    recordSolveSuccess(result);
     clearPendingHint();
     solveBtn.textContent = 'Confirm';
     confirming = true;
@@ -1826,10 +1834,7 @@ function makeWidget() {
         setStatus(formatSolveError(result), 'error');
         return;
       }
-      puzzleData.solution = result.grid;
-      cacheGalaxiesSolution(puzzleData, result.grid);
-      clearPartial(puzzleData);
-      clearFailedGalaxiesPartials(puzzleData);
+      recordSolveSuccess(result);
     }
 
     setStatus('Computing hint...', 'info');
