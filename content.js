@@ -923,6 +923,63 @@ function solveExtraData() {
   return null;
 }
 
+// Solution-cache hygiene. Each cached entry stores `savedAt: Date.now()`.
+// Two cleanup paths cooperate:
+//   * TTL on read: entries older than SOLUTION_TTL_MS are evicted at the
+//     read site and treated as a miss. Self-healing — a stale entry
+//     vanishes the next time anyone tries to read it.
+//   * Prune on write: after each cache write, scan all *-solution:* keys,
+//     drop any past TTL, and if we still exceed SOLUTION_CACHE_MAX, evict
+//     the oldest by savedAt until we fit. Bounds the cache against
+//     localStorage quota (~5 MB per origin).
+const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SOLUTION_CACHE_MAX = 50;
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:'];
+
+function isSolutionCacheKey(key) {
+  return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
+}
+
+function pruneSolutionCache() {
+  try {
+    const now = Date.now();
+    const entries = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!isSolutionCacheKey(key)) continue;
+      let savedAt = 0;
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        savedAt = parsed?.savedAt || 0;
+      } catch { /* unparseable → treat as ancient, evict below */ }
+      entries.push({ key, savedAt });
+    }
+    // TTL: drop anything past the window. Entries with no savedAt (or a
+    // corrupted JSON above) get savedAt=0, so they always fall here first.
+    const fresh = [];
+    for (const e of entries) {
+      if (now - e.savedAt > SOLUTION_TTL_MS) {
+        try { localStorage.removeItem(e.key); } catch { /* ignore */ }
+      } else {
+        fresh.push(e);
+      }
+    }
+    // LRU: oldest-first eviction until we fit.
+    if (fresh.length > SOLUTION_CACHE_MAX) {
+      fresh.sort((a, b) => a.savedAt - b.savedAt);
+      const removeCount = fresh.length - SOLUTION_CACHE_MAX;
+      for (let i = 0; i < removeCount; i++) {
+        try { localStorage.removeItem(fresh[i].key); } catch { /* ignore */ }
+      }
+    }
+  } catch { /* localStorage not available; nothing to prune */ }
+}
+
+function isFreshSolutionEntry(parsed) {
+  if (!parsed || typeof parsed.savedAt !== 'number') return false;
+  return Date.now() - parsed.savedAt <= SOLUTION_TTL_MS;
+}
+
 function galaxiesCacheKey(data) {
   if (!data || data.type !== 'galaxies') return null;
   const stars = (data.stars || []).map(s => s.row + ',' + s.col).join(';');
@@ -947,6 +1004,10 @@ function getCachedGalaxiesSolution(data) {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed?.grid || !parsed?.galaxies) return null;
+    if (!isFreshSolutionEntry(parsed)) {
+      try { localStorage.removeItem(key); } catch { /* ignore */ }
+      return null;
+    }
     const grid = parsed.grid.map(row => row.slice());
     grid.galaxies = {
       horizontal: parsed.galaxies.horizontal.map(row => row.slice()),
@@ -963,7 +1024,8 @@ function cacheGalaxiesSolution(data, grid) {
   if (!key || !grid?.galaxies) return;
   try {
     localStorage.setItem(key, JSON.stringify({ grid, galaxies: grid.galaxies, savedAt: Date.now() }));
-  } catch {}
+    pruneSolutionCache();
+  } catch { /* quota or unavailable; pruneSolutionCache would no-op anyway */ }
 }
 
 // Aquarium + nonogram cache. Same shape as galaxies (stable key derived from
@@ -995,6 +1057,10 @@ function getCachedGridSolution(data) {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.grid)) return null;
+    if (!isFreshSolutionEntry(parsed)) {
+      try { localStorage.removeItem(key); } catch { /* ignore */ }
+      return null;
+    }
     return parsed.grid.map(row => row.slice());
   } catch {
     return null;
@@ -1008,7 +1074,8 @@ function cacheGridSolution(data, grid) {
   if (!key || !Array.isArray(grid)) return;
   try {
     localStorage.setItem(key, JSON.stringify({ grid, savedAt: Date.now() }));
-  } catch {}
+    pruneSolutionCache();
+  } catch { /* quota or unavailable */ }
 }
 
 function puzzlePartialKey(data) {
