@@ -2121,6 +2121,20 @@ function makeWidget() {
     }
   });
 
+  // BFCache eviction is invisible to JS — Chrome terminates dedicated workers
+  // during BFCache regardless, but pagehide(persisted=true) bypasses our
+  // teardown. On restore, the cached solverWorker reference is dead and the
+  // next runSolve would throw on .postMessage. Null it out so getSolverWorker
+  // rebuilds lazily. pageshow always fires on the restore path.
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    if (solverWorker) {
+      try { solverWorker.terminate(); } catch {}
+      solverWorker = null;
+      solverWorkerInit = null;
+    }
+  });
+
   detectHandler().catch(() => {});
 
 }
