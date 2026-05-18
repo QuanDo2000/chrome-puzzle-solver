@@ -157,6 +157,10 @@ function getSolverWorker() {
     const blob = new Blob([solverSrc + '\n' + workerEntry], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
     const w = new Worker(url);
+    // The Worker keeps its own internal reference to the script; the blob URL
+    // is only needed for construction. Revoke immediately so the Blob can be
+    // collected — otherwise it leaks per worker spawn (one per onerror restart).
+    URL.revokeObjectURL(url);
     w.onmessage = (e) => {
       const { id, result } = e.data || {};
       const pending = solverPending.get(id);
@@ -2062,6 +2066,19 @@ function makeWidget() {
       setStatus(`Dumped ${data.type} ${data.rows}×${data.cols} to console (clipboard blocked).`, 'info');
     }
   }
+
+  // Tear down observers and the worker on page unload. Most page-loads
+  // recycle everything anyway, but puzzles-mobile SPA-navigates between
+  // puzzles within the same document, so the observer would otherwise keep
+  // watching stale DOM and the worker would linger unused.
+  window.addEventListener('pagehide', () => {
+    stopStateWatch();
+    if (solverWorker) {
+      try { solverWorker.terminate(); } catch {}
+      solverWorker = null;
+      solverWorkerInit = null;
+    }
+  });
 
   detectHandler().catch(() => {});
 
