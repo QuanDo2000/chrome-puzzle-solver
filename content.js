@@ -315,6 +315,96 @@ function getGalaxiesHint(grid, stars) {
   return null;
 }
 
+// Per-galaxy boundary-line path through a solver-produced solution. Lines are
+// grouped by the galaxy id they belong to (each line borders one or two
+// galaxies; both get the line). Galaxies are emitted smallest-first so the
+// loop completes simple regions before tackling large ones — same order the
+// heuristic itself prefers, which keeps the UX consistent across the
+// heuristic→solver handoff.
+//
+// Memoized on the solution object via solution._galaxyPath so repeated
+// Hint calls within a session don't re-walk the grid.
+function getGalaxyPath(solution) {
+  if (solution._galaxyPath) return solution._galaxyPath;
+  const target = solution?.galaxies;
+  const solGrid = solution?.grid || solution;
+  if (!target || !Array.isArray(solGrid) || !solGrid[0]) return [];
+  const rows = solGrid.length, cols = solGrid[0].length;
+
+  const byGalaxy = new Map();
+  const add = (id, line, key) => {
+    if (!id) return;
+    let g = byGalaxy.get(id);
+    if (!g) { g = { lines: [], seen: new Set() }; byGalaxy.set(id, g); }
+    if (g.seen.has(key)) return;
+    g.seen.add(key);
+    g.lines.push(line);
+  };
+  for (let r = 0; r < target.horizontal.length; r++) {
+    const row = target.horizontal[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      if (row[c] !== 1) continue;
+      const line = { orientation: 'horizontal', row: r, col: c };
+      const key = 'h:' + r + ':' + c;
+      add(solGrid[r - 1]?.[c], line, key);
+      add(solGrid[r]?.[c], line, key);
+    }
+  }
+  for (let r = 0; r < target.vertical.length; r++) {
+    const row = target.vertical[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      if (row[c] !== 1) continue;
+      const line = { orientation: 'vertical', row: r, col: c };
+      const key = 'v:' + r + ':' + c;
+      add(solGrid[r]?.[c - 1], line, key);
+      add(solGrid[r]?.[c], line, key);
+    }
+  }
+
+  const sizes = new Map();
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const id = solGrid[r][c];
+    sizes.set(id, (sizes.get(id) || 0) + 1);
+  }
+
+  const path = [...byGalaxy.entries()]
+    .map(([id, g]) => ({ id, size: sizes.get(id) || 0, lines: g.lines }))
+    .sort((a, b) => a.size - b.size || a.id - b.id);
+
+  solution._galaxyPath = path;
+  return path;
+}
+
+// Hint built from the solver-derived path: emit the next galaxy's undrawn
+// boundary lines (one galaxy per call). Returns null when every galaxy on
+// the path is complete.
+function nextGalaxyHint(grid, solution) {
+  const current = grid?.galaxies;
+  if (!current) return null;
+  const path = getGalaxyPath(solution);
+  for (const entry of path) {
+    const undrawn = entry.lines.filter(l => current[l.orientation][l.row]?.[l.col] !== 1);
+    if (!undrawn.length) continue;
+    const lineHints = undrawn.map(lh => ({ ...lh, score: entry.size }));
+    const lines = {
+      horizontal: current.horizontal.map(row => row.slice()),
+      vertical: current.vertical.map(row => row.slice()),
+    };
+    for (const lh of lineHints) lines[lh.orientation][lh.row][lh.col] = 1;
+    lines.check = false;
+    return {
+      type: 'galaxies',
+      orientation: lineHints[0].orientation,
+      row: lineHints[0].row,
+      col: lineHints[0].col,
+      lines,
+      lineHints,
+      count: lineHints.length,
+    };
+  }
+  return null;
+}
+
 function firstGalaxiesMismatch(grid, solution) {
   const current = grid?.galaxies;
   const target = solution?.galaxies;
@@ -963,6 +1053,28 @@ async function getHint(request = {}) {
       }
       hint = getGalaxiesHint(grid, detectedGrid.stars);
       if (hint?.error) return { success: false, error: hint.error };
+      // Solver fallback when the heuristic exhausts. Walks a per-galaxy
+      // path built from the solver's ground-truth solution: each call emits
+      // exactly one galaxy's worth of remaining boundary lines (smallest
+      // first), so the loop keeps progressing one galaxy at a time instead
+      // of dumping every remaining line at once.
+      if (!hint) {
+        let sol = hintSolution || getCachedGalaxiesSolution(detectedGrid);
+        if (!sol) {
+          const result = await runSolve(null, null, null, 'galaxies', solveExtraData());
+          if (result?.solved && result.grid) {
+            cacheGalaxiesSolution(detectedGrid, result.grid);
+            sol = result.grid;
+          }
+        }
+        if (sol) {
+          if (firstGalaxiesMismatch(grid, sol)) {
+            return { success: false, error: 'Current game state is wrong.' };
+          }
+          hintSolution = sol;
+          hint = nextGalaxyHint(grid, sol);
+        }
+      }
     } else if (detectedGrid.type === 'aquarium') {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1861,6 +1973,10 @@ function makeWidget() {
       if (hr.hint?.type !== 'galaxies' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
+      // getHint may lazily solve galaxies as a fallback; persist the
+      // returned solution (with its memoized galaxy-by-galaxy path) so
+      // subsequent iterations skip the solver call entirely.
+      if (h.type === 'galaxies' && hr.solution) puzzleData.solution = hr.solution;
       applyHintToGrid(gs.grid, h);
       const ar = h.type === 'galaxies'
         ? await applySolution({ type: 'galaxies-lines', lines: h.lines })
