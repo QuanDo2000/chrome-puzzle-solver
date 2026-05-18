@@ -58,6 +58,19 @@ Content scripts share the page's origin, so `new Worker(chrome.runtime.getURL('s
 - It cannot reference outer-scope helpers (closure is lost in transit). Nested helpers must live inside the function body.
 - It cannot reference functions defined elsewhere in `main-world.js` — only globals available in MAIN world (`window.Game`, `document`, etc.).
 
+### MAIN-world write functions: save + render ladder
+Any function in `main-world.js` that mutates `window.Game.currentState` (`applyGameState`, `applyGalaxiesState`, `applyHintCells`) must:
+1. Call `window.Game.saveState(true)` **before** the writes. Without it, aquarium silently keeps its prior visible state even though `cellStatus` was updated — symptom: "preview shows hint, board shows no change". `applyHintCells` had this bug pre-2026-05-17.
+2. Fall through `Game.render → Game.redraw → Game.redrawGrid → getSaved+loadGame` **after** the writes. `Game.render` isn't universal across puzzle types — aquarium needs `redraw` or `redrawGrid`.
+
+`applyGameState` is the reference shape; `applyHintCells` now mirrors it (minus the `solved=true` and `Game.check()` calls which are full-solution-only).
+
+### Galaxies geometry: shared statics on `GalaxiesSolver`
+`GalaxiesSolver.seedCellsForStar(star, rows, cols)` and `GalaxiesSolver.regionsToLines(grid, rows, cols)` are static methods used by the solver itself, `content.js` (hint computation), and `handler.js` (DOM line writing). Don't reintroduce per-file copies — the three previous near-identical implementations drifted and that's the bug audit item #5 fixed.
+
+### `handler.js` Node-only export tail
+`handler.js` carries a `if (typeof module !== 'undefined' && module.exports) { module.exports = { parseGalaxiesTask }; }` tail so `tests/handler-parsers.test.js` can `require` the parser. The three `registerHandler(...)` calls still execute under Node `require`, but they only push handler objects to a local array — nothing touches the DOM until `.matches()` runs, and tests don't call `getActiveHandler()`. **Don't add a top-level statement that touches `document` / `window` / `chrome` outside a function body** or the Node-side `require()` will throw.
+
 ### Performance patterns used
 - **Trail-based undo** in `NonogramSolver` (`_assign`/`_rollback` pushing flat 3-int groups) and `GalaxiesSolver` (same with 2D tuples) — replaces per-recursion grid cloning.
 - **Forward + backward line DP** in `NonogramSolver.solveLine` — single O(L·N·block) pass replaces the old per-cell solveLineValid reruns (was 36× slower on the 50×50 monthly).
