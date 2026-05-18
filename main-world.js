@@ -447,7 +447,7 @@ function applyGameState(solution) {
 
 function applyHintCells(hintCells) {
   try {
-    if (!window.Game || !window.Game.currentState || !window.Game.currentState.cellStatus) return;
+    if (!window.Game || !window.Game.currentState || !window.Game.currentState.cellStatus) return false;
     const cs = window.Game.currentState.cellStatus;
     for (let i = 0; i < hintCells.length; i++) {
       const cell = hintCells[i];
@@ -456,8 +456,10 @@ function applyHintCells(hintCells) {
       }
     }
     if (typeof window.Game.render === 'function') window.Game.render();
+    return true;
   } catch (e) {
     console.warn('Hint apply failed:', e);
+    return false;
   }
 }
 

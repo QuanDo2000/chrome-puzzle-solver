@@ -1751,14 +1751,22 @@ function makeWidget() {
       solveBtn.textContent = 'Solve';
       loopConfirming = false;
 
-      // Apply the pending hint first
+      // Apply the pending hint first. If it fails we bail out before starting
+      // the loop — starting auto-solve from an inconsistent state would mask
+      // the real error and likely fail every subsequent step too.
       if (puzzleData.pendingHint) {
         setStatus('Applying...', 'info');
+        let ok;
         if (puzzleData.pendingHint.type === 'galaxies') {
-          await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
+          const r = await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
+          ok = !!r?.success;
         } else {
           const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
-          await callMainWorld('applyHintCells', [hintCells]);
+          ok = !!(await callMainWorld('applyHintCells', [hintCells]));
+        }
+        if (!ok) {
+          setStatus('Hint apply failed; loop aborted.', 'error');
+          return;
         }
       }
       clearPendingHint();
@@ -1901,8 +1909,8 @@ function makeWidget() {
       result = await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
     } else {
       const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
-      await callMainWorld('applyHintCells', [hintCells]);
-      result = { success: true };
+      const ok = await callMainWorld('applyHintCells', [hintCells]);
+      result = ok ? { success: true } : { success: false, error: 'Hint apply failed' };
     }
     if (result?.success) {
       clearPendingHint();
