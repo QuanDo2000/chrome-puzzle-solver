@@ -305,9 +305,6 @@ function getGalaxiesHint(grid, stars) {
   const emptyHints = findEmptyCompHints(components, grid, stars, reachable);
   if (emptyHints) return makeHint(emptyHints);
 
-  const transitiveHints = findTransitiveHints(components, grid, stars);
-  if (transitiveHints) return makeHint(transitiveHints);
-
   return null;
 }
 
@@ -461,27 +458,16 @@ function buildComponentAdjacency(grid, rows, cols, current) {
 
 function propagateAllConstraints(components, grid, rows, cols, current, stars) {
   const adj = buildComponentAdjacency(grid, rows, cols, current);
-  const maxTarget = Math.ceil((rows * cols) / stars.length);
+  // NOTE: an earlier version eliminated a star from a component's possibleNodes
+  // when certain[star] + comp.cells.length > Math.ceil(rows*cols / stars.length).
+  // That bound is the AVERAGE galaxy size, not an upper bound — on puzzles with
+  // variable galaxy sizes (e.g. the 30x30 monthly: max galaxy = 30 cells, average
+  // = 5) it eliminates correct stars and produces phantom must-draw hints. The
+  // elimination is unsound; soundness > pruning. Only the uniqueness rule below
+  // (a forced star can't also be a neighbour's option) remains.
   let changed = true;
   while (changed) {
     changed = false;
-
-    const certain = new Array(stars.length).fill(0);
-    for (const [, comp] of components) {
-      if (comp.possibleNodes.size === 1) certain[comp.possibleNodes.values().next().value] += comp.cells.length;
-    }
-
-    for (const [, comp] of components) {
-      if (comp.possibleNodes.size <= 1) continue;
-      const s = comp.cells.length;
-      for (const star of comp.possibleNodes) {
-        if (certain[star] + s > maxTarget) {
-          comp.possibleNodes.delete(star);
-          changed = true;
-        }
-      }
-    }
-
     for (const [, comp] of components) {
       if (comp.possibleNodes.size !== 1) continue;
       const forcedStar = comp.possibleNodes.values().next().value;
@@ -495,55 +481,9 @@ function propagateAllConstraints(components, grid, rows, cols, current, stars) {
       }
     }
   }
-}
-
-function findTransitiveHints(components, grid, stars) {
-  const current = grid?.galaxies;
-  if (!current) return null;
-  const rows = grid.length;
-  const cols = grid[0].length;
-  const maxTarget = Math.ceil((rows * cols) / stars.length);
-  const certain = new Array(stars.length).fill(0);
-  for (const [, comp] of components) {
-    if (comp.possibleNodes.size === 1) certain[comp.possibleNodes.values().next().value] += comp.cells.length;
-  }
-  const hints = [];
-  const process = (orientation, row, col, aId, bId) => {
-    if (aId === bId) return;
-    const aComp = components.get(aId), bComp = components.get(bId);
-    if (!aComp || !bComp) return;
-    const shared = intersectSets(aComp.possibleNodes, bComp.possibleNodes);
-    if (shared.size !== 1) return;
-    const star = shared.values().next().value;
-    const aSize = aComp.cells.length, bSize = bComp.cells.length;
-    let adjCertain = certain[star];
-    if (aComp.possibleNodes.size === 1) adjCertain -= aSize;
-    if (bComp.possibleNodes.size === 1) adjCertain -= bSize;
-    if (adjCertain + aSize + bSize > maxTarget) hints.push({ orientation, row, col, score: aSize + bSize });
-  };
-  for (let r = 1; r < rows; r++)
-    for (let c = 0; c < cols; c++)
-      if (current.horizontal?.[r]?.[c] !== 1) process('horizontal', r, c, grid[r - 1][c], grid[r][c]);
-  for (let r = 0; r < rows; r++)
-    for (let c = 1; c < cols; c++)
-      if (current.vertical?.[r]?.[c] !== 1) process('vertical', r, c, grid[r][c - 1], grid[r][c]);
-  if (!hints.length) return null;
-  const nodeRegions = getGalaxiesNodeRegions(grid, stars);
-  let bestNode = null, bestNodeScore = -1;
-  for (const node of nodeRegions) {
-    const nodeHints = hints.filter(h => {
-      const aCell = h.orientation === 'horizontal' ? { row: h.row - 1, col: h.col } : { row: h.row, col: h.col - 1 };
-      const bCell = h.orientation === 'horizontal' ? { row: h.row, col: h.col } : { row: h.row, col: h.col };
-      const aId = grid[aCell.row][aCell.col], bId = grid[bCell.row][bCell.col];
-      return components.get(aId)?.possibleNodes?.has(node.index) || components.get(bId)?.possibleNodes?.has(node.index);
-    });
-    if (!nodeHints.length) continue;
-    const score = nodeHints.length * 10 + node.currentSize / 100;
-    if (score > bestNodeScore) { bestNodeScore = score; bestNode = { ...node, candidates: nodeHints }; }
-  }
-  const selected = bestNode ? bestNode.candidates : hints;
-  selected.sort((a, b) => b.score - a.score || a.row - b.row || a.col - b.col);
-  return selected.slice(0, Math.min(100, selected.length));
+  // Touch unused params to keep them in the signature for the explicit
+  // call contract (and silence the linter if it cares).
+  void stars;
 }
 
 function bfsComponentSide(startRow, startCol, barrierOrient, barrierRow, barrierCol, grid, current) {
@@ -637,8 +577,12 @@ function findEmptyCompHints(components, grid, stars, reachable) {
     if (!sideBkeys.length) return;
     const aBits = intersectBitset(sideA, bitsets);
     const bBits = intersectBitset(sideBkeys, bitsets);
-    if (aBits || bBits) {
-      hints.push({ orientation, row, col, score: (aBits ? sideA.size : sideBkeys.length) });
+    // Both sides must have a candidate star (non-zero bitset). 'aBits || bBits'
+    // suggested splits where one side was un-ownable — drawing the line stranded
+    // that side with no possible owner. On the 30x30 monthly this surfaced
+    // around step 95 of the loop with ~20 phantom must-draw lines.
+    if (aBits && bBits) {
+      hints.push({ orientation, row, col, score: sideA.size + sideBkeys.length });
     }
   };
 
