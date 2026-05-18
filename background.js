@@ -36,37 +36,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse(null);
       return;
     }
-    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-      if (!tab) { sendResponse(null); return; }
-      chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        world: 'MAIN',
-        func: fn,
-        args: request.args || []
-      }, (results) => {
-        if (chrome.runtime.lastError || !results || !results[0]) {
-          sendResponse(null);
-        } else {
-          sendResponse(results[0].result);
-        }
-      });
-    });
-    return true;
-  }
-
-  if (request.action === 'sendToContent') {
-    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-      if (!tab) {
-        sendResponse({ success: false, error: 'No active tab' });
-        return;
+    // Target the sending tab, not the active one — the user may have switched
+    // tabs between the content script firing this message and the SW handling
+    // it, in which case the active query would deliver to the wrong page.
+    const tabId = sender.tab?.id;
+    if (!tabId) { sendResponse(null); return; }
+    chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: fn,
+      args: request.args || []
+    }, (results) => {
+      if (chrome.runtime.lastError || !results || !results[0]) {
+        sendResponse(null);
+      } else {
+        sendResponse(results[0].result);
       }
-      chrome.tabs.sendMessage(tab.id, request.payload, (response) => {
-        if (chrome.runtime.lastError) {
-          sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        } else {
-          sendResponse(response);
-        }
-      });
     });
     return true;
   }
