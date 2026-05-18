@@ -192,26 +192,28 @@ class NonogramSolver {
       return Array(L).fill(-1);
     }
 
+    // Bitmap canEmpty path requires N <= 31 (Int32 has 32 bits, k indexes
+    // [0..N]). Real nonograms cap out around N=12 on 50×50 boards; the
+    // smallest puzzle needing N=32 would have L >= 63, larger than anything
+    // the extension targets. Fail loud if a caller violates this rather
+    // than carry untested fallback code.
+    if (N > 31) throw new Error(`solveLine: N=${N} exceeds bitmap capacity (31)`);
     const W = N + 1;
     // f[i*W + k] = "first i cells matched the first k clues, about to consider cell i"
     // (cell i is at this point not yet inside a block).
     const f = new Uint8Array((L + 1) * W);
     // bf[i] = bitmask of k values where f[i*W+k] is set. Maintained inline with
-    // the DP so the final canEmpty test is O(1) per cell instead of O(N); only
-    // valid when N <= 31 (all 32 bits available in a JS int32). For larger N
-    // the inner k-scan fallback below kicks in. Real nonograms cap out around
-    // N=12 even on 50×50 boards, so the bitmap path covers every realistic case.
-    const useBitmap = N <= 31;
-    const bf = useBitmap ? new Int32Array(L + 1) : null;
+    // the DP so the final canEmpty test is O(1) per cell instead of O(N).
+    const bf = new Int32Array(L + 1);
     f[0] = 1;
-    if (useBitmap) bf[0] = 1;
+    bf[0] = 1;
     for (let i = 0; i < L; i++) {
       for (let k = 0; k <= N; k++) {
         if (!f[i * W + k]) continue;
         // Option A: cell i is empty.
         if (line[i] !== 1) {
           f[(i + 1) * W + k] = 1;
-          if (useBitmap) bf[i + 1] |= (1 << k);
+          bf[i + 1] |= (1 << k);
         }
         // Option B: place clue k starting at cell i.
         if (k < N) {
@@ -225,11 +227,11 @@ class NonogramSolver {
               if (k < N - 1) {
                 if (i + block < L && line[i + block] !== 1) {
                   f[(i + block + 1) * W + k + 1] = 1;
-                  if (useBitmap) bf[i + block + 1] |= (1 << (k + 1));
+                  bf[i + block + 1] |= (1 << (k + 1));
                 }
               } else {
                 f[(i + block) * W + k + 1] = 1;
-                if (useBitmap) bf[i + block] |= (1 << (k + 1));
+                bf[i + block] |= (1 << (k + 1));
               }
             }
           }
@@ -240,14 +242,14 @@ class NonogramSolver {
 
     // b[i*W + k] = "cells [i..L) can match clues [k..N)".
     const b = new Uint8Array((L + 1) * W);
-    const bb = useBitmap ? new Int32Array(L + 1) : null;
+    const bb = new Int32Array(L + 1);
     b[L * W + N] = 1;
-    if (useBitmap) bb[L] = (1 << N);
+    bb[L] = (1 << N);
     // Also: b[i][N] iff cells [i..L) are all empty-compatible.
     for (let i = L - 1; i >= 0; i--) {
       if (line[i] !== 1 && b[(i + 1) * W + N]) {
         b[i * W + N] = 1;
-        if (useBitmap) bb[i] |= (1 << N);
+        bb[i] |= (1 << N);
       }
     }
     for (let i = L - 1; i >= 0; i--) {
@@ -255,7 +257,7 @@ class NonogramSolver {
         // Option A: skip cell i (empty).
         if (line[i] !== 1 && b[(i + 1) * W + k]) {
           b[i * W + k] = 1;
-          if (useBitmap) bb[i] |= (1 << k);
+          bb[i] |= (1 << k);
           continue;
         }
         // Option B: place clue k at cell i.
@@ -269,12 +271,12 @@ class NonogramSolver {
         if (k < N - 1) {
           if (i + block < L && line[i + block] !== 1 && b[(i + block + 1) * W + k + 1]) {
             b[i * W + k] = 1;
-            if (useBitmap) bb[i] |= (1 << k);
+            bb[i] |= (1 << k);
           }
         } else {
           if (b[(i + block) * W + k + 1]) {
             b[i * W + k] = 1;
-            if (useBitmap) bb[i] |= (1 << k);
+            bb[i] |= (1 << k);
           }
         }
       }
@@ -321,17 +323,10 @@ class NonogramSolver {
       const canFill = cover > 0;
       // canEmpty: either c is the mandatory gap of some valid placement, OR
       // there's a valid config where cell c is in an "explicit skip" region
-      // (∃k: f[c][k] && b[c+1][k]). The bitmap intersection answers that in
-      // O(1); the loop fallback handles N > 31.
+      // (∃k: f[c][k] && b[c+1][k]). Bitmap intersection answers in O(1).
       let canEmpty = gapEmpty[c] === 1;
       if (!canEmpty && line[c] !== 1) {
-        if (useBitmap) {
-          canEmpty = (bf[c] & bb[c + 1]) !== 0;
-        } else {
-          for (let k = 0; k <= N; k++) {
-            if (f[c * W + k] && b[(c + 1) * W + k]) { canEmpty = true; break; }
-          }
-        }
+        canEmpty = (bf[c] & bb[c + 1]) !== 0;
       }
       if (line[c] !== 0) result[c] = line[c];
       else if (canFill && !canEmpty) result[c] = 1;
