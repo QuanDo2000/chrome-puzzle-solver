@@ -511,3 +511,10 @@ function genericSetCellDOM(cell, val) {
   const input = cell.querySelector('input[type="checkbox"], input[type="radio"]');
   if (input) input.checked = val === 1;
 }
+
+// Node-only export for tests. The handler-object literals above register
+// themselves via registerHandler() at load time, but those handlers stay
+// dormant until getActiveHandler() is called, which tests don't do.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { parseGalaxiesTask, buildGalaxiesLinesFromRegions };
+}

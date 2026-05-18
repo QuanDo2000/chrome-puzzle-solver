@@ -148,6 +148,7 @@ module.exports = [
   },
 
   // Sibling content script. Defines handler functions used by content.js.
+  // Also exports its pure parsers via a CommonJS tail for tests, hence `module`.
   {
     files: ['handler.js'],
     languageOptions: {
@@ -157,6 +158,7 @@ module.exports = [
         ...browserGlobals,
         ...solverClasses,
         chrome: 'readonly',
+        module: 'readonly',
       },
     },
     rules: sharedRules,
