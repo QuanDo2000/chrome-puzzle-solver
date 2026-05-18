@@ -28,7 +28,10 @@ function buildSolver(p) {
 
 for (const name of Object.keys(fixtures)) {
   const p = fixtures[name];
-  if (!buildSolver(p)) { console.error('Unknown puzzle type:', p.type); continue; }
+  if (!buildSolver(p)) {
+    console.error(`FAIL: ${name} has unknown puzzle type: ${p.type}`);
+    process.exit(1);
+  }
   // Discard WARMUP iterations to skip V8 JIT cold-start cost.
   for (let i = 0; i < WARMUP; i++) {
     GalaxiesSolver._solutionCache?.clear?.();
