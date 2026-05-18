@@ -1794,106 +1794,6 @@ class AquariumSolver {
       for (const r of aq.tRows) rowVars[r].push(vi);
     }
 
-    const narrowLevels = (pairClue1, pairClue2, vars, getPair, ranges, cachePrefix) => {
-      // vars: array of { id, levels: [lvl...] } for each variable
-      // getPair(lvl): returns [c1, c2]
-      // ranges: [mn, mx] to update
-      const n = vars.length;
-      if (n === 0) return { ok: true, changed: false };
-      const cacheKey = cachePrefix + ':' + pairClue1 + ',' + pairClue2 + ':' + vars.map((v, i) => {
-        const d = ranges[i];
-        return v.id + '=' + d.mn + '-' + d.mx;
-      }).join(',');
-      const cached = this._cacheGet(cacheKey);
-      if (cached !== undefined) {
-        if (cached === null) return { ok: false };
-        let changed = false;
-        for (let i = 0; i < n; i++) {
-          const d = ranges[i];
-          const [mn, mx] = cached[i];
-          if (mn > mx) return { ok: false };
-          if (mn !== d.mn || mx !== d.mx) { d.mn = mn; d.mx = mx; changed = true; }
-        }
-        return { ok: true, changed };
-      }
-      const max1 = pairClue1, max2 = pairClue2;
-      const sz1 = max1 + 1, sz2 = max2 + 1;
-
-      // Forward DP
-      const fwd = new Array(n + 1);
-      fwd[0] = new Uint8Array(sz1 * sz2);
-      fwd[0][0] = 1;
-      for (let i = 0; i < n; i++) {
-        const cur = fwd[i];
-        const next = new Uint8Array(sz1 * sz2);
-        const { levels } = vars[i];
-        for (let s = 0; s < sz1 * sz2; s++) {
-          if (!cur[s]) continue;
-          const s1 = Math.floor(s / sz2), s2 = s % sz2;
-          for (const lvl of levels) {
-            const [c1, c2] = getPair(lvl, vars[i].id);
-            const ns1 = s1 + c1, ns2 = s2 + c2;
-            if (ns1 <= max1 && ns2 <= max2) next[ns1 * sz2 + ns2] = 1;
-          }
-        }
-        fwd[i + 1] = next;
-      }
-
-      // Backward DP
-      const bwd = new Array(n + 1);
-      bwd[n] = new Uint8Array(sz1 * sz2);
-      bwd[n][0] = 1;
-      for (let i = n - 1; i >= 0; i--) {
-        const cur = bwd[i + 1];
-        const next = new Uint8Array(sz1 * sz2);
-        const { levels } = vars[i];
-        for (let s = 0; s < sz1 * sz2; s++) {
-          if (!cur[s]) continue;
-          const s1 = Math.floor(s / sz2), s2 = s % sz2;
-          for (const lvl of levels) {
-            const [c1, c2] = getPair(lvl, vars[i].id);
-            const ns1 = s1 + c1, ns2 = s2 + c2;
-            if (ns1 <= max1 && ns2 <= max2) next[ns1 * sz2 + ns2] = 1;
-          }
-        }
-        bwd[i] = next;
-      }
-
-      if (!fwd[n][pairClue1 * sz2 + pairClue2]) { this._cacheSet(cacheKey, null); return { ok: false }; }
-
-      // For each variable, check each level
-      let changed = false;
-      const cachedRanges = [];
-      for (let i = 0; i < n; i++) {
-        const d = ranges[i];
-        const { levels, id } = vars[i];
-        let nmn = 999, nmx = -1;
-        for (const lvl of levels) {
-          const [c1, c2] = getPair(lvl, id);
-          const need1 = pairClue1 - c1, need2 = pairClue2 - c2;
-          if (need1 < 0 || need2 > max2) continue;
-          // Check if fwd[i] + bwd[i+1] can fill need1, need2
-          let ok = false;
-          const f = fwd[i], b = bwd[i + 1];
-          for (let s = 0; s < sz1 * sz2 && !ok; s++) {
-            if (!f[s]) continue;
-            const s1 = Math.floor(s / sz2), s2 = s % sz2;
-            const r1 = need1 - s1, r2 = need2 - s2;
-            if (r1 >= 0 && r1 <= max1 && r2 >= 0 && r2 <= max2 && b[r1 * sz2 + r2]) ok = true;
-          }
-          if (ok) {
-            if (lvl < nmn) nmn = lvl;
-            if (lvl > nmx) nmx = lvl;
-          }
-        }
-        if (nmn > nmx) { this._cacheSet(cacheKey, null); return { ok: false }; }
-        if (nmn !== d.mn || nmx !== d.mx) { d.mn = nmn; d.mx = nmx; changed = true; }
-        cachedRanges[i] = [nmn, nmx];
-      }
-      this._cacheSet(cacheKey, cachedRanges);
-      return { ok: true, changed };
-    };
-
     // Process adjacent row pairs
     for (let r = 0; r < H - 1; r++) {
       const adj1 = rc[r] - baseR[r], adj2 = rc[r + 1] - baseR[r + 1];
@@ -1922,7 +1822,7 @@ class AquariumSolver {
         return [(ct.rc[r]), (ct.rc[r + 1])];
       };
 
-      const res = narrowLevels(adj1, adj2, vars, getPair, ranges, 'rr' + r);
+      const res = this._narrowLevels(adj1, adj2, vars, getPair, ranges, 'rr' + r);
       if (!res.ok) return false;
     }
 
@@ -1960,7 +1860,7 @@ class AquariumSolver {
         return [(ct.cc[c]), (ct.cc[c + 1])];
       };
 
-      const res = narrowLevels(adj1, adj2, vars, getPair, ranges, 'cc' + c);
+      const res = this._narrowLevels(adj1, adj2, vars, getPair, ranges, 'cc' + c);
       if (!res.ok) return false;
     }
 
@@ -1976,6 +1876,111 @@ class AquariumSolver {
       lo++; hi--;
     }
     return order;
+  }
+
+  // Two-dimensional DP that narrows each variable's water-level range so the
+  // pair of clue sums (pairClue1, pairClue2) is still reachable across the
+  // adjacent row/col pair. Memoized via _cacheGet / _cacheSet. Extracted from
+  // _dpPairwise.
+  //   vars     : [{ id, levels: [lvl...] }, ...]
+  //   getPair  : (lvl, id) → [contribClue1, contribClue2]
+  //   ranges   : aligned with vars; each {mn, mx} gets tightened in place.
+  // Returns { ok: false } on contradiction, otherwise { ok: true, changed }.
+  _narrowLevels(pairClue1, pairClue2, vars, getPair, ranges, cachePrefix) {
+    const n = vars.length;
+    if (n === 0) return { ok: true, changed: false };
+    const cacheKey = cachePrefix + ':' + pairClue1 + ',' + pairClue2 + ':' + vars.map((v, i) => {
+      const d = ranges[i];
+      return v.id + '=' + d.mn + '-' + d.mx;
+    }).join(',');
+    const cached = this._cacheGet(cacheKey);
+    if (cached !== undefined) {
+      if (cached === null) return { ok: false };
+      let changed = false;
+      for (let i = 0; i < n; i++) {
+        const d = ranges[i];
+        const [mn, mx] = cached[i];
+        if (mn > mx) return { ok: false };
+        if (mn !== d.mn || mx !== d.mx) { d.mn = mn; d.mx = mx; changed = true; }
+      }
+      return { ok: true, changed };
+    }
+    const max1 = pairClue1, max2 = pairClue2;
+    const sz1 = max1 + 1, sz2 = max2 + 1;
+
+    // Forward DP
+    const fwd = new Array(n + 1);
+    fwd[0] = new Uint8Array(sz1 * sz2);
+    fwd[0][0] = 1;
+    for (let i = 0; i < n; i++) {
+      const cur = fwd[i];
+      const next = new Uint8Array(sz1 * sz2);
+      const { levels } = vars[i];
+      for (let s = 0; s < sz1 * sz2; s++) {
+        if (!cur[s]) continue;
+        const s1 = Math.floor(s / sz2), s2 = s % sz2;
+        for (const lvl of levels) {
+          const [c1, c2] = getPair(lvl, vars[i].id);
+          const ns1 = s1 + c1, ns2 = s2 + c2;
+          if (ns1 <= max1 && ns2 <= max2) next[ns1 * sz2 + ns2] = 1;
+        }
+      }
+      fwd[i + 1] = next;
+    }
+
+    // Backward DP
+    const bwd = new Array(n + 1);
+    bwd[n] = new Uint8Array(sz1 * sz2);
+    bwd[n][0] = 1;
+    for (let i = n - 1; i >= 0; i--) {
+      const cur = bwd[i + 1];
+      const next = new Uint8Array(sz1 * sz2);
+      const { levels } = vars[i];
+      for (let s = 0; s < sz1 * sz2; s++) {
+        if (!cur[s]) continue;
+        const s1 = Math.floor(s / sz2), s2 = s % sz2;
+        for (const lvl of levels) {
+          const [c1, c2] = getPair(lvl, vars[i].id);
+          const ns1 = s1 + c1, ns2 = s2 + c2;
+          if (ns1 <= max1 && ns2 <= max2) next[ns1 * sz2 + ns2] = 1;
+        }
+      }
+      bwd[i] = next;
+    }
+
+    if (!fwd[n][pairClue1 * sz2 + pairClue2]) { this._cacheSet(cacheKey, null); return { ok: false }; }
+
+    // For each variable, check each level
+    let changed = false;
+    const cachedRanges = [];
+    for (let i = 0; i < n; i++) {
+      const d = ranges[i];
+      const { levels, id } = vars[i];
+      let nmn = 999, nmx = -1;
+      for (const lvl of levels) {
+        const [c1, c2] = getPair(lvl, id);
+        const need1 = pairClue1 - c1, need2 = pairClue2 - c2;
+        if (need1 < 0 || need2 > max2) continue;
+        // Check if fwd[i] + bwd[i+1] can fill need1, need2
+        let ok = false;
+        const f = fwd[i], b = bwd[i + 1];
+        for (let s = 0; s < sz1 * sz2 && !ok; s++) {
+          if (!f[s]) continue;
+          const s1 = Math.floor(s / sz2), s2 = s % sz2;
+          const r1 = need1 - s1, r2 = need2 - s2;
+          if (r1 >= 0 && r1 <= max1 && r2 >= 0 && r2 <= max2 && b[r1 * sz2 + r2]) ok = true;
+        }
+        if (ok) {
+          if (lvl < nmn) nmn = lvl;
+          if (lvl > nmx) nmx = lvl;
+        }
+      }
+      if (nmn > nmx) { this._cacheSet(cacheKey, null); return { ok: false }; }
+      if (nmn !== d.mn || nmx !== d.mx) { d.mn = nmn; d.mx = nmx; changed = true; }
+      cachedRanges[i] = [nmn, nmx];
+    }
+    this._cacheSet(cacheKey, cachedRanges);
+    return { ok: true, changed };
   }
 
   _cacheKey() {
@@ -2062,6 +2067,22 @@ class AquariumSolver {
     this._dpCache.set(key, value);
   }
 
+  // Deterministic xorshift32 PRNG seeded from puzzle shape (clues + aquarium
+  // sizes), so a re-run on the same puzzle picks the same repair path.
+  _makeRepairRng(rc, cc, vars) {
+    let seed = 2166136261;
+    for (const n of rc.concat(cc)) seed = Math.imul(seed ^ n, 16777619) >>> 0;
+    for (const aq of vars) seed = Math.imul(seed ^ (aq.maxLvl + aq.groups.length), 16777619) >>> 0;
+    const rand = () => {
+      seed ^= seed << 13;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      return (seed >>> 0) / 4294967296;
+    };
+    const pick = arr => arr[Math.floor(rand() * arr.length)];
+    return { rand, pick };
+  }
+
   _solveRepair(maxRestarts = 80, maxSteps = 12000) {
     const H = this.rows, W = this.cols;
     const rc = this.rowClues, cc = this.colClues;
@@ -2095,16 +2116,7 @@ class AquariumSolver {
       for (let i = 0; i < aq.tCols.length; i++) lineVars[H + aq.tCols[i]].push(aq);
     }
 
-    let seed = 2166136261;
-    for (const n of rc.concat(cc)) seed = Math.imul(seed ^ n, 16777619) >>> 0;
-    for (const aq of vars) seed = Math.imul(seed ^ (aq.maxLvl + aq.groups.length), 16777619) >>> 0;
-    const rand = () => {
-      seed ^= seed << 13;
-      seed ^= seed >>> 17;
-      seed ^= seed << 5;
-      return (seed >>> 0) / 4294967296;
-    };
-    const pick = arr => arr[Math.floor(rand() * arr.length)];
+    const { rand, pick } = this._makeRepairRng(rc, cc, vars);
 
     const violation = (rowS, colS) => {
       let v = 0;
