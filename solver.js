@@ -1068,12 +1068,18 @@ class GalaxiesSolver {
     if (key && this.deadCache.size < this.maxDeadCache) this.deadCache.add(key);
   }
 
+  // changedStars is an OUTPUT accumulator (a Set), not a seed: _assignPair
+  // adds each star it assigns to into it so the caller (_search at line 975)
+  // can later restrict _regionsReachable to just those stars. Seeding still
+  // sweeps every unknown cell up front because we have no incoming "which
+  // cells just changed" signal; the dirty-queue optimization kicks in for
+  // every subsequent iteration within this call.
   _propagate(changedStars) {
-    // Dirty-cell queue: candidates(r, c) depends on grid[r][c] itself and on
-    // grid[mirror_Y(r, c)] for each Y in staticCandidates[r][c]. So when an
-    // assignment lands at (r, c), the only cells whose _candidates result can
-    // change are those whose mirror under some star is (r, c) — at most one
-    // per star. Re-scan only those instead of the whole grid.
+    // candidates(r, c) depends on grid[r][c] itself and on grid[mirror_Y(r, c)]
+    // for each Y in staticCandidates[r][c]. So when an assignment lands at
+    // (r, c), the only cells whose _candidates result can change are those
+    // whose mirror under some star is (r, c) — at most one per star. Re-scan
+    // only those instead of the whole grid.
     const rows = this.rows, cols = this.cols, stars = this.stars;
     const N = rows * cols;
     const queue = [];
