@@ -263,6 +263,12 @@ function getGalaxiesHint(grid, stars) {
     const bReach = reachable[bCell.row]?.[bCell.col] || new Set();
     let aNodes = intersectSets(aPerCell, aReach);
     let bNodes = intersectSets(bPerCell, bReach);
+    // Per-cell mirror narrowing: drop star X if the cell's mirror under X
+    // is in a different line-bounded component. Galaxies are connected, so
+    // a cell and its mirror partner must be in the same component or X
+    // can't own the cell.
+    aNodes = narrowByMirrorComponent(aCell.row, aCell.col, aNodes, stars, grid);
+    bNodes = narrowByMirrorComponent(bCell.row, bCell.col, bNodes, stars, grid);
     if (aComp?.possibleNodes?.size) aNodes = intersectSets(aNodes, aComp.possibleNodes);
     if (bComp?.possibleNodes?.size) bNodes = intersectSets(bNodes, bComp.possibleNodes);
     if (aNodes.size === 0 || bNodes.size === 0) return;
@@ -362,7 +368,16 @@ function getGalaxiesComponents(grid, stars, seedOwner) {
       ? Array.from(comp.seedNodes)
       : stars.map((_, i) => i);
     for (const nodeIndex of candidates) {
-      if (comp.cells.every(cell => galaxyCellCanBelong(cell.row, cell.col, nodeIndex, stars, rows, cols, seedOwner))) {
+      const star = stars[nodeIndex];
+      // For star X to own this whole component, every cell must satisfy the
+      // geometric check (mirror in bounds + seedOwner compatible) AND the
+      // mirror of every cell must lie in the SAME line-bounded component.
+      // Galaxies are connected, so a cell and its mirror-partner can't end
+      // up on opposite sides of a drawn line.
+      if (comp.cells.every(cell =>
+        galaxyCellCanBelong(cell.row, cell.col, nodeIndex, stars, rows, cols, seedOwner)
+        && grid[star.row - cell.row]?.[star.col - cell.col] === comp.id
+      )) {
         comp.possibleNodes.add(nodeIndex);
       }
     }
@@ -426,6 +441,22 @@ function computeReachableStars(stars, rows, cols, seedOwner, current) {
 function intersectSets(a, b) {
   const out = new Set();
   for (const v of a) if (b.has(v)) out.add(v);
+  return out;
+}
+
+// Drop stars X from `possibleSet` where the cell's mirror under X lives in
+// a different line-bounded BFS component than the cell itself. Galaxies are
+// connected within a single line-bounded region, so cell C and mirror(C, X)
+// must share a component or X can't own C.
+function narrowByMirrorComponent(cellRow, cellCol, possibleSet, stars, grid) {
+  if (!possibleSet.size) return possibleSet;
+  const cellComp = grid[cellRow]?.[cellCol];
+  if (cellComp === undefined) return possibleSet;
+  const out = new Set();
+  for (const X of possibleSet) {
+    const star = stars[X];
+    if (grid[star.row - cellRow]?.[star.col - cellCol] === cellComp) out.add(X);
+  }
   return out;
 }
 
