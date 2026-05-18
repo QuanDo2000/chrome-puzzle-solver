@@ -28,6 +28,11 @@ class NonogramSolver {
     // Typed-array mirror of this.grid for fast access and trail-based undo.
     // Values: 0 = unknown, 1 = filled, -1 = empty (matches this.grid).
     this.gridBuf = new Int8Array(this.rows * this.cols);
+    // Per-line counts of non-zero (known) cells. Maintained incrementally by
+    // _set / _assign / _rollback so backtrack() can pick its variable in O(R+C)
+    // instead of rebuilding via an O(R·C) scan per recursion node.
+    this.rowKnown = new Int32Array(this.rows);
+    this.colKnown = new Int32Array(this.cols);
     // Trail entries: (cellIndex << 2) | (oldValue + 1) — old ∈ {-1,0,1}.
     this.trail = [];
     this.maxIterations = 1000;
@@ -45,6 +50,9 @@ class NonogramSolver {
 
   // Direct write, no trail. Use only outside backtracking (initial state).
   _set(r, c, v) {
+    const old = this.gridBuf[r * this.cols + c];
+    if (old === 0 && v !== 0) { this.rowKnown[r]++; this.colKnown[c]++; }
+    else if (old !== 0 && v === 0) { this.rowKnown[r]--; this.colKnown[c]--; }
     this.gridBuf[r * this.cols + c] = v;
     this.grid[r][c] = v;
   }
@@ -56,6 +64,8 @@ class NonogramSolver {
     const old = this.gridBuf[i];
     if (old === v) return false;
     this.trail.push((i << 2) | (old + 1));
+    if (old === 0 && v !== 0) { this.rowKnown[r]++; this.colKnown[c]++; }
+    else if (old !== 0 && v === 0) { this.rowKnown[r]--; this.colKnown[c]--; }
     this.gridBuf[i] = v;
     this.grid[r][c] = v;
     return true;
@@ -69,8 +79,13 @@ class NonogramSolver {
       const entry = t.pop();
       const old = (entry & 0b11) - 1;
       const i = entry >>> 2;
+      const cur = this.gridBuf[i];
+      const r = (i / cols) | 0;
+      const c = i % cols;
+      if (cur === 0 && old !== 0) { this.rowKnown[r]++; this.colKnown[c]++; }
+      else if (cur !== 0 && old === 0) { this.rowKnown[r]--; this.colKnown[c]--; }
       this.gridBuf[i] = old;
-      this.grid[(i / cols) | 0][i % cols] = old;
+      this.grid[r][c] = old;
     }
   }
 
@@ -374,23 +389,15 @@ class NonogramSolver {
     const maxDepth = this.maxDepth || Math.max(500, this.rows * this.cols);
     if (depth > maxDepth) return { solved: false, grid: null, error: 'Backtrack limit reached' };
 
-    const rowKnown = this.grid.map(r => r.reduce((a, v) => a + (v !== 0 ? 1 : 0), 0));
-    const colKnown = Array(this.cols).fill(0);
-    for (let c = 0; c < this.cols; c++) {
-      for (let r = 0; r < this.rows; r++) {
-        if (this.grid[r][c] !== 0) colKnown[c]++;
-      }
-    }
-
     let bestR = -1, bestC = -1;
     let bestScore = -1;
 
     for (let r = 0; r < this.rows; r++) {
       const row = this.grid[r];
-      const rk = rowKnown[r];
+      const rk = this.rowKnown[r];
       for (let c = 0; c < this.cols; c++) {
         if (row[c] === 0) {
-          const score = rk + colKnown[c];
+          const score = rk + this.colKnown[c];
           if (score > bestScore) {
             bestScore = score;
             bestR = r;
