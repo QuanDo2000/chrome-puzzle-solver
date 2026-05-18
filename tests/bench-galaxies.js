@@ -10,7 +10,13 @@ const config = {
   rows: 12, cols: 12,
 };
 
+const WARMUP = 2;
 const N = 5;
+// Discard the first WARMUP iterations to skip V8 JIT cold-start cost.
+for (let i = 0; i < WARMUP; i++) {
+  GalaxiesSolver._solutionCache.clear?.();
+  new GalaxiesSolver(config.stars, config.rows, config.cols).solve(null);
+}
 const times = [];
 let solvedFlag = null;
 let nodes = 0;

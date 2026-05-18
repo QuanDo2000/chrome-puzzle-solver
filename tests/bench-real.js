@@ -15,11 +15,25 @@ console.log = ((orig) => {
   };
 })(console.log);
 
+const WARMUP = 2;
 const N = 5;
 const rows = [];
 
+function buildSolver(p) {
+  if (p.type === 'nonogram') return new NonogramSolver(p.rowClues, p.colClues);
+  if (p.type === 'aquarium') return new AquariumSolver(p.rowClues, p.colClues, p.regionMap, p.rows, p.cols);
+  if (p.type === 'galaxies') return new GalaxiesSolver(p.stars, p.rows, p.cols);
+  return null;
+}
+
 for (const name of Object.keys(fixtures)) {
   const p = fixtures[name];
+  if (!buildSolver(p)) { console.error('Unknown puzzle type:', p.type); continue; }
+  // Discard WARMUP iterations to skip V8 JIT cold-start cost.
+  for (let i = 0; i < WARMUP; i++) {
+    GalaxiesSolver._solutionCache?.clear?.();
+    buildSolver(p).solve(null);
+  }
   const times = [];
   let solved = null;
   let nodes = null;
@@ -27,17 +41,7 @@ for (const name of Object.keys(fixtures)) {
     // GalaxiesSolver has a static solution cache — clear it so each iteration
     // measures a real solve rather than a cache hit.
     GalaxiesSolver._solutionCache?.clear?.();
-    let s;
-    if (p.type === 'nonogram') {
-      s = new NonogramSolver(p.rowClues, p.colClues);
-    } else if (p.type === 'aquarium') {
-      s = new AquariumSolver(p.rowClues, p.colClues, p.regionMap, p.rows, p.cols);
-    } else if (p.type === 'galaxies') {
-      s = new GalaxiesSolver(p.stars, p.rows, p.cols);
-    } else {
-      console.error('Unknown puzzle type:', p.type);
-      continue;
-    }
+    const s = buildSolver(p);
     const t0 = process.hrtime.bigint();
     const r = s.solve(null);
     const t1 = process.hrtime.bigint();

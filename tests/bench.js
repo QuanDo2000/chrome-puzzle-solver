@@ -9,7 +9,14 @@ const rowClues = [
 ];
 const colClues = rowClues;
 
+const WARMUP = 2;
 const N = 5;
+// Discard the first WARMUP iterations: V8 JIT compiles after a few executions
+// of the same code path, so the first 1-2 solves are 2-10x slower than steady
+// state. Including them would dominate the median.
+for (let i = 0; i < WARMUP; i++) {
+  new NonogramSolver(rowClues, colClues).solve(null);
+}
 const times = [];
 let solvedFlag = null;
 for (let i = 0; i < N; i++) {

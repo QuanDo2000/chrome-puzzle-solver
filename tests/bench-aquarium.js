@@ -8,7 +8,12 @@ const log = (...a) => origLog(...a);
 
 const p = fixtures.aquariumLarge;
 
+const WARMUP = 2;
 const N = 11;
+// Discard the first WARMUP iterations to skip V8 JIT cold-start cost.
+for (let i = 0; i < WARMUP; i++) {
+  new AquariumSolver(p.rowClues, p.colClues, p.regionMap, p.rows, p.cols).solve(null);
+}
 const times = [];
 let solvedFlag = null;
 for (let i = 0; i < N; i++) {
