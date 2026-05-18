@@ -1225,11 +1225,14 @@ function makeWidget() {
   // - lastDrawSig: full signature of the last successful draw. Identical input
   //   skips the entire redraw (state-watch fires every 200ms even when nothing
   //   visually changed).
-  // - staticLayer: offscreen canvas holding region borders, nonogram every-5
-  //   guides, and galaxies stars — pixels that depend only on puzzle shape, not
-  //   on the live grid contents. Rebuilt only when cellSize / regionMap / stars
-  //   change.
+  // - latticeLayer: offscreen canvas with just the gray cell-border lattice.
+  //   Drawn FIRST so dynamic fills paint over it (a black filled cell hides
+  //   the gray border within its area, matching the pre-refactor look).
+  // - staticLayer: offscreen canvas with region borders, nonogram every-5
+  //   guides, and galaxies stars — pixels that should sit ON TOP of fills.
+  //   Both rebuilt only when cellSize / regionMap / stars change.
   let lastDrawSig = null;
+  let latticeLayer = null;
   let staticLayer = null;
   let staticLayerSig = null;
 
@@ -1306,14 +1309,14 @@ function makeWidget() {
     return h;
   }
 
-  function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
+  // Cell-border lattice — batched into one Path2D so the offscreen build is
+  // O(rows + cols) strokes instead of the rows*cols strokeRects the old
+  // per-tick code did.
+  function buildLatticeLayer(rows, cols, cellSize, w, h) {
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
     const ctx = c.getContext('2d');
-    // Grid lattice: previously drawn per cell every tick (2500 strokeRect
-    // calls on 50×50). Static-shape only, so it lives here and we batch all
-    // rows / cols into a single Path2D — O(rows + cols) stroke calls.
     ctx.strokeStyle = '#d1d5db';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
@@ -1326,6 +1329,14 @@ function makeWidget() {
       ctx.lineTo(cc * cellSize, h);
     }
     ctx.stroke();
+    return c;
+  }
+
+  function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
     drawRegionBordersOn(ctx, rows, cols, cellSize, pd?.regionMap);
     drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd);
     if (pd?.type === 'galaxies' && pd.stars) {
@@ -1445,11 +1456,12 @@ function makeWidget() {
     if (sig === lastDrawSig) return;
     lastDrawSig = sig;
 
-    // (Re)build the static layer if puzzle shape or size changed.
+    // (Re)build the static layers if puzzle shape or size changed.
     const staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
                       '|rm=' + regionMapSig(pd?.regionMap) +
                       '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '');
     if (staticSig !== staticLayerSig) {
+      latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
       staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
       staticLayerSig = staticSig;
     }
@@ -1459,10 +1471,13 @@ function makeWidget() {
 
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
+    // Lattice goes UNDER dynamic fills so filled cells hide the grey
+    // cell-border lines inside them. Region borders + galaxy stars come
+    // from the second static layer below, painted on top.
+    if (latticeLayer) ctx.drawImage(latticeLayer, 0, 0);
 
-    // Dynamic fills only — the grid lattice is now part of staticLayer (drawn
-    // on top at the end). Empty-cell X marks are batched into one stroke pass
-    // so their shared strokeStyle/lineWidth set up only once.
+    // Empty-cell X marks are batched into one stroke pass so their shared
+    // strokeStyle/lineWidth set up only once.
     const galaxiesColors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
     const xPad = Math.max(1, Math.floor(cellSize / 5));
     let xMarkPath = null;
@@ -1583,8 +1598,9 @@ function makeWidget() {
       }
     }
 
-    // Region borders + nonogram-5 guides + galaxies stars (all puzzle-shape
-    // dependent only) come from the cached static layer.
+    // Region borders + nonogram-5 guides + galaxies stars sit ON TOP of fills
+    // and hints (the lattice layer painted at the start of this function
+    // already covers the under-fill case).
     if (staticLayer) ctx.drawImage(staticLayer, 0, 0);
   }
 
