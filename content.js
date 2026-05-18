@@ -2079,7 +2079,13 @@ function makeWidget() {
   // recycle everything anyway, but puzzles-mobile SPA-navigates between
   // puzzles within the same document, so the observer would otherwise keep
   // watching stale DOM and the worker would linger unused.
-  window.addEventListener('pagehide', () => {
+  window.addEventListener('pagehide', (e) => {
+    // event.persisted=true means the page is entering the back-forward cache
+    // and may be restored later. Tearing down the worker / observer would
+    // leave the widget non-functional after restore (Solve buttons exist but
+    // worker is dead). Skip cleanup; Chrome reclaims the worker if the page
+    // is actually evicted from BFCache.
+    if (e.persisted) return;
     stopStateWatch();
     if (solverWorker) {
       // Resolve any in-flight solves before tearing down the worker —
