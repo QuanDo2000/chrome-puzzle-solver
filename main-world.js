@@ -322,6 +322,7 @@ function readGalaxiesState(rows, cols) {
 async function applyGalaxiesState(lines) {
   // Nested because this function is serialized via fn.toString() into the page
   // MAIN world — closure to outer-scope helpers is lost in transit.
+  // Keep in sync with the syncTimer copy in applyGameState below.
   function syncTimer() {
     try {
       if (!window.Game) return;
@@ -379,6 +380,7 @@ async function applyGalaxiesState(lines) {
 function applyGameState(solution) {
   // Nested because this function is serialized via fn.toString() into the page
   // MAIN world — closure to outer-scope helpers is lost in transit.
+  // Keep in sync with the syncTimer copy in applyGalaxiesState above.
   function syncTimer() {
     try {
       if (!window.Game) return;
