@@ -551,12 +551,47 @@ function findEmptyCompHints(components, grid, stars, reachable) {
     }
   }
 
+  // Per-star seed cells, used by the closed-galaxy check below.
+  const seedCellsByStar = stars.map(s => GalaxiesSolver.seedCellsForStar(s, rows, cols));
+
   const compCellSets = new Map();
   for (const comp of emptyComps) {
     const s = new Set();
     for (const cell of comp.cells) s.add(cell.row + ',' + cell.col);
     compCellSets.set(comp.id, s);
   }
+
+  // Returns the index of a star X for which `sideCells` IS X's galaxy: X's
+  // seed cells are entirely in sideCells, NO other star's seed cells are in
+  // sideCells, and every cell in sideCells has its mirror under X also in
+  // sideCells. These three conditions together are sufficient to conclude
+  // that sideCells = galaxy(X) in the unique solution, so drawing a line
+  // that isolates sideCells is sound even if the rest of the component has
+  // no single-owner bitset yet.
+  // Returns -1 if no such star.
+  const closedGalaxyOwner = (sideCells, sideBits) => {
+    if (!sideBits) return -1;
+    starLoop: for (let i = 0; i < stars.length; i++) {
+      if (!(sideBits & (1n << BigInt(i)))) continue;
+      for (const s of seedCellsByStar[i]) {
+        if (!sideCells.has(s.row + ',' + s.col)) continue starLoop;
+      }
+      for (let j = 0; j < stars.length; j++) {
+        if (j === i) continue;
+        for (const s of seedCellsByStar[j]) {
+          if (sideCells.has(s.row + ',' + s.col)) continue starLoop;
+        }
+      }
+      const star = stars[i];
+      for (const key of sideCells) {
+        const [r, c] = key.split(',');
+        const mr = star.row - +r, mc = star.col - +c;
+        if (mr < 0 || mc < 0 || mr >= rows || mc >= cols || !sideCells.has(mr + ',' + mc)) continue starLoop;
+      }
+      return i;
+    }
+    return -1;
+  };
 
   const hints = [];
   const tried = new Set();
@@ -577,11 +612,21 @@ function findEmptyCompHints(components, grid, stars, reachable) {
     if (!sideBkeys.length) return;
     const aBits = intersectBitset(sideA, bitsets);
     const bBits = intersectBitset(sideBkeys, bitsets);
-    // Both sides must have a candidate star (non-zero bitset). 'aBits || bBits'
-    // suggested splits where one side was un-ownable — drawing the line stranded
-    // that side with no possible owner. On the 30x30 monthly this surfaced
-    // around step 95 of the loop with ~20 phantom must-draw lines.
+    // Acceptance criteria — both are sound:
+    //   1. Both sides have a candidate star (the original check; covers
+    //      "split into two parts that can each become galaxies later").
+    //   2. One side is a closed galaxy for a specific star X (catches
+    //      isolate-the-final-galaxy cases where the other side is a big
+    //      messy remainder, e.g. the 30x30 monthly at step ~95).
+    // The earlier 'aBits || bBits' version was unsound — it accepted splits
+    // that stranded a side with no possible owner. The new criterion 2
+    // proves a specific owner exists, so it doesn't strand anything.
     if (aBits && bBits) {
+      hints.push({ orientation, row, col, score: sideA.size + sideBkeys.length });
+      return;
+    }
+    const sideBSet = new Set(sideBkeys);
+    if (closedGalaxyOwner(sideA, aBits) >= 0 || closedGalaxyOwner(sideBSet, bBits) >= 0) {
       hints.push({ orientation, row, col, score: sideA.size + sideBkeys.length });
     }
   };
