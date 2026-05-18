@@ -506,7 +506,7 @@ class GalaxiesSolver {
     // not a "r,c" string key, so lookups in _canUseCell don't allocate.
     this.owner = new Map();
     for (let i = 0; i < this.stars.length; i++) {
-      for (const cell of this._seedCells(this.stars[i])) {
+      for (const cell of GalaxiesSolver.seedCellsForStar(this.stars[i], this.rows, this.cols)) {
         const key = cell.row * cols + cell.col;
         if (this.owner.has(key)) this.owner.set(key, -1);
         else this.owner.set(key, i);
@@ -525,6 +525,58 @@ class GalaxiesSolver {
   // when they need a guaranteed cold solve.
   static clearSolutionCache() {
     GalaxiesSolver._solutionCache.clear();
+  }
+
+  // ── Shared galaxies geometry ────────────────────────────────────────
+  // Static helpers used by GalaxiesSolver and also by content.js / handler.js
+  // for hint computation and DOM line rendering. Previously duplicated across
+  // the three files; centralized here so all callers stay in lockstep.
+
+  /**
+   * Cells covered by a star's seed footprint. A star at doubled coords
+   * (R, C) occupies the 1, 2, or 4 grid cells that surround its center
+   * depending on whether R and C are even (cell center) or odd (between
+   * cells). Out-of-bounds cells are dropped.
+   *
+   * @param {{row: number, col: number}} star  Doubled-coord star position.
+   * @param {number} rows                       Grid row count.
+   * @param {number} cols                       Grid col count.
+   * @returns {Array<{row: number, col: number}>}
+   */
+  static seedCellsForStar(star, rows, cols) {
+    const rr = star.row % 2 === 0 ? [star.row / 2] : [(star.row - 1) / 2, (star.row + 1) / 2];
+    const cc = star.col % 2 === 0 ? [star.col / 2] : [(star.col - 1) / 2, (star.col + 1) / 2];
+    const out = [];
+    for (const row of rr) {
+      for (const col of cc) {
+        if (row >= 0 && col >= 0 && row < rows && col < cols) out.push({ row, col });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Convert a region-id grid (1 region id per cell) to the implied galaxies
+   * line layout: a horizontal line at (r, c) where the cells above and below
+   * belong to different regions, and likewise for vertical lines. Robust to
+   * a null grid (returns zero-filled arrays).
+   *
+   * @param {number[][] | null | undefined} grid
+   * @param {number} rows
+   * @param {number} cols
+   * @returns {{horizontal: number[][], vertical: number[][]}}
+   */
+  static regionsToLines(grid, rows, cols) {
+    const horizontal = Array.from({ length: rows + 1 }, () => Array(cols).fill(0));
+    const vertical = Array.from({ length: rows }, () => Array(cols + 1).fill(0));
+    if (!grid) return { horizontal, vertical };
+    for (let r = 1; r < rows; r++) {
+      for (let c = 0; c < cols; c++) horizontal[r][c] = grid[r - 1]?.[c] !== grid[r]?.[c] ? 1 : 0;
+    }
+    for (let r = 0; r < rows; r++) {
+      for (let c = 1; c < cols; c++) vertical[r][c] = grid[r]?.[c - 1] !== grid[r]?.[c] ? 1 : 0;
+    }
+    return { horizontal, vertical };
   }
 
   /**
@@ -603,7 +655,7 @@ class GalaxiesSolver {
     const savedGrid = this.grid;
     this.grid = grid;
     for (let i = 0; i < this.stars.length; i++) {
-      for (const cell of this._seedCells(this.stars[i])) {
+      for (const cell of GalaxiesSolver.seedCellsForStar(this.stars[i], this.rows, this.cols)) {
         if (!this._assignPair(cell.row, cell.col, i)) {
           this.grid = savedGrid;
           return null;
@@ -719,7 +771,7 @@ class GalaxiesSolver {
     const maxShapes = this.rows * this.cols >= 900 ? 200 : 500;
     const maxCells = this.rows * this.cols >= 900 ? 16 : 30;
     const seed = new Set();
-    for (const cell of this._seedCells(this.stars[starIndex])) {
+    for (const cell of GalaxiesSolver.seedCellsForStar(this.stars[starIndex], this.rows, this.cols)) {
       if (!this.staticCandidates[cell.row]?.[cell.col]?.includes(starIndex)) return [];
       seed.add(cell.row * this.cols + cell.col);
     }
@@ -816,7 +868,7 @@ class GalaxiesSolver {
 
   _toOutputGrid(grid) {
     const out = grid.map(row => row.map(v => v + 1));
-    out.galaxies = this._toLines(grid);
+    out.galaxies = GalaxiesSolver.regionsToLines(grid, this.rows, this.cols);
     return out;
   }
 
@@ -896,18 +948,6 @@ class GalaxiesSolver {
 
   _starCell(star) {
     return { row: Math.floor(star.row / 2), col: Math.floor(star.col / 2) };
-  }
-
-  _seedCells(star) {
-    const rows = star.row % 2 === 0 ? [star.row / 2] : [(star.row - 1) / 2, (star.row + 1) / 2];
-    const cols = star.col % 2 === 0 ? [star.col / 2] : [(star.col - 1) / 2, (star.col + 1) / 2];
-    const out = [];
-    for (const row of rows) {
-      for (const col of cols) {
-        if (this._inside(row, col)) out.push({ row, col });
-      }
-    }
-    return out;
   }
 
   _mirror(row, col, starIndex) {
@@ -1259,17 +1299,6 @@ class GalaxiesSolver {
     return seen.size === total;
   }
 
-  _toLines(grid) {
-    const horizontal = Array.from({ length: this.rows + 1 }, () => Array(this.cols).fill(0));
-    const vertical = Array.from({ length: this.rows }, () => Array(this.cols + 1).fill(0));
-    for (let r = 1; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) horizontal[r][c] = grid[r - 1][c] !== grid[r][c] ? 1 : 0;
-    }
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 1; c < this.cols; c++) vertical[r][c] = grid[r][c - 1] !== grid[r][c] ? 1 : 0;
-    }
-    return { horizontal, vertical };
-  }
 }
 
 class AquariumSolver {

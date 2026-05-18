@@ -151,26 +151,13 @@ const galaxiesHandler = {
   async applySolution(solution, ctx) {
     const lines = solution?.type === 'galaxies-lines'
       ? solution.lines
-      : solution?.galaxies || buildGalaxiesLinesFromRegions(solution, ctx.rows, ctx.cols);
+      : solution?.galaxies || GalaxiesSolver.regionsToLines(solution, ctx.rows, ctx.cols);
     const ok = await callMainWorld('applyGalaxiesState', [lines]);
     return ok
       ? { success: true }
       : { success: false, error: 'Galaxies apply failed (no window.Game or MAIN-world timeout)' };
   },
 };
-
-function buildGalaxiesLinesFromRegions(grid, rows, cols) {
-  const horizontal = Array.from({ length: rows + 1 }, () => Array(cols).fill(0));
-  const vertical = Array.from({ length: rows }, () => Array(cols + 1).fill(0));
-  if (!grid) return { horizontal, vertical };
-  for (let r = 1; r < rows; r++) {
-    for (let c = 0; c < cols; c++) horizontal[r][c] = grid[r - 1]?.[c] !== grid[r]?.[c] ? 1 : 0;
-  }
-  for (let r = 0; r < rows; r++) {
-    for (let c = 1; c < cols; c++) vertical[r][c] = grid[r]?.[c - 1] !== grid[r]?.[c] ? 1 : 0;
-  }
-  return { horizontal, vertical };
-}
 
 registerHandler(galaxiesHandler);
 
@@ -516,5 +503,5 @@ function genericSetCellDOM(cell, val) {
 // themselves via registerHandler() at load time, but those handlers stay
 // dormant until getActiveHandler() is called, which tests don't do.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseGalaxiesTask, buildGalaxiesLinesFromRegions };
+  module.exports = { parseGalaxiesTask };
 }

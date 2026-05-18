@@ -341,7 +341,7 @@ function firstGalaxiesMismatch(grid, solution) {
 function buildGalaxiesSeedOwner(stars, rows, cols) {
   const owner = new Map();
   for (let i = 0; i < stars.length; i++) {
-    for (const cell of galaxiesSeedCells(stars[i], rows, cols)) {
+    for (const cell of GalaxiesSolver.seedCellsForStar(stars[i], rows, cols)) {
       const key = cell.row + ',' + cell.col;
       owner.set(key, owner.has(key) ? -1 : i);
     }
@@ -401,7 +401,7 @@ function possibleGalaxiesNodesForCell(row, col, stars, rows, cols, seedOwner) {
 function computeReachableStars(stars, rows, cols, seedOwner, current) {
   const reachable = Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
   for (let i = 0; i < stars.length; i++) {
-    const seeds = galaxiesSeedCells(stars[i], rows, cols);
+    const seeds = GalaxiesSolver.seedCellsForStar(stars[i], rows, cols);
     const q = [];
     const seen = new Set();
     for (const seed of seeds) {
@@ -666,7 +666,7 @@ function getGalaxiesNodeRegions(grid, stars) {
   }
   return (stars || []).map((star, index) => {
     const currentIds = new Set();
-    for (const cell of galaxiesSeedCells(star, grid.length, grid[0]?.length || 0)) {
+    for (const cell of GalaxiesSolver.seedCellsForStar(star, grid.length, grid[0]?.length || 0)) {
       const id = grid[cell.row]?.[cell.col];
       if (id) currentIds.add(id);
     }
@@ -674,18 +674,6 @@ function getGalaxiesNodeRegions(grid, stars) {
     for (const id of currentIds) currentSize += sizes.get(id) || 0;
     return { index, currentIds, currentSize };
   });
-}
-
-function galaxiesSeedCells(star, rows, cols) {
-  const rr = star.row % 2 === 0 ? [star.row / 2] : [(star.row - 1) / 2, (star.row + 1) / 2];
-  const cc = star.col % 2 === 0 ? [star.col / 2] : [(star.col - 1) / 2, (star.col + 1) / 2];
-  const out = [];
-  for (const row of rr) {
-    for (const col of cc) {
-      if (row >= 0 && col >= 0 && row < rows && col < cols) out.push({ row, col });
-    }
-  }
-  return out;
 }
 
 function solveExtraData() {

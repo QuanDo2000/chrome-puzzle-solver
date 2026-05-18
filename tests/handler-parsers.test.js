@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseGalaxiesTask, buildGalaxiesLinesFromRegions } = require('../handler.js');
+const { parseGalaxiesTask } = require('../handler.js');
+const { GalaxiesSolver } = require('../solver.js');
+const regionsToLines = GalaxiesSolver.regionsToLines;
 
 // ── parseGalaxiesTask ─────────────────────────────────────────────
 // Encoding: stars on a (2*width-1) × (2*height-1) doubled-coord grid.
@@ -49,24 +51,24 @@ test('parseGalaxiesTask: breaks when row would exceed grid', () => {
   assert.deepEqual(stars[0], { row: 0, col: 0 });
 });
 
-// ── buildGalaxiesLinesFromRegions ────────────────────────────────
+// ── GalaxiesSolver.regionsToLines ────────────────────────────────
 // Maps a region-id grid (1 per cell) to the implied galaxies-line layout:
 // a horizontal line at row r, col c exists iff grid[r-1][c] !== grid[r][c],
 // a vertical line at row r, col c exists iff grid[r][c-1] !== grid[r][c].
 
-test('buildGalaxiesLinesFromRegions: null grid returns zero-filled arrays', () => {
-  const lines = buildGalaxiesLinesFromRegions(null, 2, 2);
+test('regionsToLines: null grid returns zero-filled arrays', () => {
+  const lines = regionsToLines(null, 2, 2);
   assert.equal(lines.horizontal.length, 3); // rows+1
   assert.equal(lines.vertical.length, 2);   // rows
   assert.deepEqual(lines.horizontal[0], [0, 0]);
   assert.deepEqual(lines.horizontal[1], [0, 0]);
 });
 
-test('buildGalaxiesLinesFromRegions: horizontal split between regions', () => {
+test('regionsToLines: horizontal split between regions', () => {
   // 2×2 grid, top row in region 1, bottom row in region 2.
   // Horizontal line should appear at row 1 (between the two rows).
   const grid = [[1, 1], [2, 2]];
-  const lines = buildGalaxiesLinesFromRegions(grid, 2, 2);
+  const lines = regionsToLines(grid, 2, 2);
   assert.deepEqual(lines.horizontal[0], [0, 0]); // top edge, no internal line
   assert.deepEqual(lines.horizontal[1], [1, 1]); // between rows: regions differ
   assert.deepEqual(lines.horizontal[2], [0, 0]); // bottom edge
@@ -75,10 +77,10 @@ test('buildGalaxiesLinesFromRegions: horizontal split between regions', () => {
   assert.deepEqual(lines.vertical[1], [0, 0, 0]);
 });
 
-test('buildGalaxiesLinesFromRegions: vertical split between regions', () => {
+test('regionsToLines: vertical split between regions', () => {
   // 2×2 grid, left col in region 1, right col in region 2.
   const grid = [[1, 2], [1, 2]];
-  const lines = buildGalaxiesLinesFromRegions(grid, 2, 2);
+  const lines = regionsToLines(grid, 2, 2);
   // No horizontal lines.
   assert.deepEqual(lines.horizontal[1], [0, 0]);
   // Vertical line at col 1 in both rows.
@@ -86,10 +88,10 @@ test('buildGalaxiesLinesFromRegions: vertical split between regions', () => {
   assert.deepEqual(lines.vertical[1], [0, 1, 0]);
 });
 
-test('buildGalaxiesLinesFromRegions: checkerboard regions give a full lattice', () => {
+test('regionsToLines: checkerboard regions give a full lattice', () => {
   // 2×2 with diagonally-opposite regions.
   const grid = [[1, 2], [2, 1]];
-  const lines = buildGalaxiesLinesFromRegions(grid, 2, 2);
+  const lines = regionsToLines(grid, 2, 2);
   assert.deepEqual(lines.horizontal[1], [1, 1]);
   assert.deepEqual(lines.vertical[0], [0, 1, 0]);
   assert.deepEqual(lines.vertical[1], [0, 1, 0]);
