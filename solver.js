@@ -2465,6 +2465,107 @@ forLoop:
   }
 }
 
+class BinairoSolver {
+  /**
+   * @param {{ rows: number, cols: number, givens: number[][], initialState?: number[][] }} opts
+   *   `givens`     2D array, page-native encoding (-1=blank, 0=given-zero, 1=given-one).
+   *   `initialState` optional 2D in cellStatus encoding (0=empty, 1=one, 2=zero);
+   *                  defaults to givens-translated state.
+   */
+  constructor({ rows, cols, givens, initialState }) {
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
+      throw new Error('BinairoSolver: rows/cols must be positive integers');
+    }
+    if (rows % 2 !== 0 || cols % 2 !== 0) {
+      throw new Error('BinairoSolver: rows/cols must be even (Binairo requires N/2 of each value per line)');
+    }
+    this.rows = rows;
+    this.cols = cols;
+    this.half = cols / 2;        // per-row half count
+    this.halfRow = rows / 2;     // per-col half count
+    this.givens = givens;
+
+    // Internal grid: 0=empty, 1=one, 2=zero. Flat Int8Array for fast access.
+    this.grid = new Int8Array(rows * cols);
+
+    // Per-line known-value counts. Maintained incrementally by _assign / _rollback.
+    this.rowOnes  = new Int32Array(rows);
+    this.rowZeros = new Int32Array(rows);
+    this.colOnes  = new Int32Array(cols);
+    this.colZeros = new Int32Array(cols);
+
+    // Trail entries packed as (idx << 2) | oldValue. oldValue ∈ {0, 1, 2}.
+    this.trail = [];
+
+    // Seed the grid from initialState if provided, else from givens.
+    const init = initialState || this._initialFromGivens(givens);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const v = init[r] && init[r][c] !== undefined ? init[r][c] : 0;
+        if (v !== 0) this._set(r, c, v);
+      }
+    }
+  }
+
+  _initialFromGivens(givens) {
+    const out = Array.from({ length: this.rows }, () => new Array(this.cols).fill(0));
+    for (let r = 0; r < this.rows; r++) {
+      const row = givens[r] || [];
+      for (let c = 0; c < this.cols; c++) {
+        const g = row[c];
+        out[r][c] = g === 1 ? 1 : g === 0 ? 2 : 0;
+      }
+    }
+    return out;
+  }
+
+  _idx(r, c) { return r * this.cols + c; }
+
+  _get(r, c) { return this.grid[r * this.cols + c]; }
+
+  // Direct write, no trail. Use only for initial seeding.
+  _set(r, c, v) {
+    const i = r * this.cols + c;
+    const old = this.grid[i];
+    if (old === v) return;
+    this._bumpCounts(r, c, old, v);
+    this.grid[i] = v;
+  }
+
+  // Trailed write. Returns true iff value changed.
+  _assign(r, c, v) {
+    const i = r * this.cols + c;
+    const old = this.grid[i];
+    if (old === v) return false;
+    this.trail.push((i << 2) | old);
+    this._bumpCounts(r, c, old, v);
+    this.grid[i] = v;
+    return true;
+  }
+
+  _rollback(mark) {
+    const t = this.trail;
+    const cols = this.cols;
+    while (t.length > mark) {
+      const entry = t.pop();
+      const old = entry & 0b11;
+      const i = entry >>> 2;
+      const cur = this.grid[i];
+      const r = (i / cols) | 0;
+      const c = i % cols;
+      this._bumpCounts(r, c, cur, old);
+      this.grid[i] = old;
+    }
+  }
+
+  _bumpCounts(r, c, oldV, newV) {
+    if (oldV === 1) { this.rowOnes[r]--; this.colOnes[c]--; }
+    else if (oldV === 2) { this.rowZeros[r]--; this.colZeros[c]--; }
+    if (newV === 1) { this.rowOnes[r]++; this.colOnes[c]++; }
+    else if (newV === 2) { this.rowZeros[r]++; this.colZeros[c]++; }
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver };
 }
