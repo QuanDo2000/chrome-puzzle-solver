@@ -40,6 +40,7 @@ self.onmessage = function (e) {
         rows: extraData.rows,
         cols: extraData.cols,
         givens: extraData.givens,
+        comparisonClues: extraData.comparisonClues || [],
         initialState: initialGrid || null,
       });
       result = s.solve();
