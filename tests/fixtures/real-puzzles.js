@@ -152,4 +152,23 @@ module.exports = {
       [54,54,54,54,54,54,54,54,54,54,58,58,58,58,58,58,59,59,59,59,59,59,59,59,52,52,52,52,52,52],
     ],
   },
+
+  // Captured live from https://www.puzzles-mobile.com/binairo/random/6x6-easy
+  // on 2026-05-18. See tests/fixtures/puzzles.js binairo6x6 for the same data.
+  // Additional sizes (8x8, 10x10, etc.) can be captured via the widget's
+  // 📋 Dump button now that dumpPuzzleForBench knows the binairo branch.
+  binairoReal6x6_a: {
+    type: 'binairo',
+    rows: 6,
+    cols: 6,
+    givens: [
+      [-1,  1, -1,  1, -1, -1],
+      [-1, -1,  0, -1, -1, -1],
+      [ 0,  0, -1, -1,  0, -1],
+      [-1, -1, -1,  0, -1, -1],
+      [ 0,  1, -1, -1,  0, -1],
+      [ 0, -1, -1, -1, -1, -1],
+    ],
+    comparisonClues: [],
+  },
 };
