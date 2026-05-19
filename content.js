@@ -1778,6 +1778,21 @@ function makeWidget() {
     return h;
   }
 
+  // Sparse comparison-clue stable signature. FNV-like rolling number so a
+  // change anywhere in the sparse 2D invalidates the static-layer cache.
+  function comparisonCluesSig(cc) {
+    if (!Array.isArray(cc) || cc.length === 0) return '0';
+    let h = 0x811c9dc5;
+    for (let r = 0; r < cc.length; r++) {
+      const row = Array.isArray(cc[r]) ? cc[r] : [];
+      for (let c = 0; c < row.length; c++) {
+        h ^= r * 65537 + c * 31 + ((row[c] | 0) + 1);
+        h = Math.imul(h, 0x01000193) >>> 0;
+      }
+    }
+    return (h >>> 0).toString(36);
+  }
+
   function gridDataSig(grid) {
     let h = FNV_OFFSET;
     for (let r = 0; r < grid.length; r++) {
@@ -1853,7 +1868,46 @@ function makeWidget() {
         ctx.fill();
       }
     }
+    if (pd?.type === 'binairo' && Array.isArray(pd.comparisonClues)) {
+      drawComparisonCluesOn(ctx, cellSize, pd.comparisonClues);
+    }
     return c;
+  }
+
+  function drawComparisonCluesOn(ctx, cellSize, comparisonClues) {
+    const fontSize = Math.max(8, Math.floor(cellSize * 0.45));
+    ctx.save();
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = '#1f2937';
+    for (let r = 0; r < comparisonClues.length; r++) {
+      const row = comparisonClues[r];
+      if (!Array.isArray(row)) continue;
+      for (let c = 0; c < row.length; c++) {
+        const flag = row[c];
+        if (typeof flag !== 'number' || flag === 0) continue;
+        // Right edge (between (r,c) and (r,c+1))
+        if (flag & 3) {
+          const x = (c + 1) * cellSize;
+          const y = r * cellSize + cellSize / 2;
+          const ch = (flag & 1) ? '=' : '≠';
+          ctx.strokeText(ch, x, y);
+          ctx.fillText(ch, x, y);
+        }
+        // Bottom edge (between (r,c) and (r+1,c))
+        if (flag & 12) {
+          const x = c * cellSize + cellSize / 2;
+          const y = (r + 1) * cellSize;
+          const ch = (flag & 4) ? '=' : '≠';
+          ctx.strokeText(ch, x, y);
+          ctx.fillText(ch, x, y);
+        }
+      }
+    }
+    ctx.restore();
   }
 
   function drawRegionBordersOn(ctx, rows, cols, cellSize, rm) {
@@ -1963,7 +2017,8 @@ function makeWidget() {
     // (Re)build the static layers if puzzle shape or size changed.
     const staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
                       '|rm=' + regionMapSig(pd?.regionMap) +
-                      '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '');
+                      '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
+                      '|cc=' + comparisonCluesSig(pd?.comparisonClues);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
       staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
