@@ -1942,13 +1942,31 @@ function makeWidget() {
     const galaxiesColors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
     const xPad = Math.max(1, Math.floor(cellSize / 5));
     let xMarkPath = null;
+    const isBinairo = puzzleData?.type === 'binairo';
+    const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
     ctx.fillStyle = '#1f2937';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const v = grid[r][c];
         if (v === 0) continue;
         const x = c * cellSize, y = r * cellSize;
-        if (puzzleData?.type === 'galaxies' && v > 0) {
+        if (isBinairo) {
+          const cx = x + cellSize / 2, cy = y + cellSize / 2;
+          if (v === 1) {
+            ctx.fillStyle = '#1f2937';
+            ctx.beginPath();
+            ctx.arc(cx, cy, discR, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (v === 2) {
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#1f2937';
+            ctx.lineWidth = Math.max(1.5, cellSize / 14);
+            ctx.beginPath();
+            ctx.arc(cx, cy, discR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        } else if (puzzleData?.type === 'galaxies' && v > 0) {
           ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
           ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
         } else if (v === 1) {
@@ -2023,7 +2041,22 @@ function makeWidget() {
       for (const cell of hintAbsoluteCells(hint)) {
         const cx = cell.col * cellSize;
         const cy = cell.row * cellSize;
-        if (cell.value === 1) {
+        if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
+          // For binairo hints, draw a translucent disc matching the target value
+          // — full blue fill = "play a 1 here", outlined blue = "play a 0 here".
+          const ccx = cx + cellSize / 2;
+          const ccy = cy + cellSize / 2;
+          const hr = Math.max(2, Math.floor(cellSize * 0.35));
+          ctx.fillStyle = fillColor;
+          ctx.beginPath();
+          ctx.arc(ccx, ccy, hr, 0, Math.PI * 2);
+          ctx.fill();
+          if (cell.value === 2) {
+            ctx.strokeStyle = '#2e86de';
+            ctx.lineWidth = Math.max(1.5, cellSize / 14);
+            ctx.stroke();
+          }
+        } else if (cell.value === 1) {
           ctx.fillStyle = fillColor;
           ctx.fillRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
         } else if (cell.value === -1) {
