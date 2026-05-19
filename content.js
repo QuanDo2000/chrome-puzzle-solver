@@ -1951,13 +1951,10 @@ function makeWidget() {
         if (v === 0) continue;
         const x = c * cellSize, y = r * cellSize;
         if (isBinairo) {
+          // cellStatus encoding: 1 = "one" cells (page shows as light/outlined),
+          // 2 = "zero" cells (page shows as dark/filled). Match that polarity.
           const cx = x + cellSize / 2, cy = y + cellSize / 2;
           if (v === 1) {
-            ctx.fillStyle = '#1f2937';
-            ctx.beginPath();
-            ctx.arc(cx, cy, discR, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (v === 2) {
             ctx.fillStyle = '#fff';
             ctx.strokeStyle = '#1f2937';
             ctx.lineWidth = Math.max(1.5, cellSize / 14);
@@ -1965,6 +1962,11 @@ function makeWidget() {
             ctx.arc(cx, cy, discR, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
+          } else if (v === 2) {
+            ctx.fillStyle = '#1f2937';
+            ctx.beginPath();
+            ctx.arc(cx, cy, discR, 0, Math.PI * 2);
+            ctx.fill();
           }
         } else if (puzzleData?.type === 'galaxies' && v > 0) {
           ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
@@ -2043,7 +2045,7 @@ function makeWidget() {
         const cy = cell.row * cellSize;
         if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
           // For binairo hints, draw a translucent disc matching the target value
-          // — full blue fill = "play a 1 here", outlined blue = "play a 0 here".
+          // — outlined blue = "play a 1 here", full blue fill = "play a 0 here".
           const ccx = cx + cellSize / 2;
           const ccy = cy + cellSize / 2;
           const hr = Math.max(2, Math.floor(cellSize * 0.35));
@@ -2051,7 +2053,7 @@ function makeWidget() {
           ctx.beginPath();
           ctx.arc(ccx, ccy, hr, 0, Math.PI * 2);
           ctx.fill();
-          if (cell.value === 2) {
+          if (cell.value === 1) {
             ctx.strokeStyle = '#2e86de';
             ctx.lineWidth = Math.max(1.5, cellSize / 14);
             ctx.stroke();
