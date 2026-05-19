@@ -1,9 +1,10 @@
 # Project conventions for Claude Code
 
-A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, and Binairo
-puzzles on puzzles-mobile.com. Four solver classes in `solver.js`, a
-content-script widget in `content.js`, and a small service worker in
-`background.js`.
+A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
+and Binairo Plus puzzles on puzzles-mobile.com. Four solver classes in
+`solver.js` (Binairo Plus reuses `BinairoSolver` with the comparison-clue
+rule enabled), a content-script widget in `content.js`, and a small
+service worker in `background.js`.
 
 ## Version control: use `jj`, never plain `git`
 
@@ -91,6 +92,47 @@ has markers. Note: the page pre-allocates `comparisonClues` as one empty
 array per row on the standard variant too (so the outer length always equals
 `puzzleHeight`); the active-variant check must look at marker counts inside,
 not just the outer length.
+
+### Binairo Plus / comparison-clue support
+
+The `/binairo-plus/*` path is served by the same `binairoHandler` and
+`BinairoSolver` as standard Binairo, with one extra rule and one extra
+constructor field.
+
+Page exposes comparison clues at `window.Game.comparisonClues` as a sparse
+2D of flag integers. Each non-null entry `flag` at `(r, c)` decodes via
+bit positions exported on `Game` as `FLAG_RIGHT_EQ=1`, `FLAG_RIGHT_NE=2`,
+`FLAG_DOWN_EQ=4`, `FLAG_DOWN_NE=8` (OR-able). A flag of `10` (= `8|2`)
+encodes "down ≠ AND right ≠" on that cell.
+
+`BinairoSolver._decodeComparison(comparisonClues)` flattens the sparse
+2D into a canonical array of `{ aR, aC, bR, bC, sameSign }` constraints
+stored as `this.compConstraints`. Out-of-grid borders are silently
+dropped during decode.
+
+`_applyComparison(onChange)` runs in `propagate()` between balance and
+uniqueness. For each constraint:
+- both sides known + inconsistent → contradiction (`return false`);
+- exactly one side known → force the other (with `_wouldCreateTriple`
+  pre-check so the assign-time triple invariant from the rest of the
+  solver still holds);
+- neither side known → skip.
+
+Because `_applyComparison` validates both-sides-known pairs every pass, a
+successful `propagate()` guarantees no comparison violations — no
+separate `_hasComparisonViolation` check is needed at completion
+(unlike `_hasDuplicateLines`, which IS still needed because uniqueness
+has a real gap on lines with > 2 empty cells).
+
+`puzzleData.type === 'binairo'` for both paths — the discriminator lives
+in `puzzleData.comparisonClues` (empty array for standard binairo,
+populated sparse 2D for plus). The cache key (`binairoCacheKey` and
+`BinairoSolver._cacheKey`) mixes comparison-clue bytes so two boards
+with identical givens but different clues don't share cache slots.
+
+Preview canvas renders `=` / `≠` glyphs at cell-boundary midpoints in the
+cached `staticLayer`; `staticSig` includes a `|cc=` segment so the
+layer rebuilds when the clue set changes.
 
 ### Backtracking validates duplicates at completion; triples validated inline
 
