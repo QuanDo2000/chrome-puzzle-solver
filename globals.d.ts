@@ -13,6 +13,7 @@ declare const chrome: any;
 declare const NonogramSolver: any;
 declare const AquariumSolver: any;
 declare const GalaxiesSolver: any;
+declare const BinairoSolver: any;
 
 // Helpers from handler.js.
 // MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in

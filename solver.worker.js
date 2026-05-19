@@ -2,6 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -34,6 +35,14 @@ self.onmessage = function (e) {
         extraData.cols
       );
       result = s.solve(initialGrid || null);
+    } else if (type === 'binairo' && extraData) {
+      const s = new BinairoSolver({
+        rows: extraData.rows,
+        cols: extraData.cols,
+        givens: extraData.givens,
+        initialState: initialGrid || null,
+      });
+      result = s.solve();
     } else {
       const s = new NonogramSolver(rowClues, colClues);
       result = s.solve(initialGrid || null);
