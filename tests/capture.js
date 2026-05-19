@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 
 function solveNonogram(p) {
@@ -16,6 +16,10 @@ function solveAquarium(p) {
 function solveGalaxies(p) {
   return new GalaxiesSolver(p.stars, p.rows, p.cols).solve(null);
 }
+function solveBinairo(p) {
+  BinairoSolver.clearSolutionCache();
+  return new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve();
+}
 
 const raw = {
   nonogramDiagonal5: solveNonogram(fixtures.nonogramDiagonal5),
@@ -24,6 +28,7 @@ const raw = {
   aquariumLarge:     solveAquarium(fixtures.aquariumLarge),
   galaxiesTiny:      solveGalaxies(fixtures.galaxiesTiny),
   galaxiesSmall:     solveGalaxies(fixtures.galaxiesSmall),
+  binairo6x6:        solveBinairo(fixtures.binairo6x6),
 };
 
 // Strip any non-deterministic fields (timing, internal counters) before writing.

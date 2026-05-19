@@ -164,3 +164,12 @@ test('BinairoSolver: static _solutionCache returns prior solve on identical give
   assert.deepEqual(r2.grid, r1.grid);
   BinairoSolver.clearSolutionCache();
 });
+
+test('BinairoSolver: 6x6 captured fixture matches golden', () => {
+  BinairoSolver.clearSolutionCache();
+  const p = fixtures.binairo6x6;
+  const result = clean(
+    new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve()
+  );
+  assert.deepEqual(result, golden.binairo6x6);
+});
