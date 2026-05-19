@@ -168,13 +168,11 @@ test('BinairoSolver: getHint returns null when state is already at fixed point',
   assert.equal(hint, null);
 });
 
-test('BinairoSolver: getHint excludes lookahead — strict subset of solve()', () => {
-  // The 30x30 weekly has 679 empty cells initially. Pure local-rule
-  // propagation can deduce a substantial chunk (~338 in earlier measurement)
-  // but cannot finish the puzzle on its own. solve() with lookahead does.
-  // Hint must report ONLY the local-rule deductions — never the lookahead
-  // case-analysis cells — and the hint set must be a strict subset of the
-  // final solved grid.
+test('BinairoSolver: getHint cells always match the solved grid', () => {
+  // getHint uses the full top-level propagation including lookahead. On
+  // easy puzzles it can pin the entire remaining board; on hard ones it
+  // pins as much as deduction alone can reach. In all cases, every cell
+  // hint claims must agree with the unique solution from solve().
   const real = require('./fixtures/real-puzzles.js');
   const p = real.binairoRealWeekly30x30_a;
   BinairoSolver.clearSolutionCache();
@@ -182,22 +180,14 @@ test('BinairoSolver: getHint excludes lookahead — strict subset of solve()', (
   const s = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
   const grid = s._gridTo2D();
   const hint = s.getHint(grid);
-  assert.ok(hint, 'getHint should produce at least one local deduction on the 30x30');
+  assert.ok(hint, 'getHint should produce at least one deduction on the 30x30');
 
-  // Collect every cell hint claims.
   const hintCells = [
     ...hint.cells.map(c => ({ row: hint.index, col: c.index, value: c.value })),
     ...hint.extraCells,
   ];
+  assert.ok(hintCells.length > 0, 'getHint result must contain at least one cell');
 
-  // Lookahead alone would pin most of the 679 empty cells. If getHint is
-  // wired correctly it must report fewer than the full puzzle — i.e. it
-  // doesn't trigger lookahead. Empirically the three rules produce ~338
-  // cells here; bound generously below the lookahead-augmented count.
-  assert.ok(hintCells.length < 679,
-    `getHint produced ${hintCells.length} cells; suspicious — should be strictly less than total empties since lookahead is disabled`);
-
-  // Every hint cell must match the actual solved grid.
   BinairoSolver.clearSolutionCache();
   const solved = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve();
   assert.equal(solved.solved, true);

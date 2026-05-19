@@ -2910,13 +2910,15 @@ class BinairoSolver {
   }
 
   /**
-   * Runs ONLY the three local rules (no-triples, balance, uniqueness) to
-   * fixed point starting from `currentGrid`, and returns every cell whose
-   * value was thereby deductively forced. Lookahead/case-analysis is
-   * intentionally skipped — Hint reports what one-step direct logic alone
-   * can prove, not what the full solver could pin via probing. No
-   * backtracking either. Returns null if no cell can be deduced (already
-   * at fixed point) or if the state is contradictory.
+   * Runs the full top-level propagation (three local rules to fixed point,
+   * then lookahead/forward-checking to fixed point) starting from
+   * `currentGrid` and returns every cell whose value was thereby
+   * deductively forced. No backtracking. Returns null if no cell can be
+   * deduced (already at fixed point) or if the state is contradictory.
+   *
+   * On easy late-game states this can resolve the entire remaining board
+   * in a single call — that's by design; the alternative (3-rules only)
+   * stalls on hard puzzles where lookahead is the only available logic.
    * @param {number[][]} currentGrid  2D in cellStatus encoding (0/1/2).
    */
   getHint(currentGrid) {
@@ -2925,9 +2927,6 @@ class BinairoSolver {
       givens: this.givens,
       initialState: currentGrid,
     });
-    // Disable the lookahead phase inside propagate() — only the three local
-    // rules should fire. The depth-gate is the existing mechanism for that.
-    clone._depth = 1;
     const before = new Int8Array(clone.grid);
     const ok = clone.propagate();
     if (!ok) return null;
