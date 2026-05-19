@@ -2500,6 +2500,15 @@ class BinairoSolver {
     // Trail entries packed as (idx << 2) | oldValue. oldValue ∈ {0, 1, 2}.
     this.trail = [];
 
+    // Solve-time control. maxMs=0 disables the budget.
+    this.maxMs = 0;
+    this._startedAt = 0;
+    this._timedOut = false;
+    // Depth tracking so lookahead only fires at the top level — at deeper
+    // backtrack depths the per-cell probing cost outweighs the pruning win.
+    this._depth = 0;
+    this._inLookahead = false;
+
     // Seed the grid from initialState if provided, else from givens.
     const init = initialState || this._initialFromGivens(givens);
     for (let r = 0; r < rows; r++) {
@@ -2568,17 +2577,75 @@ class BinairoSolver {
     else if (newV === 2) { this.rowZeros[r]++; this.colZeros[c]++; }
   }
 
-  // Fixed-point loop driving all three rules. Returns false on contradiction
-  // (a cell forced to a value already occupied by its complement).
+  // Fixed-point loop driving the three local rules, then (top level only)
+  // a 1-step lookahead pass. Returns false on contradiction.
   propagate() {
-    let changed = true;
-    while (changed) {
-      changed = false;
+    if (this._timedOut) return false;
+    while (true) {
+      let changed = false;
       if (!this._applyNoTriples(() => { changed = true; })) return false;
       if (!this._applyBalance(() => { changed = true; }))   return false;
       if (!this._applyUniqueness(() => { changed = true; })) return false;
+      if (changed) continue;
+      // Local rules exhausted. Try lookahead — but only at depth 0 (inside
+      // backtracking, the recurring per-cell probe cost dwarfs the gain).
+      if (this._depth > 0 || this._inLookahead) break;
+      let lookChanged = false;
+      this._inLookahead = true;
+      let lookOK;
+      try {
+        lookOK = this._applyLookahead(() => { lookChanged = true; });
+      } finally {
+        this._inLookahead = false;
+      }
+      if (!lookOK) return false;
+      if (!lookChanged) break;
+      // Lookahead made progress; re-run local rules to cascade.
     }
     return true;
+  }
+
+  // For each empty cell, tentatively assign each value, run a (lookahead-free)
+  // propagate, and check whether the assignment leads to a contradiction. If
+  // exactly one value survives, force it. If both fail, signal contradiction.
+  _applyLookahead(onChange) {
+    if (this._checkTimeout()) return false;
+    const R = this.rows, C = this.cols;
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) {
+        if (this._get(r, c) !== 0) continue;
+        if (this._checkTimeout()) return false;
+        const mark = this.trail.length;
+
+        // Probe v=1: an immediate triple short-circuits to failed probe.
+        let okOne = false;
+        if (!this._wouldCreateTriple(r, c, 1)) {
+          if (this._assign(r, c, 1) && this.propagate()) okOne = true;
+          this._rollback(mark);
+        }
+
+        // Probe v=2
+        let okZero = false;
+        if (!this._wouldCreateTriple(r, c, 2)) {
+          if (this._assign(r, c, 2) && this.propagate()) okZero = true;
+          this._rollback(mark);
+        }
+
+        if (!okOne && !okZero) return false;
+        if (okOne && !okZero) { if (this._assign(r, c, 1)) onChange(); }
+        else if (okZero && !okOne) { if (this._assign(r, c, 2)) onChange(); }
+      }
+    }
+    return true;
+  }
+
+  _checkTimeout() {
+    if (this._timedOut) return true;
+    if (this.maxMs > 0 && Date.now() - this._startedAt > this.maxMs) {
+      this._timedOut = true;
+      return true;
+    }
+    return false;
   }
 
   // For each empty cell, check both placements against up to three horizontal
@@ -2625,9 +2692,9 @@ class BinairoSolver {
     return false;
   }
 
-  // Stubs — Tasks 4 and 5 replace these.
-  // If a line already has rowHalf of one value, every empty cell in it must take
-  // the other value. Uses the incrementally-maintained rowOnes/rowZeros etc.
+  // If a line already has rowHalf of one value, every empty cell in it must
+  // take the other value. Validates no-triples on each assignment so that
+  // backtracking doesn't need a separate full-grid triple scan.
   _applyBalance(onChange) {
     const R = this.rows, C = this.cols, rowHalf = this.rowHalf, colHalf = this.colHalf;
 
@@ -2637,11 +2704,15 @@ class BinairoSolver {
       if (ones > rowHalf || zeros > rowHalf) return false;
       if (ones === rowHalf) {
         for (let c = 0; c < C; c++) {
-          if (this._get(r, c) === 0) { if (this._assign(r, c, 2)) onChange(); }
+          if (this._get(r, c) !== 0) continue;
+          if (this._wouldCreateTriple(r, c, 2)) return false;
+          if (this._assign(r, c, 2)) onChange();
         }
       } else if (zeros === rowHalf) {
         for (let c = 0; c < C; c++) {
-          if (this._get(r, c) === 0) { if (this._assign(r, c, 1)) onChange(); }
+          if (this._get(r, c) !== 0) continue;
+          if (this._wouldCreateTriple(r, c, 1)) return false;
+          if (this._assign(r, c, 1)) onChange();
         }
       }
     }
@@ -2652,11 +2723,15 @@ class BinairoSolver {
       if (ones > colHalf || zeros > colHalf) return false;
       if (ones === colHalf) {
         for (let r = 0; r < R; r++) {
-          if (this._get(r, c) === 0) { if (this._assign(r, c, 2)) onChange(); }
+          if (this._get(r, c) !== 0) continue;
+          if (this._wouldCreateTriple(r, c, 2)) return false;
+          if (this._assign(r, c, 2)) onChange();
         }
       } else if (zeros === colHalf) {
         for (let r = 0; r < R; r++) {
-          if (this._get(r, c) === 0) { if (this._assign(r, c, 1)) onChange(); }
+          if (this._get(r, c) !== 0) continue;
+          if (this._wouldCreateTriple(r, c, 1)) return false;
+          if (this._assign(r, c, 1)) onChange();
         }
       }
     }
@@ -2680,7 +2755,13 @@ class BinairoSolver {
       if (cands.length === 0) return false;
       if (cands.length === 1) {
         const [v0, v1] = cands[0];
+        // Cross-axis triple check — _completeLineCandidates only validates
+        // no-triples within the line. The two assigns can still create a
+        // column-direction triple. Without this guard, the post-validation
+        // in _backtrack used to catch it; now we surface it inline.
+        if (this._wouldCreateTriple(r, empty[0], v0)) return false;
         if (this._assign(r, empty[0], v0)) onChange();
+        if (this._wouldCreateTriple(r, empty[1], v1)) return false;
         if (this._assign(r, empty[1], v1)) onChange();
       }
     }
@@ -2695,7 +2776,9 @@ class BinairoSolver {
       if (cands.length === 0) return false;
       if (cands.length === 1) {
         const [v0, v1] = cands[0];
+        if (this._wouldCreateTriple(empty[0], c, v0)) return false;
         if (this._assign(empty[0], c, v0)) onChange();
+        if (this._wouldCreateTriple(empty[1], c, v1)) return false;
         if (this._assign(empty[1], c, v1)) onChange();
       }
     }
@@ -2791,11 +2874,27 @@ class BinairoSolver {
     const cached = BinairoSolver._solutionCache.get(key);
     if (cached) return { solved: true, grid: cached.map(row => row.slice()) };
 
+    this._startedAt = Date.now();
+    this._timedOut = false;
+    this._depth = 0;
+
+    // Reject invalid givens up-front. Propagation rules only catch triples
+    // they create themselves (and the no-triples rule only scans empty cells),
+    // so a pre-existing triple in the initial state would otherwise sneak
+    // through and produce a triple-bearing "solution".
+    if (this._gridHasTriple()) {
+      return { solved: false, grid: null, error: 'givens contain a triple' };
+    }
+
     if (!this.propagate()) {
+      if (this._timedOut) return { solved: false, grid: null, error: 'timed out' };
       return { solved: false, grid: null, error: 'contradiction on initial propagation' };
     }
     if (this._isComplete()) {
-      if (this._gridHasTriple() || this._hasDuplicateLines()) {
+      // Balance + uniqueness propagation now reject triples at assign-time,
+      // so a fully-filled state cannot contain triples; only the cross-line
+      // duplicate-row/duplicate-col check is still meaningful here.
+      if (this._hasDuplicateLines()) {
         return { solved: false, grid: null, error: 'givens produce an invalid Binairo grid' };
       }
       const grid = this._gridTo2D();
@@ -2807,7 +2906,7 @@ class BinairoSolver {
       this._storeInCache(key, grid);
       return { solved: true, grid };
     }
-    return { solved: false, grid: null, error: 'no solution found' };
+    return { solved: false, grid: null, error: this._timedOut ? 'timed out' : 'no solution found' };
   }
 
   /**
@@ -2929,23 +3028,34 @@ class BinairoSolver {
   }
 
   _backtrack() {
+    if (this._checkTimeout()) return false;
     const cell = this._pickBranchCell();
     if (!cell) {
       if (!this._isComplete()) return false;
       return !this._hasDuplicateLines();
     }
     const [r, c] = cell;
-    for (const v of [1, 2]) {
-      const mark = this.trail.length;
-      this._assign(r, c, v);
-      if (this.propagate() && !this._gridHasTriple()) {
-        if (this._isComplete()) {
-          if (!this._hasDuplicateLines()) return true;
-        } else if (this._backtrack()) {
-          return true;
+    this._depth++;
+    try {
+      for (const v of [1, 2]) {
+        // Pre-check: the branch assignment itself must not create a triple
+        // (propagation only catches triples through balance/uniqueness, not
+        // through the bare backtrack assign).
+        if (this._wouldCreateTriple(r, c, v)) continue;
+        const mark = this.trail.length;
+        this._assign(r, c, v);
+        if (this.propagate()) {
+          if (this._isComplete()) {
+            if (!this._hasDuplicateLines()) return true;
+          } else if (this._backtrack()) {
+            return true;
+          }
         }
+        this._rollback(mark);
+        if (this._timedOut) return false;
       }
-      this._rollback(mark);
+    } finally {
+      this._depth--;
     }
     return false;
   }

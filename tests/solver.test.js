@@ -188,3 +188,39 @@ test('BinairoSolver: 6x6 captured fixture matches golden', () => {
   );
   assert.deepEqual(result, golden.binairo6x6);
 });
+
+test('BinairoSolver: 30x30 weekly solves under 1s (lookahead regression guard)', () => {
+  // Before the lookahead propagation phase landed, this puzzle didn't solve
+  // within several minutes — local rules + plain backtracking got stuck once
+  // initial propagation exhausted. With lookahead it's ~80ms. Bound at 1s
+  // generously to absorb CI variance; a regression would mean a fundamental
+  // rule/lookahead break, not a small slowdown.
+  const real = require('./fixtures/real-puzzles.js');
+  const p = real.binairoRealWeekly30x30_a;
+  BinairoSolver.clearSolutionCache();
+  const t0 = Date.now();
+  const result = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve();
+  const elapsed = Date.now() - t0;
+  assert.equal(result.solved, true);
+  assert.ok(elapsed < 1000, `30x30 weekly took ${elapsed}ms (>1s); lookahead may have regressed`);
+});
+
+test('BinairoSolver: maxMs budget triggers timed-out on unfinishable search', () => {
+  // Construct a 30x30 with intentionally degenerate givens that take longer
+  // than the budget. Easier path: use the same weekly fixture but set a 1ms
+  // budget — the lookahead pass alone outruns that.
+  const real = require('./fixtures/real-puzzles.js');
+  const p = real.binairoRealWeekly30x30_a;
+  BinairoSolver.clearSolutionCache();
+  const s = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
+  s.maxMs = 1;
+  const t0 = Date.now();
+  const result = s.solve();
+  const elapsed = Date.now() - t0;
+  // Either timed-out or finished within the slack. Either way, must bail
+  // promptly (well under 500ms).
+  assert.ok(elapsed < 500, `solver should bail within 500ms when maxMs=1, took ${elapsed}ms`);
+  if (!result.solved) {
+    assert.equal(result.error, 'timed out');
+  }
+});

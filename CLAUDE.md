@@ -92,16 +92,45 @@ array per row on the standard variant too (so the outer length always equals
 `puzzleHeight`); the active-variant check must look at marker counts inside,
 not just the outer length.
 
-### Backtracking validates triples + duplicates at completion
+### Backtracking validates duplicates at completion; triples validated inline
 
-`BinairoSolver._backtrack` calls `_gridHasTriple()` after every propagation
-pass and `_hasDuplicateLines()` at every completion check. The reason:
-`_applyBalance` and `_applyUniqueness` write values without re-checking
-no-triples against already-filled neighbors, and `_applyUniqueness` only
-detects duplicate lines when one of them has exactly 2 empty cells. The
-post-propagation full-grid scan and the post-completion duplicate check
-catch the cases the per-rule propagation misses. Found via fuzz testing
-(`tests/binairo-fuzz.test.js`) during initial implementation.
+`BinairoSolver._applyBalance` and `_applyUniqueness` now call
+`_wouldCreateTriple` before each write, and `_backtrack` calls it before the
+branch assign. As a result, propagation cannot produce a triple-bearing
+state, and the previous `_gridHasTriple()` post-validation in `_backtrack` is
+gone. `_hasDuplicateLines()` is still called at completion (only when the
+grid is fully filled) because backtracking can complete a line into a
+duplicate of another full line, and the uniqueness rule only catches
+duplicates when one of the two lines has exactly 2 empty cells. `solve()`
+also calls `_gridHasTriple()` once up-front to reject invalid givens (the
+no-triples rule only scans empty cells, so a pre-existing triple in the
+givens would otherwise slip through). Found via fuzz testing during initial
+implementation; current covered by `tests/binairo-fuzz.test.js`.
+
+### Lookahead / forward-checking phase
+
+After the three local rules (no-triples, balance, uniqueness) exhaust within
+a single `propagate()` call at the top level, `BinairoSolver` runs a
+1-step lookahead: for each empty cell, tentatively place each value, run a
+lookahead-free `propagate()`, and check whether either assignment leads to
+contradiction. If exactly one value survives, force the other. The
+`_inLookahead` flag prevents recursive lookahead during the per-probe inner
+propagate. The `_depth` field ensures lookahead runs *only* at the top level
+(`_backtrack` increments `_depth` so inner propagates skip lookahead) — the
+per-cell probing cost is too expensive at deep backtrack levels but
+dramatically prunes the search at depth 0. Without lookahead the 30×30
+weekly was effectively unsolvable (the original backtrack ran for minutes);
+with lookahead it solves in ~75 ms.
+
+### `maxMs` budget
+
+`BinairoSolver` accepts an instance-level `maxMs` field (default 0 = no
+limit). When set, `_backtrack` and `_applyLookahead` check elapsed time
+between iterations; once exceeded the solver returns `{ solved: false,
+error: 'timed out' }`. The UI side should set `maxMs` whenever it dispatches
+a solve to avoid minute-long hangs on degenerate inputs (the worker has no
+other escape). The `tests/solver.test.js` suite includes a `maxMs=1`
+regression test that asserts the solver bails within 500 ms.
 
 ### Galaxies geometry: shared statics on `GalaxiesSolver`
 `GalaxiesSolver.seedCellsForStar(star, rows, cols)` and `GalaxiesSolver.regionsToLines(grid, rows, cols)` are static methods used by the solver itself, `content.js` (hint computation), and `handler.js` (DOM line writing). Don't reintroduce per-file copies — the three previous near-identical implementations drifted and that's the bug audit item #5 fixed.
