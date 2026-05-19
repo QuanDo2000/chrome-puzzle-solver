@@ -1338,6 +1338,7 @@ async function getHint(request = {}) {
       }
       const solver = new BinairoSolver({
         rows, cols, givens: detectedGrid.givens, initialState: grid,
+        comparisonClues: detectedGrid.comparisonClues || [],
       });
       hint = solver.getHint(grid);
       // No solve-fallback for binairo: hint is pure deduction by design.
