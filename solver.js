@@ -2886,14 +2886,65 @@ class BinairoSolver {
     return bestR === -1 ? null : [bestR, bestC];
   }
 
+  // Scan the entire grid for any three-in-a-row (horizontal or vertical).
+  // Returns true if any triple of consecutive identical non-zero values is found.
+  // Called after propagation to catch triples that _applyBalance or
+  // _applyUniqueness may have introduced (those rules don't verify no-triples
+  // for the cells they fill, and propagation only checks *empty* cells).
+  _gridHasTriple() {
+    const R = this.rows, C = this.cols;
+    for (let r = 0; r < R; r++) {
+      for (let c = 2; c < C; c++) {
+        const v = this._get(r, c);
+        if (v !== 0 && v === this._get(r, c - 1) && v === this._get(r, c - 2)) return true;
+      }
+    }
+    for (let c = 0; c < C; c++) {
+      for (let r = 2; r < R; r++) {
+        const v = this._get(r, c);
+        if (v !== 0 && v === this._get(r - 1, c) && v === this._get(r - 2, c)) return true;
+      }
+    }
+    return false;
+  }
+
+  // When the grid is complete, verify uniqueness across all rows and cols.
+  // Returns true if any two rows (or cols) are identical.
+  _hasDuplicateLines() {
+    const R = this.rows, C = this.cols;
+    const rowMasks = new Set();
+    for (let r = 0; r < R; r++) {
+      let mask = 0;
+      for (let c = 0; c < C; c++) if (this._get(r, c) === 1) mask |= (1 << c);
+      if (rowMasks.has(mask)) return true;
+      rowMasks.add(mask);
+    }
+    const colMasks = new Set();
+    for (let c = 0; c < C; c++) {
+      let mask = 0;
+      for (let r = 0; r < R; r++) if (this._get(r, c) === 1) mask |= (1 << r);
+      if (colMasks.has(mask)) return true;
+      colMasks.add(mask);
+    }
+    return false;
+  }
+
   _backtrack() {
     const cell = this._pickBranchCell();
-    if (!cell) return this._isComplete();
+    if (!cell) {
+      if (!this._isComplete()) return false;
+      return !this._hasDuplicateLines();
+    }
     const [r, c] = cell;
     for (const v of [1, 2]) {
       const mark = this.trail.length;
-      if (this._assign(r, c, v) && this.propagate()) {
-        if (this._isComplete() || this._backtrack()) return true;
+      this._assign(r, c, v);
+      if (this.propagate() && !this._gridHasTriple()) {
+        if (this._isComplete()) {
+          if (!this._hasDuplicateLines()) return true;
+        } else if (this._backtrack()) {
+          return true;
+        }
       }
       this._rollback(mark);
     }
