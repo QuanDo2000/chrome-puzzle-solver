@@ -763,6 +763,24 @@ function dumpPuzzleForBench() {
       return null;
     }
 
+    if (path.indexOf('/binairo/') !== -1) {
+      if (!Array.isArray(g.task)) {
+        return { error: 'binairo: g.task is not a 2D array', diagnostic: diagnostic(g), path: path };
+      }
+      var givens = [];
+      for (var r = 0; r < height; r++) {
+        var srcRow = g.task[r] || [];
+        var copyRow = [];
+        for (var c = 0; c < width; c++) {
+          var v = srcRow[c];
+          copyRow.push((v === 0 || v === 1) ? v : -1);
+        }
+        givens.push(copyRow);
+      }
+      var comparison = Array.isArray(g.comparisonClues) ? g.comparisonClues : [];
+      return { type: 'binairo', rows: height, cols: width, givens: givens, comparisonClues: comparison, path: path };
+    }
+
     if (path.indexOf('/galaxies/') !== -1) {
       var stars = [];
       // 1. g.task as a sparse 2D matrix of doubled-coord star positions
