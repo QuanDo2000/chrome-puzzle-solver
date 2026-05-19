@@ -477,3 +477,12 @@ test('BinairoSolver: _applyComparison flags inconsistent prefill as contradictio
   const ok = s._applyComparison(() => {});
   assert.equal(ok, false, 'should report contradiction when EQ holds 1 vs 0');
 });
+
+test('BinairoSolver: _cacheKey differs when comparisonClues differ', () => {
+  const givens = Array.from({ length: 4 }, () => new Array(4).fill(-1));
+  const a = new BinairoSolver({ rows: 4, cols: 4, givens, comparisonClues: [] });
+  const b = new BinairoSolver({ rows: 4, cols: 4, givens, comparisonClues: [[1]] });
+  const c = new BinairoSolver({ rows: 4, cols: 4, givens, comparisonClues: [[2]] });
+  assert.notEqual(a._cacheKey(), b._cacheKey(), 'empty vs R-EQ must differ');
+  assert.notEqual(b._cacheKey(), c._cacheKey(), 'R-EQ vs R-NE must differ');
+});

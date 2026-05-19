@@ -3298,6 +3298,14 @@ class BinairoSolver {
       const row = this.givens[r] || [];
       for (let c = 0; c < this.cols; c++) mix((row[c] | 0) + 2); // +2 to map -1..1 to 1..3
     }
+    // Mix comparison constraints. Stable ordering is _decodeComparison's
+    // emission order: outer row then col, with bit order (R-EQ, R-NE,
+    // D-EQ, D-NE). Length sentinel up front so an empty list still mixes.
+    mix(this.compConstraints.length);
+    for (const k of this.compConstraints) {
+      mix(k.aR); mix(k.aC); mix(k.bR); mix(k.bC);
+      mix(k.sameSign ? 1 : 0);
+    }
     return String(h >>> 0);
   }
 
