@@ -2547,19 +2547,40 @@ function makeWidget() {
     if (!data || data.error) {
       const msg = data?.error ? `Dump failed: ${data.error}` : 'Dump failed.';
       setStatus(msg, 'error');
-      console.warn('[puzzle-solver dump]\n' + JSON.stringify(data, null, 2));
-      // Also try to copy the diagnostic so the user can paste it back.
-      try { await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); } catch {}
+      const errJson = formatDump(data);
+      console.warn('[puzzle-solver dump] ' + errJson);
+      try { await navigator.clipboard.writeText(errJson); } catch {}
       return;
     }
-    const json = JSON.stringify(data, null, 2);
-    console.log('[puzzle-solver dump]\n' + json);
+    const json = formatDump(data);
+    console.log('[puzzle-solver dump] ' + json);
     try {
       await navigator.clipboard.writeText(json);
       setStatus(`Dumped ${data.type} ${data.rows}×${data.cols} to clipboard.`, 'success');
     } catch {
       setStatus(`Dumped ${data.type} ${data.rows}×${data.cols} to console (clipboard blocked).`, 'info');
     }
+  }
+
+  // Compact-but-line-friendly JSON formatter for dumps. Top-level keys go
+  // on one line each; arrays of primitives stay flat (no per-element
+  // newlines); 2D arrays put each inner row on its own line so the grid
+  // structure remains visible when pasted into a fixture file.
+  function formatDump(data) {
+    if (!data || typeof data !== 'object') return JSON.stringify(data);
+    const flatJSON = (v) => JSON.stringify(v);
+    const is2D = (v) => Array.isArray(v) && v.length > 0 && Array.isArray(v[0]);
+    const parts = [];
+    for (const k of Object.keys(data)) {
+      const v = data[k];
+      if (is2D(v)) {
+        const rows = v.map(r => '  ' + flatJSON(r)).join(',\n');
+        parts.push(`  ${flatJSON(k)}: [\n${rows}\n  ]`);
+      } else {
+        parts.push(`  ${flatJSON(k)}: ${flatJSON(v)}`);
+      }
+    }
+    return '{\n' + parts.join(',\n') + '\n}';
   }
 
   // Tear down observers and the worker on page unload. Most page-loads
