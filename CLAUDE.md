@@ -86,7 +86,11 @@ preview rendering, MAIN-world apply) uses `0/1/2`. Don't reintroduce the
 `binairoHandler.readState()` call returns it in that encoding directly.
 
 The comparison-clue variant (`/binairo/comparison/...`) is **not** supported;
-the handler refuses with a clear error if `Game.comparisonClues` is non-empty.
+the handler refuses with a clear error if any row in `Game.comparisonClues`
+has markers. Note: the page pre-allocates `comparisonClues` as one empty
+array per row on the standard variant too (so the outer length always equals
+`puzzleHeight`); the active-variant check must look at marker counts inside,
+not just the outer length.
 
 ### Backtracking validates triples + duplicates at completion
 

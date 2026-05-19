@@ -267,7 +267,11 @@ const binairoHandler = {
     const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
     const data = await callMainWorld('readBinairoData', []);
     if (!data) return { ...result, error: 'No Binairo task data found' };
-    if (Array.isArray(data.comparisonClues) && data.comparisonClues.length > 0) {
+    // Page pre-allocates comparisonClues as one empty array per row even on
+    // the standard variant. Treat as active only if some row has markers.
+    const hasComparisonClues = Array.isArray(data.comparisonClues) &&
+      data.comparisonClues.some(row => Array.isArray(row) && row.length > 0);
+    if (hasComparisonClues) {
       return { ...result, error: 'Binairo comparison-clue variant not yet supported' };
     }
     const stageEl = document.getElementById('stage') ||

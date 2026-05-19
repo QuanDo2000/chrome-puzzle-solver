@@ -2115,7 +2115,7 @@ function makeWidget() {
     setStatus('Detecting...', 'info');
     const result = await detectPuzzle();
     if (!result || !result.found) {
-      setStatus('No puzzle found.', 'error');
+      setStatus(result?.error ? `No puzzle found: ${result.error}` : 'No puzzle found.', 'error');
       return;
     }
     puzzleData = result;
