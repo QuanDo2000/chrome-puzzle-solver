@@ -905,6 +905,13 @@ function getGalaxiesNodeRegions(grid, stars) {
 function solveExtraData() {
   const data = detectedGrid;
   if (!data) return null;
+  if (data.type === 'binairo') {
+    return {
+      rows: data.rows,
+      cols: data.cols,
+      givens: data.givens,
+    };
+  }
   if (data.type === 'aquarium') {
     return {
       rowCluesFlat: data.rowClues, colCluesFlat: data.colClues,
