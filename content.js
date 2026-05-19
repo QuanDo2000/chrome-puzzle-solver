@@ -1631,16 +1631,20 @@ function makeWidget() {
   }
 
   function binairoHintStatusNodes(h) {
-    if (!h.cells || !h.cells.length) return ['No hint available'];
-    const cell = h.cells[0];
-    // Binairo cellStatus: 1 = "one", 2 = "zero". Translate for display.
-    const valueStr = cell.value === 1 ? '1' : '0';
-    const nodes = [
-      'Cell ', bold(`(row ${h.index + 1}, col ${cell.index + 1})`),
-      ' must be ', bold(valueStr),
-    ];
-    if (h.rule) nodes.push(' (', h.rule, ')');
-    return nodes;
+    const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
+    if (total === 0) return ['No hint available'];
+    if (total === 1) {
+      const cell = h.cells?.[0] || h.extraCells?.[0];
+      const row = h.cells?.length ? h.index : cell.row;
+      const col = h.cells?.length ? cell.index : cell.col;
+      // Binairo cellStatus: 1 = "one", 2 = "zero". Translate for display.
+      const valueStr = cell.value === 1 ? '1' : '0';
+      return [
+        'Cell ', bold(`(row ${row + 1}, col ${col + 1})`),
+        ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(total)), ' cells can be deduced'];
   }
 
   // Status + preview after a freshly computed hint. Used by hintHandler,

@@ -136,7 +136,7 @@ test('BinairoSolver: solves the captured 6x6 fixture', () => {
   }
 });
 
-test('BinairoSolver: getHint returns first forced cell when applied to fresh givens', () => {
+test('BinairoSolver: getHint returns every cell deducible from fresh givens', () => {
   const p = fixtures.binairo6x6;
   const s = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
   // Grid argument: 0/1/2 encoding from the page. Mirror the givens →
@@ -146,11 +146,26 @@ test('BinairoSolver: getHint returns first forced cell when applied to fresh giv
   assert.ok(hint, 'getHint should return at least one forced cell from these givens');
   assert.equal(hint.type, 'row');
   assert.ok(Number.isInteger(hint.index));
-  assert.equal(hint.cells.length, 1);
-  assert.ok(hint.cells[0].value === 1 || hint.cells[0].value === 2,
-    `hint value must be 1 or 2, got ${hint.cells[0].value}`);
-  assert.ok(['no-triples', 'balance', 'uniqueness'].includes(hint.rule),
-    `hint rule must be a known deduction name, got ${hint.rule}`);
+  const total = hint.cells.length + hint.extraCells.length;
+  assert.ok(total >= 1, `expected ≥1 deduced cell, got ${total}`);
+  const allCells = [
+    ...hint.cells.map(c => c.value),
+    ...hint.extraCells.map(c => c.value),
+  ];
+  for (const v of allCells) {
+    assert.ok(v === 1 || v === 2, `hint value must be 1 or 2, got ${v}`);
+  }
+});
+
+test('BinairoSolver: getHint returns null when state is already at fixed point', () => {
+  const p = fixtures.binairo6x6;
+  const s = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
+  // Solve fully, then ask for a hint — there should be nothing left to deduce.
+  const solved = s.solve();
+  assert.equal(solved.solved, true);
+  const hint = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens })
+    .getHint(solved.grid);
+  assert.equal(hint, null);
 });
 
 test('BinairoSolver: static _solutionCache returns prior solve on identical givens', () => {

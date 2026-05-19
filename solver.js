@@ -2811,53 +2811,49 @@ class BinairoSolver {
   }
 
   /**
-   * Returns the first deductively-forced cell, or null if the state is
-   * already propagated to fixed point.
+   * Runs the propagation rules to fixed point starting from `currentGrid`,
+   * and returns every cell whose value was deductively forced. No
+   * backtracking — pure logical deduction. Returns null if no cell can be
+   * deduced (already at fixed point or contradiction).
    * @param {number[][]} currentGrid  2D in cellStatus encoding (0/1/2).
    */
   getHint(currentGrid) {
-    // Seed a fresh solver state from the current grid (which already
-    // includes givens). We use a clone so the caller's solver instance
-    // isn't mutated.
     const clone = new BinairoSolver({
       rows: this.rows, cols: this.cols,
       givens: this.givens,
       initialState: currentGrid,
     });
+    const before = new Int8Array(clone.grid);
+    const ok = clone.propagate();
+    if (!ok) return null;
 
-    // Try each rule in priority order. The first rule that makes a change
-    // attributes the hint. We snapshot the grid before, run one rule, find
-    // the first changed cell.
-    /** @type {Array<[string, (cb: () => void) => boolean]>} */
-    const rules = [
-      ['no-triples',  (onChange) => clone._applyNoTriples(onChange)],
-      ['balance',     (onChange) => clone._applyBalance(onChange)],
-      ['uniqueness',  (onChange) => clone._applyUniqueness(onChange)],
-    ];
-    for (const [name, run] of rules) {
-      const before = new Int8Array(clone.grid);
-      let changed = false;
-      const ok = run(() => { changed = true; });
-      if (!ok) return null;  // contradiction; caller should refuse the hint
-      if (!changed) continue;
-      // Find the first differing cell.
-      for (let i = 0; i < before.length; i++) {
-        if (before[i] !== clone.grid[i]) {
-          const r = (i / clone.cols) | 0;
-          const c = i % clone.cols;
-          return {
-            type: 'row',
-            index: r,
-            clue: null,
-            cells: [{ index: c, value: clone.grid[i] }],
-            extraCells: [],
-            count: 1,
-            rule: name,
-          };
-        }
+    const forced = [];
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] === 0 && clone.grid[i] !== 0) {
+        const r = (i / clone.cols) | 0;
+        const c = i % clone.cols;
+        forced.push({ row: r, col: c, value: clone.grid[i] });
       }
     }
-    return null;
+    if (forced.length === 0) return null;
+
+    // Anchor on the first cell's row. Same-row cells go in `cells` (indexed
+    // by column); the rest go in `extraCells` with absolute (row, col).
+    const base = forced[0];
+    const cells = [];
+    const extraCells = [];
+    for (const f of forced) {
+      if (f.row === base.row) cells.push({ index: f.col, value: f.value });
+      else extraCells.push({ row: f.row, col: f.col, value: f.value });
+    }
+    return {
+      type: 'row',
+      index: base.row,
+      clue: null,
+      cells,
+      extraCells,
+      count: forced.length,
+    };
   }
 
   _isComplete() {

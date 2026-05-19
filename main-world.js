@@ -468,7 +468,12 @@ function applyHintCells(hintCells) {
     for (let i = 0; i < hintCells.length; i++) {
       const cell = hintCells[i];
       if (cell.row !== undefined && cell.col !== undefined && cell.row < cs.length && cell.col < cs[cell.row].length) {
-        cs[cell.row][cell.col] = cell.value === 1 ? 1 : cell.value === -1 ? 2 : 0;
+        // value=1 → cellStatus 1 (nonogram filled / binairo "one")
+        // value=2 → cellStatus 2 (binairo "zero")
+        // value=-1 → cellStatus 2 (nonogram cross)
+        // anything else → cellStatus 0 (empty)
+        const v = cell.value;
+        cs[cell.row][cell.col] = v === 1 ? 1 : (v === 2 || v === -1) ? 2 : 0;
       }
     }
 
