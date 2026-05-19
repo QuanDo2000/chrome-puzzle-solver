@@ -169,7 +169,7 @@ Click the widget's **📋 Dump** button on any puzzle page. It writes a JSON sni
 
 ## MV3 hardening contract
 
-- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (9 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
+- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (11 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
 - `callMainWorld` has a 15s wall-clock timeout via `Promise.race` — if the SW dies mid-call, the caller resolves `null` instead of hanging.
 - `execMain` targets `sender.tab.id`, not the active tab — handles tab-switch mid-call.
 - `manifest.json` permissions list is minimal (`scripting` only). Don't add `activeTab` / `storage` back without a concrete need.

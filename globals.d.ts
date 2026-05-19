@@ -31,7 +31,6 @@ type MainWorldFn =
   | 'applyBinairoState'
   | 'applyGameState'
   | 'applyHintCells'
-  | 'fixGameTimer'
   | 'dumpPuzzleForBench';
 declare function callMainWorld(funcName: MainWorldFn, args?: unknown[]): Promise<any>;
 declare function getActiveHandler(): any;

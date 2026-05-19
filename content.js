@@ -1539,7 +1539,6 @@ function makeWidget() {
       <div class="ns-btn-row">
         <button data-action="undo" disabled>↩ Undo</button>
         <button data-action="redo" disabled>↪ Redo</button>
-        <button data-action="fixTimer">⏱ Fix Timer</button>
         <button data-action="dump">📋 Dump</button>
       </div>
     </div>
@@ -2101,7 +2100,6 @@ function makeWidget() {
     else if (action === 'hint') hintHandler();
     else if (action === 'applyHint') applyHintHandler();
     else if (action === 'undo' || action === 'redo') historyHandler(action);
-    else if (action === 'fixTimer') timerFixHandler();
     else if (action === 'dump') dumpHandler();
   });
 
@@ -2525,16 +2523,6 @@ function makeWidget() {
     } else {
       const detail = result?.error ? `${cap} failed: ${result.error}` : `${cap} failed.`;
       setStatus(detail, 'error');
-    }
-  }
-
-  async function timerFixHandler() {
-    setStatus('Fixing timer...', 'info');
-    const result = await callMainWorld('fixGameTimer', []);
-    if (result) {
-      setStatus('Timer fixed!', 'success');
-    } else {
-      setStatus('Timer fix: no Game API found on this page.', 'info');
     }
   }
 

@@ -18,7 +18,6 @@ const EXEC_MAIN_ALLOWLIST = new Set([
   'applyBinairoState',
   'applyGameState',
   'applyHintCells',
-  'fixGameTimer',
   'dumpPuzzleForBench',
 ]);
 
