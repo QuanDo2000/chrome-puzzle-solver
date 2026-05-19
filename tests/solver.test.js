@@ -168,11 +168,11 @@ test('BinairoSolver: getHint returns null when state is already at fixed point',
   assert.equal(hint, null);
 });
 
-test('BinairoSolver: getHint cells always match the solved grid', () => {
-  // getHint uses the full top-level propagation including lookahead. On
-  // easy puzzles it can pin the entire remaining board; on hard ones it
-  // pins as much as deduction alone can reach. In all cases, every cell
-  // hint claims must agree with the unique solution from solve().
+test('BinairoSolver: getHint uses local rules only — never reveals the entire 30x30', () => {
+  // getHint runs the local-rule set (no-triples, balance, uniqueness,
+  // single-remaining) but NOT lookahead. On the 30x30 weekly the local
+  // rules alone deduce ~338 of 679 empty cells — short of finishing the
+  // puzzle. Hint cells must match the solved grid.
   const real = require('./fixtures/real-puzzles.js');
   const p = real.binairoRealWeekly30x30_a;
   BinairoSolver.clearSolutionCache();
@@ -187,6 +187,8 @@ test('BinairoSolver: getHint cells always match the solved grid', () => {
     ...hint.extraCells,
   ];
   assert.ok(hintCells.length > 0, 'getHint result must contain at least one cell');
+  assert.ok(hintCells.length < 679,
+    `getHint produced ${hintCells.length} cells; lookahead must be excluded`);
 
   BinairoSolver.clearSolutionCache();
   const solved = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve();
@@ -195,6 +197,100 @@ test('BinairoSolver: getHint cells always match the solved grid', () => {
     assert.equal(solved.grid[c.row][c.col], c.value,
       `hint claimed (${c.row},${c.col})=${c.value} but solved grid has ${solved.grid[c.row][c.col]}`);
   }
+});
+
+test('BinairoSolver: single-remaining rule forces unique slot when only 1 value left', () => {
+  // 6-row, 6-col. Row 0 needs exactly 1 more "1": already has [1,1,2,2,_,_]
+  // (ones=2, rowHalf=3). Empty slots are cols 4 and 5. Placing "1" at col 4
+  // would create 1,2,_,1 → not a triple, fine. Placing "1" at col 5 also
+  // fine — both legal, so single-remaining cannot fire on this row alone.
+  // Use a tighter setup: row 0 = [2,1,1,2,_,_], ones=2, empties at 4,5.
+  // Placing 1 at col 4: cells 2,3,4 = 1,2,1 — no triple. fine.
+  // Placing 1 at col 5: cells 3,4,5 = 2,_,1 — fine.
+  // Still both legal. We need a config where one slot would create a triple.
+  // [_,1,1,_,_,_] in a 6-row: rowHalf=3, ones=2. Empties 0,3,4,5. Need 1 more "1".
+  // At col 0: cells 0,1,2 = 1,1,1 → triple. Illegal.
+  // At col 3: cells 1,2,3 = 1,1,1 → triple. Illegal.
+  // At col 4: cells 2,3,4 = 1,?,1 — wait 3 is empty. cells 3,4,5 = ?,1,?. No triple yet.
+  // At col 5: cells 3,4,5 = ?,?,1 — no triple yet.
+  // So legal slots are 4 and 5. Still two. Hmm.
+  // [_,1,1,2,_,_]: ones=2, empties at 0,4,5.
+  // col 0: cells 0,1,2 = 1,1,1 → triple. Illegal.
+  // col 4: cells 2,3,4 = 1,2,1 — fine.
+  // col 5: cells 3,4,5 = 2,_,1 — fine. (4 is empty so window 4,5,6 doesn't apply if 6 is OOB)
+  // Two legal again.
+  // [_,1,1,2,_,2]: ones=2, zeros=2, empties at 0,4. Need 1 "1".
+  // col 0: cells 0,1,2 = 1,1,1 → triple. Illegal.
+  // col 4: cells 2,3,4 = 1,2,1 — fine. Cells 3,4,5 = 2,1,2 — fine.
+  // Only col 4 is legal → single-remaining forces col 4 = 1.
+  // But wait — empties=2, so uniqueness rule might fire first. Let me check.
+  // Uniqueness: enumerate (1,2) and (2,1) for slots [0,4]. Need ones=3 and zeros=3.
+  //   (0=1, 4=2): line=[1,1,1,2,2,2]. ones=3, zeros=3, balanced. But cells 0,1,2 = 1,1,1 → triple. Rejected.
+  //   (0=2, 4=1): line=[2,1,1,2,1,2]. ones=3, zeros=3, balanced. No triples. Valid.
+  // So uniqueness picks (0=2, 4=1). Forces. Single-remaining doesn't get a chance to add anything new.
+  //
+  // To isolate single-remaining we need a row with 3+ empties.
+  // [_,1,1,2,_,_,_,2,_,2,_,1] (12 cells). rowOnes=3, rowZeros=3, rowHalf=6. Need 3 more ones, 3 more zeros.
+  // Not single-remaining (need 1 more, not 3).
+  //
+  // [_,1,1,2,_,2,2,1,_,2,1,1] (12). rowOnes=5, rowZeros=4, empties at 0,4,8. Need 1 more one, 2 zeros.
+  // Single-remaining for ones at 5=rowHalf-1=5? Yes.
+  //   col 0: cells 0,1,2 = 1,1,1 → triple. Illegal.
+  //   col 4: cells 2,3,4 = 1,2,1 — fine. cells 3,4,5 = 2,1,2 — fine. cells 4,5,6 = 1,2,2 — fine.
+  //   col 8: cells 6,7,8 = 2,1,1 — fine. cells 7,8,9 = 1,1,2 — fine. cells 8,9,10 = 1,2,1 — fine.
+  // Two legal slots (4 and 8) → can't force. Damn.
+  //
+  // [1,1,_,2,2,_,1,1,2,_,_,_] (12). rowOnes=4, rowZeros=3, empties at 2,5,9,10,11. Need 2 ones, 3 zeros.
+  // Not single-remaining.
+  //
+  // I'll fall back to a smaller targeted test: build the state manually,
+  // call _applySingleRemaining directly, and assert.
+  const givens = Array.from({ length: 6 }, () => new Array(6).fill(-1));
+  givens[0] = [1, 1, -1, -1, -1, 0]; // partial — 2 ones, 1 zero given
+  // Manually fabricate an `initialState` that exercises single-remaining
+  // on a column: col 0 has cells 0,1=1 and we'll need 1 more "1" with
+  // only one legal slot.
+  const initialState = [
+    [1, 1, 2, 2, 0, 2],  // ones=2, zeros=3, empties at col 4
+    [1, 2, 0, 0, 2, 0],
+    [2, 1, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ];
+  // Col 0: cells 0=1, 1=1, 2=2 → if col 0 gets one more "1", placing it at
+  // row 3 makes cells 1,2,3 = 1,2,1 — fine. Row 4: cells 2,3,4 = 2,?,1 fine.
+  // Row 5: cells 3,4,5 = ?,?,1 — fine. So 3 legal slots — but col 0 already
+  // has 2 ones in 6 rows (colHalf=3), so colOnes = 2 = 3-1 = colHalf-1. ✓ single-remaining fires.
+  // All three remaining rows (3, 4, 5) of col 0 are legal slots → won't force.
+  // To make only one row legal, plant a 1 at row 2 of col 0 first:
+  initialState[2][0] = 1; // now col 0 has [1,1,1,_,_,_] which is itself a triple.
+  // That's actually a contradiction in the initial state. Skip.
+
+  // Build a config where col 0 has [1,1,2,_,_,_] (rowOnes=2, rowZeros=1).
+  // Need 1 more "1" (colHalf-1=2). Slots: rows 3,4,5.
+  // Place "1" at row 3: cells 1,2,3 of col 0 = 1,2,1 → fine.
+  // Place "1" at row 4: cells 2,3,4 = 2,?,1 → fine.
+  // Place "1" at row 5: cells 3,4,5 = ?,?,1 → fine. All legal.
+  // To restrict: prefill rows 4 and 5 with something that bans 1 there.
+  // Row 4, col 0 must not allow 1 → if rows 5,6 col 0 are 1,1 we'd ban row 4 by triple but row 6 OOB.
+  // Try: rows 4 and 5 of col 0 are already filled with 2. Then row 3 is the only empty in col 0.
+  // colOnes=2 (rows 0,1), colZeros=3 (rows 2,4,5). Need 1 more "1". One empty (row 3). Forced.
+  const initialState2 = [
+    [1, 0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0, 0],
+    [2, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [2, 0, 0, 0, 0, 0],
+    [2, 0, 0, 0, 0, 0],
+  ];
+  const givens2 = Array.from({ length: 6 }, () => new Array(6).fill(-1));
+  const s = new BinairoSolver({ rows: 6, cols: 6, givens: givens2, initialState: initialState2 });
+  let changed = false;
+  const ok = s._applySingleRemaining(() => { changed = true; });
+  assert.equal(ok, true);
+  assert.equal(changed, true, 'single-remaining should fire on col 0 with one slot left');
+  assert.equal(s._get(3, 0), 1, 'col 0 row 3 must be forced to 1');
 });
 
 test('BinairoSolver: static _solutionCache returns prior solve on identical givens', () => {

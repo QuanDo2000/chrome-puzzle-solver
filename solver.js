@@ -2586,6 +2586,7 @@ class BinairoSolver {
       if (!this._applyNoTriples(() => { changed = true; })) return false;
       if (!this._applyBalance(() => { changed = true; }))   return false;
       if (!this._applyUniqueness(() => { changed = true; })) return false;
+      if (!this._applySingleRemaining(() => { changed = true; })) return false;
       if (changed) continue;
       // Local rules exhausted. Try lookahead — but only at depth 0 (inside
       // backtracking, the recurring per-cell probe cost dwarfs the gain).
@@ -2690,6 +2691,84 @@ class BinairoSolver {
       if (a === v && b === v && d === v) return true;
     }
     return false;
+  }
+
+  // When a line needs exactly one more of a given value (rowOnes/rowZeros
+  // is one short of the half-target), check each empty cell to see whether
+  // it can legally hold that value without creating a triple. If exactly
+  // one slot can, force the value there and every other empty in the line
+  // to the opposite value. If no slot can, the line is unsolvable —
+  // signal contradiction.
+  //
+  // This catches a class of deductions that no-triples + balance miss:
+  // no-triples is cell-local, balance only fires at the half-target, and
+  // uniqueness only fires on 2-empty lines. With a longer empty stretch
+  // but a single remaining instance of one value, the position is often
+  // pinned by triple constraints alone.
+  _applySingleRemaining(onChange) {
+    const R = this.rows, C = this.cols, rowHalf = this.rowHalf, colHalf = this.colHalf;
+
+    for (let r = 0; r < R; r++) {
+      if (this.rowOnes[r] === rowHalf - 1) {
+        if (!this._forceSingleInRow(r, 1, onChange)) return false;
+      }
+      if (this.rowZeros[r] === rowHalf - 1) {
+        if (!this._forceSingleInRow(r, 2, onChange)) return false;
+      }
+    }
+    for (let c = 0; c < C; c++) {
+      if (this.colOnes[c] === colHalf - 1) {
+        if (!this._forceSingleInCol(c, 1, onChange)) return false;
+      }
+      if (this.colZeros[c] === colHalf - 1) {
+        if (!this._forceSingleInCol(c, 2, onChange)) return false;
+      }
+    }
+    return true;
+  }
+
+  _forceSingleInRow(r, target, onChange) {
+    const empties = this._emptyCellsInRow(r);
+    if (empties.length === 0) return true;
+    let onlySlot = -1;
+    let count = 0;
+    for (const c of empties) {
+      if (!this._wouldCreateTriple(r, c, target)) {
+        if (++count > 1) return true; // more than one slot — can't force
+        onlySlot = c;
+      }
+    }
+    if (count === 0) return false; // contradiction: nowhere to place the target
+    const other = target === 1 ? 2 : 1;
+    if (this._assign(r, onlySlot, target)) onChange();
+    for (const c of empties) {
+      if (c === onlySlot) continue;
+      if (this._wouldCreateTriple(r, c, other)) return false;
+      if (this._assign(r, c, other)) onChange();
+    }
+    return true;
+  }
+
+  _forceSingleInCol(c, target, onChange) {
+    const empties = this._emptyCellsInCol(c);
+    if (empties.length === 0) return true;
+    let onlySlot = -1;
+    let count = 0;
+    for (const r of empties) {
+      if (!this._wouldCreateTriple(r, c, target)) {
+        if (++count > 1) return true;
+        onlySlot = r;
+      }
+    }
+    if (count === 0) return false;
+    const other = target === 1 ? 2 : 1;
+    if (this._assign(onlySlot, c, target)) onChange();
+    for (const r of empties) {
+      if (r === onlySlot) continue;
+      if (this._wouldCreateTriple(r, c, other)) return false;
+      if (this._assign(r, c, other)) onChange();
+    }
+    return true;
   }
 
   // If a line already has rowHalf of one value, every empty cell in it must
@@ -2910,15 +2989,16 @@ class BinairoSolver {
   }
 
   /**
-   * Runs the full top-level propagation (three local rules to fixed point,
-   * then lookahead/forward-checking to fixed point) starting from
-   * `currentGrid` and returns every cell whose value was thereby
-   * deductively forced. No backtracking. Returns null if no cell can be
-   * deduced (already at fixed point) or if the state is contradictory.
+   * Runs ONLY the local-rule propagation to fixed point — no lookahead,
+   * no backtracking. The rule set is no-triples, balance, uniqueness, and
+   * single-remaining (the last one fires on lines that need exactly one
+   * more of a value and have a single legal slot for it). Returns every
+   * cell that was thereby deductively forced, or null if the state is
+   * already at fixed point or contradictory.
    *
-   * On easy late-game states this can resolve the entire remaining board
-   * in a single call — that's by design; the alternative (3-rules only)
-   * stalls on hard puzzles where lookahead is the only available logic.
+   * Lookahead (case analysis via probing) is intentionally excluded so
+   * Hint never reveals the entire remaining board on easy late-game
+   * states. Solve() retains lookahead for actually finishing puzzles.
    * @param {number[][]} currentGrid  2D in cellStatus encoding (0/1/2).
    */
   getHint(currentGrid) {
@@ -2927,6 +3007,9 @@ class BinairoSolver {
       givens: this.givens,
       initialState: currentGrid,
     });
+    // Suppress the lookahead phase inside propagate() — only the local
+    // rules should fire. The depth-gate is the existing mechanism for that.
+    clone._depth = 1;
     const before = new Int8Array(clone.grid);
     const ok = clone.propagate();
     if (!ok) return null;
