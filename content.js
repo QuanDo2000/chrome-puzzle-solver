@@ -1623,9 +1623,24 @@ function makeWidget() {
   function setHintStatus(h, prefix = '') {
     if (h.type === 'galaxies') {
       setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
+    } else if (puzzleData?.type === 'binairo') {
+      setStatusNodes('info', prefix, ...binairoHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
+  }
+
+  function binairoHintStatusNodes(h) {
+    if (!h.cells || !h.cells.length) return ['No hint available'];
+    const cell = h.cells[0];
+    // Binairo cellStatus: 1 = "one", 2 = "zero". Translate for display.
+    const valueStr = cell.value === 1 ? '1' : '0';
+    const nodes = [
+      'Cell ', bold(`(row ${h.index + 1}, col ${cell.index + 1})`),
+      ' must be ', bold(valueStr),
+    ];
+    if (h.rule) nodes.push(' (', h.rule, ')');
+    return nodes;
   }
 
   // Status + preview after a freshly computed hint. Used by hintHandler,
@@ -1639,12 +1654,13 @@ function makeWidget() {
 
   function hintStatusNodes(h) {
     const label = h.type === 'row' ? 'Row' : 'Column';
-    const clueStr = h.clue.join(', ');
+    const clueStr = Array.isArray(h.clue) ? h.clue.join(', ') : null;
     const filled = h.cells.filter(c => c.value === 1).map(c => c.index + 1);
     const crossed = h.cells.filter(c => c.value === -1).map(c => c.index + 1);
     const extra = h.extraCells || [];
 
-    const nodes = [bold(`${label} ${h.index + 1}`), ` (clue: ${clueStr}): `];
+    const nodes = [bold(`${label} ${h.index + 1}`),
+                   clueStr !== null ? ` (clue: ${clueStr}): ` : ': '];
     const segments = [];
     if (filled.length) segments.push(['cells ', bold(fmtList(filled)), ' must be filled']);
     if (crossed.length) segments.push(['cells ', bold(fmtList(crossed)), ' must be empty']);
