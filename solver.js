@@ -3125,6 +3125,12 @@ class BinairoSolver {
       givens: this.givens,
       initialState: currentGrid,
     });
+    // Carry comparison constraints onto the clone — the constructor doesn't
+    // see them because we only pass `givens` + `initialState`. Without this
+    // the clone's `compConstraints` stays empty and `_applyComparison`
+    // becomes a no-op inside Hint, so Binairo Plus puzzles look fully
+    // deduced when many comparison-driven cells remain forceable.
+    clone.compConstraints = this.compConstraints;
     // Suppress the propagate()-internal lookahead phase. Hint's only
     // permitted lookahead is the line-restricted fallback below.
     clone._depth = 1;

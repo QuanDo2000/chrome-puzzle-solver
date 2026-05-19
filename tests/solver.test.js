@@ -498,3 +498,27 @@ test('BinairoSolver: binairoPlus6x6 fixture matches golden', () => {
   );
   assert.deepEqual(result, golden.binairoPlus6x6);
 });
+
+test('BinairoSolver: getHint carries comparisonClues onto the clone (binairo-plus regression)', () => {
+  // Hand-built 4x4 case where comparison clues are the ONLY way to make
+  // progress. Empty givens leave many candidates; the two clues below
+  // (R-EQ at (0,0) and R-NE at (1,0)) pin nothing on their own, but the
+  // chained constraints + balance let propagate deduce at least one cell.
+  // If getHint forgot to carry compConstraints, no comparison-driven
+  // deductions would surface and the cell count would be 0.
+  const givens = Array.from({ length: 4 }, () => new Array(4).fill(-1));
+  givens[0][0] = 1; // seed so R-EQ at (0,0) has work to do
+  const comparisonClues = [[1], [2]]; // R-EQ at (0,0), R-NE at (1,0)
+  const s = new BinairoSolver({ rows: 4, cols: 4, givens, comparisonClues });
+  const grid = s._gridTo2D();
+  const hint = s.getHint(grid);
+  assert.ok(hint, 'getHint should find at least one comparison-driven cell');
+  const cells = [
+    ...hint.cells.map(c => ({ row: hint.index, col: c.index, value: c.value })),
+    ...hint.extraCells,
+  ];
+  // R-EQ at (0,0) with (0,0)=1 forces (0,1)=1.
+  const forced01 = cells.find(c => c.row === 0 && c.col === 1);
+  assert.ok(forced01, 'getHint must force (0,1) via R-EQ with (0,0)=1');
+  assert.equal(forced01.value, 1, '(0,1) must be 1 (matching (0,0))');
+});
