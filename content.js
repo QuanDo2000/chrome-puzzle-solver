@@ -956,7 +956,7 @@ function solveExtraData() {
 //     localStorage quota (~5 MB per origin).
 const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SOLUTION_CACHE_MAX = 50;
-const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:'];
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:'];
 
 function isSolutionCacheKey(key) {
   return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
@@ -1082,7 +1082,7 @@ function binairoCacheKey(data) {
     const row = g[r] || [];
     for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
   }
-  return 'binairo:' + (h >>> 0).toString(16);
+  return 'binairo-solution:' + (h >>> 0).toString(16);
 }
 
 function getCachedGridSolution(data) {
@@ -1861,7 +1861,7 @@ function makeWidget() {
   }
 
   function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-    if (pd?.regionMap || pd?.type === 'galaxies') return;
+    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo') return;
     ctx.save();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -2211,6 +2211,7 @@ function makeWidget() {
   function recordSolveSuccess(result) {
     puzzleData.solution = result.grid;
     cacheGalaxiesSolution(puzzleData, result.grid);
+    cacheGridSolution(puzzleData, result.grid);
     clearPartial(puzzleData);
     clearFailedGalaxiesPartials(puzzleData);
   }
