@@ -18,7 +18,10 @@ function solveGalaxies(p) {
 }
 function solveBinairo(p) {
   BinairoSolver.clearSolutionCache();
-  return new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve();
+  return new BinairoSolver({
+    rows: p.rows, cols: p.cols, givens: p.givens,
+    comparisonClues: p.comparisonClues || [],
+  }).solve();
 }
 
 const raw = {
@@ -29,6 +32,7 @@ const raw = {
   galaxiesTiny:      solveGalaxies(fixtures.galaxiesTiny),
   galaxiesSmall:     solveGalaxies(fixtures.galaxiesSmall),
   binairo6x6:        solveBinairo(fixtures.binairo6x6),
+  binairoPlus6x6:    solveBinairo(fixtures.binairoPlus6x6),
 };
 
 // Strip any non-deterministic fields (timing, internal counters) before writing.

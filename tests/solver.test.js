@@ -486,3 +486,15 @@ test('BinairoSolver: _cacheKey differs when comparisonClues differ', () => {
   assert.notEqual(a._cacheKey(), b._cacheKey(), 'empty vs R-EQ must differ');
   assert.notEqual(b._cacheKey(), c._cacheKey(), 'R-EQ vs R-NE must differ');
 });
+
+test('BinairoSolver: binairoPlus6x6 fixture matches golden', () => {
+  BinairoSolver.clearSolutionCache();
+  const p = fixtures.binairoPlus6x6;
+  const result = clean(
+    new BinairoSolver({
+      rows: p.rows, cols: p.cols, givens: p.givens,
+      comparisonClues: p.comparisonClues,
+    }).solve()
+  );
+  assert.deepEqual(result, golden.binairoPlus6x6);
+});

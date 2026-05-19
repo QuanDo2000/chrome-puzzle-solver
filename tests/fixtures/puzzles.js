@@ -98,4 +98,31 @@ module.exports = {
       [ 0, -1, -1, -1, -1, -1],
     ],
   },
+
+  // Binairo Plus 6x6 captured from puzzles-mobile.com/binairo-plus/random/
+  // 6x6-easy on 2026-05-19. Flag encoding per the page engine:
+  //   1=R-EQ, 2=R-NE, 4=D-EQ, 8=D-NE (OR-able).
+  // Recon dump showed only the first 3 rows of comparisonClues; the
+  // remaining rows are empty arrays which decode to zero constraints.
+  // The captured task data is the full 6x6 givens.
+  binairoPlus6x6: {
+    rows: 6,
+    cols: 6,
+    givens: [
+      [-1, -1, -1, -1,  1,  1],
+      [-1,  1, -1, -1, -1, -1],
+      [-1,  0, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+    ],
+    comparisonClues: [
+      [4],
+      [null, null, null, 2],
+      [null, null, 10, 4],
+      [],
+      [],
+      [],
+    ],
+  },
 };
