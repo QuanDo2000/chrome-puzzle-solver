@@ -53,6 +53,7 @@ const solverClasses = {
   NonogramSolver: 'readonly',
   AquariumSolver: 'readonly',
   GalaxiesSolver: 'readonly',
+  BinairoSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js

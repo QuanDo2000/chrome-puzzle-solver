@@ -267,6 +267,21 @@ function getNonogramPath(solution) {
   return path;
 }
 
+function getBinairoPath(solution) {
+  if (solution._binairoPath) return solution._binairoPath;
+  const path = [];
+  for (let r = 0; r < solution.length; r++) {
+    const row = solution[r] || [];
+    const cells = [];
+    for (let c = 0; c < row.length; c++) {
+      if (row[c] === 1 || row[c] === 2) cells.push({ row: r, col: c, value: row[c] });
+    }
+    if (cells.length) path.push({ id: r, size: cells.length, cells });
+  }
+  solution._binairoPath = path;
+  return path;
+}
+
 // Convert a flat array of {row, col, value} cells (the next chunk in a path)
 // into the row-hint shape the rest of the pipeline expects: first cell becomes
 // the row anchor, same-row cells become hint.cells, the rest go in extraCells.
@@ -1054,9 +1069,26 @@ function nonogramCacheKey(data) {
   return 'nonogram-solution:' + data.rows + 'x' + data.cols + ':' + r + ':' + c;
 }
 
+function binairoCacheKey(data) {
+  if (data?.type !== 'binairo') return null;
+  // FNV-1a over (type, rows, cols, flattened givens).
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x42); // 'B' nameplate so binairo keys can't collide with nonogram keys
+  mix(data.rows | 0);
+  mix(data.cols | 0);
+  const g = data.givens || [];
+  for (let r = 0; r < data.rows; r++) {
+    const row = g[r] || [];
+    for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
+  }
+  return 'binairo:' + (h >>> 0).toString(16);
+}
+
 function getCachedGridSolution(data) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
+    : data?.type === 'binairo' ? binairoCacheKey(data)
     : null;
   if (!key) return null;
   try {
@@ -1077,6 +1109,7 @@ function getCachedGridSolution(data) {
 function cacheGridSolution(data, grid) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
+    : data?.type === 'binairo' ? binairoCacheKey(data)
     : null;
   if (!key || !Array.isArray(grid)) return;
   try {
@@ -1300,6 +1333,34 @@ async function getHint(request = {}) {
           }
           hintSolution = sol;
           hint = nextChunkHint(grid, getAquariumPath(sol, detectedGrid.regionMap));
+        }
+      }
+    } else if (detectedGrid.type === 'binairo') {
+      if (solution && firstMismatch(grid, solution)) {
+        return { success: false, error: 'Current game state is wrong.' };
+      }
+      const solver = new BinairoSolver({
+        rows, cols, givens: detectedGrid.givens, initialState: grid,
+      });
+      hint = solver.getHint(grid);
+      // Solver fallback: same shape as nonogram/aquarium. If getHint
+      // exhausts (returns null) we run a full solve via cache → fresh run
+      // and emit one empty cell at a time.
+      if (!hint) {
+        let sol = hintSolution || getCachedGridSolution(detectedGrid);
+        if (!sol) {
+          const result = await runSolve(null, null, grid, 'binairo', solveExtraData());
+          if (result?.solved && result.grid) {
+            cacheGridSolution(detectedGrid, result.grid);
+            sol = result.grid;
+          }
+        }
+        if (sol) {
+          if (firstMismatch(grid, sol)) {
+            return { success: false, error: 'Current game state is wrong.' };
+          }
+          hintSolution = sol;
+          hint = nextChunkHint(grid, getBinairoPath(sol));
         }
       }
     } else {
