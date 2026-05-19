@@ -1409,6 +1409,15 @@ async function handleHistory(direction) {
 
 const WIDGET_STORAGE_KEY = 'ns_widget_state';
 
+// Puzzle types the widget knows how to solve. Used by the "no puzzle here"
+// status to point users at a sample URL for each supported type.
+const SUPPORTED_PUZZLES = [
+  { name: 'Nonogram', url: 'https://www.puzzles-mobile.com/nonograms/' },
+  { name: 'Aquarium', url: 'https://www.puzzles-mobile.com/aquarium/' },
+  { name: 'Galaxies', url: 'https://www.puzzles-mobile.com/galaxies/' },
+  { name: 'Binairo',  url: 'https://www.puzzles-mobile.com/binairo/' },
+];
+
 // Reference set by makeWidget() so the top-level message listener (for the
 // toolbar-icon click → expandWidget action) can drive the widget without
 // reaching into its closure.
@@ -1671,6 +1680,36 @@ function makeWidget() {
     const b = document.createElement('b');
     b.textContent = text;
     return b;
+  }
+
+  // Render the "no puzzle detected" status with a clickable list of the
+  // puzzle types this extension supports. Same content on the homepage
+  // and on any unrecognized page within puzzles-mobile.com.
+  function showSupportedPuzzles(detectError) {
+    while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
+    statusEl.className = 'ns-status ns-info';
+
+    const header = document.createElement('div');
+    header.appendChild(bold(detectError ? `No puzzle here: ${detectError}` : 'No puzzle on this page.'));
+    statusEl.appendChild(header);
+
+    const sub = document.createElement('div');
+    sub.textContent = 'Supported puzzles:';
+    sub.style.marginTop = '4px';
+    statusEl.appendChild(sub);
+
+    const list = document.createElement('ul');
+    list.style.cssText = 'margin:2px 0 0 0;padding-left:18px;';
+    for (const p of SUPPORTED_PUZZLES) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = p.url;
+      a.textContent = p.name;
+      a.style.color = 'inherit';
+      li.appendChild(a);
+      list.appendChild(li);
+    }
+    statusEl.appendChild(list);
   }
 
   // Cached state for drawPreview's incremental rendering.
@@ -2107,7 +2146,7 @@ function makeWidget() {
     setStatus('Detecting...', 'info');
     const result = await detectPuzzle();
     if (!result || !result.found) {
-      setStatus(result?.error ? `No puzzle found: ${result.error}` : 'No puzzle found.', 'error');
+      showSupportedPuzzles(result?.error);
       return;
     }
     puzzleData = result;
