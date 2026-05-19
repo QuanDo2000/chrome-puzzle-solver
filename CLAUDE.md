@@ -103,7 +103,8 @@ Page exposes comparison clues at `window.Game.comparisonClues` as a sparse
 2D of flag integers. Each non-null entry `flag` at `(r, c)` decodes via
 bit positions exported on `Game` as `FLAG_RIGHT_EQ=1`, `FLAG_RIGHT_NE=2`,
 `FLAG_DOWN_EQ=4`, `FLAG_DOWN_NE=8` (OR-able). A flag of `10` (= `8|2`)
-encodes "down ≠ AND right ≠" on that cell.
+encodes "down ≠ AND right ≠" on that cell. (The preview canvas renders the
+NE marker as `×` rather than `≠` to match the page's in-game display.)
 
 `BinairoSolver._decodeComparison(comparisonClues)` flattens the sparse
 2D into a canonical array of `{ aR, aC, bR, bC, sameSign }` constraints
@@ -130,7 +131,7 @@ populated sparse 2D for plus). The cache key (`binairoCacheKey` and
 `BinairoSolver._cacheKey`) mixes comparison-clue bytes so two boards
 with identical givens but different clues don't share cache slots.
 
-Preview canvas renders `=` / `≠` glyphs at cell-boundary midpoints in the
+Preview canvas renders `=` / `×` glyphs at cell-boundary midpoints in the
 cached `staticLayer`; `staticSig` includes a `|cc=` segment so the
 layer rebuilds when the clue set changes.
 

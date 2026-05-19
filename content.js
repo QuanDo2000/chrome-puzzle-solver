@@ -1893,7 +1893,7 @@ function makeWidget() {
         if (flag & 3) {
           const x = (c + 1) * cellSize;
           const y = r * cellSize + cellSize / 2;
-          const ch = (flag & 1) ? '=' : '≠';
+          const ch = (flag & 1) ? '=' : '×';
           ctx.strokeText(ch, x, y);
           ctx.fillText(ch, x, y);
         }
@@ -1901,7 +1901,7 @@ function makeWidget() {
         if (flag & 12) {
           const x = c * cellSize + cellSize / 2;
           const y = (r + 1) * cellSize;
-          const ch = (flag & 4) ? '=' : '≠';
+          const ch = (flag & 4) ? '=' : '×';
           ctx.strokeText(ch, x, y);
           ctx.fillText(ch, x, y);
         }
