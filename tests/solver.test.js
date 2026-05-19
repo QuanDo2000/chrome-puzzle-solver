@@ -433,3 +433,19 @@ test('BinairoSolver: _decodeComparison drops out-of-grid constraints', () => {
   assert.deepEqual(s.compConstraints[0],
     { aR: 1, aC: 3, bR: 2, bC: 3, sameSign: true });
 });
+
+test('BinairoSolver: _applyComparison EQ forces same value', () => {
+  // 4x4 board: only constraint is (0,0) D-EQ (0,0)≡(1,0). Place 1 at (0,0)
+  // via givens; propagation should force (1,0) to 1 also.
+  const givens = Array.from({ length: 4 }, () => new Array(4).fill(-1));
+  givens[0][0] = 1;
+  const s = new BinairoSolver({
+    rows: 4, cols: 4, givens,
+    comparisonClues: [[4]], // D-EQ at (0,0)
+  });
+  let changed = false;
+  const ok = s._applyComparison(() => { changed = true; });
+  assert.equal(ok, true);
+  assert.equal(changed, true);
+  assert.equal(s._get(1, 0), 1, 'cell (1,0) must be forced to match (0,0)=1');
+});

@@ -2619,6 +2619,7 @@ class BinairoSolver {
       let changed = false;
       if (!this._applyNoTriples(() => { changed = true; })) return false;
       if (!this._applyBalance(() => { changed = true; }))   return false;
+      if (!this._applyComparison(() => { changed = true; })) return false;
       if (!this._applyUniqueness(() => { changed = true; })) return false;
       if (!this._applySingleRemaining(() => { changed = true; })) return false;
       if (changed) continue;
@@ -2906,6 +2907,30 @@ class BinairoSolver {
           if (this._assign(r, c, 1)) onChange();
         }
       }
+    }
+    return true;
+  }
+  // Comparison-clue propagation. For each pairwise constraint:
+  // - if both sides are known, verify consistency (else contradiction);
+  // - if exactly one side is known, force the other so the constraint holds.
+  // Validates no-triples on each forced assignment so the post-validation
+  // gap in _backtrack stays closed.
+  _applyComparison(onChange) {
+    for (const k of this.compConstraints) {
+      const a = this._get(k.aR, k.aC);
+      const b = this._get(k.bR, k.bC);
+      if (a !== 0 && b !== 0) {
+        const equal = a === b;
+        if (equal !== k.sameSign) return false;
+        continue;
+      }
+      if (a === 0 && b === 0) continue;
+      const known = a !== 0 ? a : b;
+      const target = k.sameSign ? known : (known === 1 ? 2 : 1);
+      const r = a !== 0 ? k.bR : k.aR;
+      const c = a !== 0 ? k.bC : k.aC;
+      if (this._wouldCreateTriple(r, c, target)) return false;
+      if (this._assign(r, c, target)) onChange();
     }
     return true;
   }
