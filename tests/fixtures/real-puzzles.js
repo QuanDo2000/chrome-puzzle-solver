@@ -214,4 +214,30 @@ module.exports = {
     ],
     comparisonClues: [],
   },
+
+  // Binairo Plus 6x6 captured from puzzles-mobile.com/binairo-plus/random/
+  // 6x6-easy on 2026-05-19. Mirrors fixtures.binairoPlus6x6 in shape; this
+  // copy lives in real-puzzles.js so bench-binairo.js exercises the
+  // comparison-rule code path.
+  binairoPlusReal6x6_a: {
+    type: 'binairo',
+    rows: 6,
+    cols: 6,
+    givens: [
+      [-1, -1, -1, -1,  1,  1],
+      [-1,  1, -1, -1, -1, -1],
+      [-1,  0, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1, -1],
+    ],
+    comparisonClues: [
+      [4],
+      [null, null, null, 2],
+      [null, null, 10, 4],
+      [],
+      [],
+      [],
+    ],
+  },
 };

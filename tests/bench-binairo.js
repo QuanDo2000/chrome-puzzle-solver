@@ -21,13 +21,19 @@ let failed = false;
 for (const { name, puzzle } of targets) {
   for (let i = 0; i < WARMUP; i++) {
     BinairoSolver.clearSolutionCache();
-    new BinairoSolver({ rows: puzzle.rows, cols: puzzle.cols, givens: puzzle.givens }).solve();
+    new BinairoSolver({
+      rows: puzzle.rows, cols: puzzle.cols, givens: puzzle.givens,
+      comparisonClues: puzzle.comparisonClues || [],
+    }).solve();
   }
   const times = [];
   let solvedFlag = null;
   for (let i = 0; i < N; i++) {
     BinairoSolver.clearSolutionCache();
-    const s = new BinairoSolver({ rows: puzzle.rows, cols: puzzle.cols, givens: puzzle.givens });
+    const s = new BinairoSolver({
+      rows: puzzle.rows, cols: puzzle.cols, givens: puzzle.givens,
+      comparisonClues: puzzle.comparisonClues || [],
+    });
     const t0 = process.hrtime.bigint();
     const r = s.solve();
     const t1 = process.hrtime.bigint();
