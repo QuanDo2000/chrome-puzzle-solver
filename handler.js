@@ -252,6 +252,56 @@ const aquariumHandler = {
 
 registerHandler(aquariumHandler);
 
+// ── Binairo handler (puzzles-mobile.com/binairo/) ─────────────
+
+const binairoHandler = {
+  name: 'puzzles-mobile-binairo',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/binairo/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readBinairoData', []);
+    if (!data) return { ...result, error: 'No Binairo task data found' };
+    if (Array.isArray(data.comparisonClues) && data.comparisonClues.length > 0) {
+      return { ...result, error: 'Binairo comparison-clue variant not yet supported' };
+    }
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'binairo',
+      rows: data.height,
+      cols: data.width,
+      givens: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readBinairoState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyBinairoState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Binairo apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(binairoHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
