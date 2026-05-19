@@ -910,6 +910,7 @@ function solveExtraData() {
       rows: data.rows,
       cols: data.cols,
       givens: data.givens,
+      comparisonClues: data.comparisonClues || [],
     };
   }
   if (data.type === 'aquarium') {
@@ -1056,7 +1057,7 @@ function nonogramCacheKey(data) {
 
 function binairoCacheKey(data) {
   if (data?.type !== 'binairo') return null;
-  // FNV-1a over (type, rows, cols, flattened givens).
+  // FNV-1a over (type, rows, cols, flattened givens, comparison clues).
   let h = 0x811c9dc5;
   const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
   mix(0x42); // 'B' nameplate so binairo keys can't collide with nonogram keys
@@ -1066,6 +1067,17 @@ function binairoCacheKey(data) {
   for (let r = 0; r < data.rows; r++) {
     const row = g[r] || [];
     for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
+  }
+  // Mix comparison clues so binairo and binairo-plus boards with identical
+  // givens hash to distinct keys. Sparse 2D — outer row index, inner col
+  // index, value or 0 for missing. Length sentinels up front keep zero-
+  // comparison and 1-comparison-of-flag-0 cases distinguishable.
+  const cc = Array.isArray(data.comparisonClues) ? data.comparisonClues : [];
+  mix(cc.length);
+  for (let r = 0; r < cc.length; r++) {
+    const row = Array.isArray(cc[r]) ? cc[r] : [];
+    mix(row.length);
+    for (let c = 0; c < row.length; c++) mix((row[c] | 0) + 1);
   }
   return 'binairo-solution:' + (h >>> 0).toString(16);
 }
@@ -1412,10 +1424,11 @@ const WIDGET_STORAGE_KEY = 'ns_widget_state';
 // Puzzle types the widget knows how to solve. Used by the "no puzzle here"
 // status to point users at a sample URL for each supported type.
 const SUPPORTED_PUZZLES = [
-  { name: 'Nonogram', url: 'https://www.puzzles-mobile.com/nonograms/' },
-  { name: 'Aquarium', url: 'https://www.puzzles-mobile.com/aquarium/' },
-  { name: 'Galaxies', url: 'https://www.puzzles-mobile.com/galaxies/' },
-  { name: 'Binairo',  url: 'https://www.puzzles-mobile.com/binairo/' },
+  { name: 'Nonogram',     url: 'https://www.puzzles-mobile.com/nonograms/' },
+  { name: 'Aquarium',     url: 'https://www.puzzles-mobile.com/aquarium/' },
+  { name: 'Galaxies',     url: 'https://www.puzzles-mobile.com/galaxies/' },
+  { name: 'Binairo',      url: 'https://www.puzzles-mobile.com/binairo/' },
+  { name: 'Binairo Plus', url: 'https://www.puzzles-mobile.com/binairo-plus/' },
 ];
 
 // Reference set by makeWidget() so the top-level message listener (for the
