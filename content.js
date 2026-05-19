@@ -267,21 +267,6 @@ function getNonogramPath(solution) {
   return path;
 }
 
-function getBinairoPath(solution) {
-  if (solution._binairoPath) return solution._binairoPath;
-  const path = [];
-  for (let r = 0; r < solution.length; r++) {
-    const row = solution[r] || [];
-    const cells = [];
-    for (let c = 0; c < row.length; c++) {
-      if (row[c] === 1 || row[c] === 2) cells.push({ row: r, col: c, value: row[c] });
-    }
-    if (cells.length) path.push({ id: r, size: cells.length, cells });
-  }
-  solution._binairoPath = path;
-  return path;
-}
-
 // Convert a flat array of {row, col, value} cells (the next chunk in a path)
 // into the row-hint shape the rest of the pipeline expects: first cell becomes
 // the row anchor, same-row cells become hint.cells, the rest go in extraCells.
