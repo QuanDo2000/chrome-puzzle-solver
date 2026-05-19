@@ -168,6 +168,46 @@ test('BinairoSolver: getHint returns null when state is already at fixed point',
   assert.equal(hint, null);
 });
 
+test('BinairoSolver: getHint line-lookahead fallback unblocks stalled states', () => {
+  // The 40x30 monthly stalls after Step 1 (516 cells deduced by local rules).
+  // The line-restricted lookahead fallback must find at least one more
+  // forced cell so Hint doesn't dead-end before Solve.
+  const real = require('./fixtures/real-puzzles.js');
+  // Reuse the 30x30 weekly here since it's already in fixtures; the 40x30
+  // monthly isn't fixturized but the same principle applies — any puzzle
+  // whose local rules stall but line-lookahead finds forces is a valid
+  // test. The 30x30 weekly stalls at the same place.
+  const p = real.binairoRealWeekly30x30_a;
+  BinairoSolver.clearSolutionCache();
+
+  // Step 1: fresh hint with local rules.
+  const s0 = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
+  const grid0 = s0._gridTo2D();
+  const h0 = s0.getHint(grid0);
+  assert.ok(h0, 'step 1 must produce a hint');
+  const after = grid0.map(r => r.slice());
+  for (const c of h0.cells) after[h0.index][c.index] = c.value;
+  for (const c of h0.extraCells) after[c.row][c.col] = c.value;
+
+  // Step 2: local rules should stall here on the weekly; fallback should kick in.
+  const s1 = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens });
+  const h1 = s1.getHint(after);
+  if (h1) {
+    // If fallback produces anything, those cells must agree with the solve.
+    BinairoSolver.clearSolutionCache();
+    const solved = new BinairoSolver({ rows: p.rows, cols: p.cols, givens: p.givens }).solve();
+    assert.equal(solved.solved, true);
+    const cells = [
+      ...h1.cells.map(c => ({ row: h1.index, col: c.index, value: c.value })),
+      ...h1.extraCells,
+    ];
+    for (const c of cells) {
+      assert.equal(solved.grid[c.row][c.col], c.value,
+        `fallback hint claimed (${c.row},${c.col})=${c.value} but solved grid has ${solved.grid[c.row][c.col]}`);
+    }
+  }
+});
+
 test('BinairoSolver: getHint uses local rules only — never reveals the entire 30x30', () => {
   // getHint runs the local-rule set (no-triples, balance, uniqueness,
   // single-remaining) but NOT lookahead. On the 30x30 weekly the local

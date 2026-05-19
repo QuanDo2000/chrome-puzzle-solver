@@ -2649,6 +2649,65 @@ class BinairoSolver {
     return false;
   }
 
+  // Line-restricted lookahead: a single round over rows/columns that need
+  // exactly 1 of one value and ≥2 of the other. For each empty cell in
+  // such a line, probe both values via local-rule propagation. If exactly
+  // one value survives, force it. Cells where both values stay legal are
+  // skipped. Used by getHint as a fallback when local rules alone deduce
+  // nothing — it picks up forced moves that require case analysis but
+  // doesn't unfurl the whole board the way unrestricted lookahead does.
+  _applyLineLookahead(onChange) {
+    const R = this.rows, C = this.cols, rowHalf = this.rowHalf, colHalf = this.colHalf;
+
+    const targets = [];
+    for (let r = 0; r < R; r++) {
+      const needOnes  = rowHalf - this.rowOnes[r];
+      const needZeros = rowHalf - this.rowZeros[r];
+      if ((needOnes === 1 && needZeros >= 2) || (needZeros === 1 && needOnes >= 2)) {
+        targets.push({ axis: 'row', index: r });
+      }
+    }
+    for (let c = 0; c < C; c++) {
+      const needOnes  = colHalf - this.colOnes[c];
+      const needZeros = colHalf - this.colZeros[c];
+      if ((needOnes === 1 && needZeros >= 2) || (needZeros === 1 && needOnes >= 2)) {
+        targets.push({ axis: 'col', index: c });
+      }
+    }
+
+    for (const tgt of targets) {
+      if (this._checkTimeout()) return false;
+      const empties = tgt.axis === 'row'
+        ? this._emptyCellsInRow(tgt.index)
+        : this._emptyCellsInCol(tgt.index);
+      for (const idx of empties) {
+        const r = tgt.axis === 'row' ? tgt.index : idx;
+        const c = tgt.axis === 'row' ? idx : tgt.index;
+        // Skip cells forced earlier in this pass.
+        if (this._get(r, c) !== 0) continue;
+        const mark = this.trail.length;
+
+        let okOne = false;
+        if (!this._wouldCreateTriple(r, c, 1)) {
+          if (this._assign(r, c, 1) && this.propagate()) okOne = true;
+          this._rollback(mark);
+        }
+
+        let okZero = false;
+        if (!this._wouldCreateTriple(r, c, 2)) {
+          if (this._assign(r, c, 2) && this.propagate()) okZero = true;
+          this._rollback(mark);
+        }
+
+        if (!okOne && !okZero) return false;
+        if (okOne && !okZero) { if (this._assign(r, c, 1)) onChange(); }
+        else if (okZero && !okOne) { if (this._assign(r, c, 2)) onChange(); }
+        // else (both legal): cell can take either value — skip per spec.
+      }
+    }
+    return true;
+  }
+
   // For each empty cell, check both placements against up to three horizontal
   // and three vertical 3-windows that contain it (boundary windows skipped).
   // If exactly one value is legal, force it. If neither is legal, contradiction.
@@ -2989,16 +3048,16 @@ class BinairoSolver {
   }
 
   /**
-   * Runs ONLY the local-rule propagation to fixed point — no lookahead,
-   * no backtracking. The rule set is no-triples, balance, uniqueness, and
-   * single-remaining (the last one fires on lines that need exactly one
-   * more of a value and have a single legal slot for it). Returns every
-   * cell that was thereby deductively forced, or null if the state is
-   * already at fixed point or contradictory.
+   * Runs local-rule propagation to fixed point (no-triples, balance,
+   * uniqueness, single-remaining). If that produces no deductions, falls
+   * back to ONE round of line-restricted lookahead: for each line that
+   * has exactly 1 of one value and ≥2 of the other still to place, probe
+   * each empty cell in that line — if exactly one value survives the
+   * probe, force it. Cells that can take either value are left alone.
    *
-   * Lookahead (case analysis via probing) is intentionally excluded so
-   * Hint never reveals the entire remaining board on easy late-game
-   * states. Solve() retains lookahead for actually finishing puzzles.
+   * This avoids the "Hint reveals the whole board" problem that full
+   * lookahead has, while still finding forced cells that pure local
+   * deduction misses.
    * @param {number[][]} currentGrid  2D in cellStatus encoding (0/1/2).
    */
   getHint(currentGrid) {
@@ -3007,12 +3066,27 @@ class BinairoSolver {
       givens: this.givens,
       initialState: currentGrid,
     });
-    // Suppress the lookahead phase inside propagate() — only the local
-    // rules should fire. The depth-gate is the existing mechanism for that.
+    // Suppress the propagate()-internal lookahead phase. Hint's only
+    // permitted lookahead is the line-restricted fallback below.
     clone._depth = 1;
     const before = new Int8Array(clone.grid);
-    const ok = clone.propagate();
+    let ok = clone.propagate();
     if (!ok) return null;
+
+    // If local rules deduced nothing, try the line-restricted lookahead.
+    let localChanged = false;
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] !== clone.grid[i]) { localChanged = true; break; }
+    }
+    if (!localChanged) {
+      clone._inLookahead = true;
+      try {
+        ok = clone._applyLineLookahead(() => {});
+      } finally {
+        clone._inLookahead = false;
+      }
+      if (!ok) return null;
+    }
 
     const forced = [];
     for (let i = 0; i < before.length; i++) {
