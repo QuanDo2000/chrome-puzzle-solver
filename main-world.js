@@ -569,6 +569,114 @@ function fixGameTimer() {
   }
 }
 
+function readBinairoData() {
+  var maxAttempts = 20;
+  var pollMs = 250;
+
+  function deepCopy2D(g) {
+    if (!Array.isArray(g)) return null;
+    var out = [];
+    for (var r = 0; r < g.length; r++) {
+      if (!Array.isArray(g[r])) return null;
+      out[r] = g[r].slice();
+    }
+    return out;
+  }
+
+  function doRead() {
+    try {
+      if (!window.Game || window.Game.loaded === false) return null;
+      if (!Array.isArray(window.Game.task)) return null;
+      var width = window.Game.puzzleWidth;
+      var height = window.Game.puzzleHeight;
+      if (!width || !height) return null;
+      var task = deepCopy2D(window.Game.task);
+      if (!task) return null;
+      var comparison = Array.isArray(window.Game.comparisonClues)
+        ? window.Game.comparisonClues : [];
+      return { task: task, width: width, height: height, comparisonClues: comparison };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  return new Promise(function(resolve) {
+    function poll() {
+      var r = doRead();
+      if (r) { resolve(r); return; }
+      maxAttempts--;
+      if (maxAttempts <= 0) { resolve(null); return; }
+      setTimeout(poll, pollMs);
+    }
+    poll();
+    setTimeout(function() { resolve(null); }, 10000);
+  });
+}
+
+function readBinairoState(rows, cols) {
+  try {
+    if (!window.Game || !window.Game.currentState) return null;
+    var cs = window.Game.currentState.cellStatus;
+    if (!Array.isArray(cs)) return null;
+    var out = [];
+    for (var r = 0; r < rows && r < cs.length; r++) {
+      var row = cs[r];
+      if (!Array.isArray(row)) return null;
+      out[r] = [];
+      for (var c = 0; c < cols && c < row.length; c++) {
+        var v = row[c];
+        out[r][c] = (v === 1 || v === 2) ? v : 0;
+      }
+    }
+    return out;
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyBinairoState(solution) {
+  try {
+    if (!solution || !Array.isArray(solution)) return false;
+    if (!(window.Game && window.Game.currentState && window.Game.currentState.cellStatus)) {
+      return false;
+    }
+    var cs = window.Game.currentState.cellStatus;
+    var rows = solution.length;
+
+    // saveState(true) BEFORE writes — this engine matches aquarium's pattern
+    // where direct cellStatus mutation needs to be committed to the page's
+    // internal model first. See CLAUDE.md "MAIN-world write functions: save +
+    // render ladder" and the prior aquarium bug fix (7df9fa5).
+    if (typeof window.Game.saveState === 'function') {
+      window.Game.saveState(true);
+    }
+
+    for (var r = 0; r < rows && r < cs.length; r++) {
+      var srcRow = solution[r] || [];
+      var dstRow = cs[r];
+      if (!Array.isArray(dstRow)) continue;
+      var cols = srcRow.length;
+      for (var c = 0; c < cols && c < dstRow.length; c++) {
+        var v = srcRow[c];
+        dstRow[c] = (v === 1 || v === 2) ? v : 0;
+      }
+    }
+
+    if (typeof window.Game.redraw === 'function') {
+      window.Game.redraw();
+    } else if (typeof window.Game.render === 'function') {
+      window.Game.render();
+    } else if (window.Game.getSaved && window.Game.loadGame) {
+      var saved = window.Game.getSaved();
+      if (saved) window.Game.loadGame(saved);
+    }
+    return true;
+  } catch (e) {
+    console.warn('Binairo apply failed:', e);
+    return false;
+  }
+}
+
 // Dump the current puzzle in our test/fixtures format, for capturing real
 // puzzles to feed into bench-real.js. On failure returns
 // { error, diagnostic, path } where `diagnostic` describes the shape of
