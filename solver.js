@@ -2467,12 +2467,14 @@ forLoop:
 
 class BinairoSolver {
   /**
-   * @param {{ rows: number, cols: number, givens: number[][], initialState?: number[][] }} opts
-   *   `givens`     2D array, page-native encoding (-1=blank, 0=given-zero, 1=given-one).
-   *   `initialState` optional 2D in cellStatus encoding (0=empty, 1=one, 2=zero);
-   *                  defaults to givens-translated state.
+   * @param {{ rows: number, cols: number, givens: number[][], initialState?: number[][], comparisonClues?: (number|null)[][] }} opts
+   *   `givens`          2D array, page-native encoding (-1=blank, 0=given-zero, 1=given-one).
+   *   `initialState`    optional 2D in cellStatus encoding (0=empty, 1=one, 2=zero);
+   *                     defaults to givens-translated state.
+   *   `comparisonClues` optional sparse 2D of flag integers (1=R-EQ, 2=R-NE, 4=D-EQ, 8=D-NE);
+   *                     omitted or undefined produces standard (unconstrained) Binairo.
    */
-  constructor({ rows, cols, givens, initialState }) {
+  constructor({ rows, cols, givens, initialState, comparisonClues }) {
     if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
       throw new Error('BinairoSolver: rows/cols must be positive integers');
     }
@@ -2509,6 +2511,11 @@ class BinairoSolver {
     this._depth = 0;
     this._inLookahead = false;
 
+    // Comparison-clue normalization: page-native sparse 2D of flag integers
+    // collapses to a flat list of canonical pairwise constraints. Empty/
+    // undefined `comparisonClues` produces an empty list (standard Binairo).
+    this.compConstraints = this._decodeComparison(comparisonClues);
+
     // Seed the grid from initialState if provided, else from givens.
     const init = initialState || this._initialFromGivens(givens);
     for (let r = 0; r < rows; r++) {
@@ -2529,6 +2536,33 @@ class BinairoSolver {
       }
     }
     return out;
+  }
+
+  _decodeComparison(comparisonClues) {
+    const out = [];
+    if (!Array.isArray(comparisonClues)) return out;
+    const R = this.rows, C = this.cols;
+    for (let r = 0; r < comparisonClues.length && r < R; r++) {
+      const row = comparisonClues[r];
+      if (!Array.isArray(row)) continue;
+      for (let c = 0; c < row.length && c < C; c++) {
+        const flag = row[c];
+        if (typeof flag !== 'number' || flag === 0) continue;
+        if ((flag & 1) && c + 1 < C) out.push({ aR: r, aC: c, bR: r, bC: c + 1, sameSign: true });
+        if ((flag & 2) && c + 1 < C) out.push({ aR: r, aC: c, bR: r, bC: c + 1, sameSign: false });
+        if ((flag & 4) && r + 1 < R) out.push({ aR: r, aC: c, bR: r + 1, bC: c, sameSign: true });
+        if ((flag & 8) && r + 1 < R) out.push({ aR: r, aC: c, bR: r + 1, bC: c, sameSign: false });
+      }
+    }
+    return out;
+  }
+
+  // Public static so tests can construct compConstraints without an instance.
+  static compConstraintsFromFlags(rows, cols, comparisonClues) {
+    const stub = Object.create(BinairoSolver.prototype);
+    stub.rows = rows;
+    stub.cols = cols;
+    return stub._decodeComparison(comparisonClues);
   }
 
   _idx(r, c) { return r * this.cols + c; }

@@ -389,3 +389,47 @@ test('BinairoSolver: maxMs budget triggers timed-out on unfinishable search', ()
     assert.equal(result.error, 'timed out');
   }
 });
+
+test('BinairoSolver: _decodeComparison expands flags into pairwise constraints', () => {
+  const s = new BinairoSolver({
+    rows: 6, cols: 6,
+    givens: Array.from({ length: 6 }, () => new Array(6).fill(-1)),
+    comparisonClues: [
+      [4],                       // (0,0): D-EQ → ((0,0), (1,0), same)
+      [null, null, null, 2],     // (1,3): R-NE → ((1,3), (1,4), diff)
+      [null, null, 10, 4],       // (2,2): 10=8|2 → R-NE + D-NE
+                                 // (2,3): 4=D-EQ → ((2,3), (3,3), same)
+    ],
+  });
+  // Sort for stable comparison.
+  const got = s.compConstraints.slice().sort((a, b) =>
+    (a.aR - b.aR) || (a.aC - b.aC) || (a.bR - b.bR) || (a.bC - b.bC) ||
+    (Number(a.sameSign) - Number(b.sameSign)));
+  const expected = [
+    { aR: 0, aC: 0, bR: 1, bC: 0, sameSign: true  },  // D-EQ at (0,0)
+    { aR: 1, aC: 3, bR: 1, bC: 4, sameSign: false },  // R-NE at (1,3)
+    { aR: 2, aC: 2, bR: 2, bC: 3, sameSign: false },  // R-NE at (2,2)
+    { aR: 2, aC: 2, bR: 3, bC: 2, sameSign: false },  // D-NE at (2,2)
+    { aR: 2, aC: 3, bR: 3, bC: 3, sameSign: true  },  // D-EQ at (2,3)
+  ].sort((a, b) =>
+    (a.aR - b.aR) || (a.aC - b.aC) || (a.bR - b.bR) || (a.bC - b.bC) ||
+    (Number(a.sameSign) - Number(b.sameSign)));
+  assert.deepEqual(got, expected);
+});
+
+test('BinairoSolver: _decodeComparison drops out-of-grid constraints', () => {
+  const s = new BinairoSolver({
+    rows: 4, cols: 4,
+    givens: Array.from({ length: 4 }, () => new Array(4).fill(-1)),
+    comparisonClues: [
+      [null, null, null, 1],  // R-EQ on last column → drop
+      [null, null, null, 4],  // D-EQ on last column but valid downward → keep
+      [null, null, null, null],
+      [4, null, null, null],  // D-EQ on last row → drop
+    ],
+  });
+  // Only the (1,3) D-EQ survives.
+  assert.equal(s.compConstraints.length, 1);
+  assert.deepEqual(s.compConstraints[0],
+    { aR: 1, aC: 3, bR: 2, bC: 3, sameSign: true });
+});
