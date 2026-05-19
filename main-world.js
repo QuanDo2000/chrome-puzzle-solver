@@ -691,7 +691,7 @@ function dumpPuzzleForBench() {
       return null;
     }
 
-    if (path.indexOf('/binairo/') !== -1) {
+    if (path.indexOf('/binairo/') !== -1 || path.indexOf('/binairo-plus/') !== -1) {
       if (!Array.isArray(g.task)) {
         return { error: 'binairo: g.task is not a 2D array', diagnostic: diagnostic(g), path: path };
       }
