@@ -522,3 +522,22 @@ test('BinairoSolver: getHint carries comparisonClues onto the clone (binairo-plu
   assert.ok(forced01, 'getHint must force (0,1) via R-EQ with (0,0)=1');
   assert.equal(forced01.value, 1, '(0,1) must be 1 (matching (0,0))');
 });
+
+test('BinairoSolver: _applyLineEnumeration forces cells from per-line completions', () => {
+  // 4x4 col 0: cells [1, 0, ?, ?]. needOnes = 2-1 = 1, empties = 2.
+  // Candidates (2,1) and (1,2). (2,1) at pos (3,0) = 1 — fine. (1,2) puts
+  // (2,0) = 1; cells (0,0)=1, (1,0)=0, (2,0)=1 — no triple. Both legal in
+  // isolation. Add a D-NE at (1,0) forcing (1,0) != (2,0); cell (1,0)=0
+  // so (2,0) must be 1. After that, (3,0) must be 0 (balance: ones=2).
+  const givens = Array.from({ length: 4 }, () => new Array(4).fill(-1));
+  givens[0][0] = 1;
+  givens[1][0] = 0;
+  const comparisonClues = [[], [8]]; // D-NE at (1,0) → (1,0) ≠ (2,0)
+  const s = new BinairoSolver({ rows: 4, cols: 4, givens, comparisonClues });
+  let changed = false;
+  const ok = s._applyLineEnumeration(() => { changed = true; });
+  assert.equal(ok, true);
+  assert.equal(changed, true);
+  assert.equal(s._get(2, 0), 1, 'D-NE forces (2,0) != (1,0)=0 → (2,0)=1');
+  assert.equal(s._get(3, 0), 2, 'balance forces (3,0)=2 (2 ones already in col)');
+});

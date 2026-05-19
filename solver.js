@@ -2684,6 +2684,122 @@ class BinairoSolver {
     return false;
   }
 
+  // Per-line enumeration fallback: for each row/column with a tractable
+  // number of empty-cell permutations, enumerate every valid completion
+  // (respecting balance, no-triples within the line, and comparison
+  // constraints involving cells in the line — including cross-axis
+  // constraints whose other side is already filled). For each empty cell,
+  // if all valid completions agree on its value, force it.
+  //
+  // Used by getHint as a fallback when local rules deduce nothing. Finds
+  // forced moves that the cell-by-cell line lookahead misses, including
+  // forces driven by comparison constraints that span multiple empties.
+  _applyLineEnumeration(onChange) {
+    const R = this.rows, C = this.cols;
+    const MAX_COMBOS = 5000;
+    for (let r = 0; r < R; r++) {
+      if (!this._enumerateLine('row', r, this.rowHalf, MAX_COMBOS, onChange)) return false;
+    }
+    for (let c = 0; c < C; c++) {
+      if (!this._enumerateLine('col', c, this.colHalf, MAX_COMBOS, onChange)) return false;
+    }
+    return true;
+  }
+
+  _enumerateLine(axis, index, halfCount, maxCombos, onChange) {
+    const N = axis === 'row' ? this.cols : this.rows;
+    const lineVals = new Int8Array(N);
+    const empties = [];
+    let onesCount = 0;
+    for (let i = 0; i < N; i++) {
+      const v = axis === 'row' ? this._get(index, i) : this._get(i, index);
+      lineVals[i] = v;
+      if (v === 0) empties.push(i);
+      else if (v === 1) onesCount++;
+    }
+    if (empties.length === 0) return true;
+    const needOnes = halfCount - onesCount;
+    const k = empties.length;
+    if (needOnes < 0 || needOnes > k) return false;
+
+    // Skip lines whose enumeration would blow the budget — local rules and
+    // backtracking handle those instead.
+    let combos = 1;
+    for (let i = 0; i < Math.min(needOnes, k - needOnes); i++) {
+      combos = (combos * (k - i)) / (i + 1);
+      if (combos > maxCombos) return true;
+    }
+
+    // Restrict comparison constraints to those involving this line.
+    const lineConstraints = [];
+    for (const cn of this.compConstraints) {
+      const aInLine = (axis === 'row' && cn.aR === index) || (axis === 'col' && cn.aC === index);
+      const bInLine = (axis === 'row' && cn.bR === index) || (axis === 'col' && cn.bC === index);
+      if (aInLine || bInLine) lineConstraints.push(cn);
+    }
+
+    // possible[i]: bitmask of values seen at empties[i] across valid completions.
+    //   bit 0 (=1) → value 1 reachable; bit 1 (=2) → value 2 reachable.
+    const possible = new Int8Array(k);
+    const valForEmpty = new Int8Array(k);
+    const candidate = new Int8Array(N);
+    let validCount = 0;
+    const self = this;
+
+    function isValid() {
+      for (let i = 0; i < N; i++) candidate[i] = lineVals[i];
+      for (let i = 0; i < k; i++) candidate[empties[i]] = valForEmpty[i];
+      for (let i = 2; i < N; i++) {
+        if (candidate[i] !== 0 &&
+            candidate[i] === candidate[i - 1] &&
+            candidate[i] === candidate[i - 2]) return false;
+      }
+      for (const cn of lineConstraints) {
+        const valA = (axis === 'row' && cn.aR === index) ? candidate[cn.aC] :
+                     (axis === 'col' && cn.aC === index) ? candidate[cn.aR] :
+                     self._get(cn.aR, cn.aC);
+        const valB = (axis === 'row' && cn.bR === index) ? candidate[cn.bC] :
+                     (axis === 'col' && cn.bC === index) ? candidate[cn.bR] :
+                     self._get(cn.bR, cn.bC);
+        if (valA === 0 || valB === 0) continue;
+        if ((valA === valB) !== cn.sameSign) return false;
+      }
+      return true;
+    }
+
+    function recurse(pos, onesLeft, zerosLeft) {
+      if (pos === k) {
+        if (isValid()) {
+          validCount++;
+          for (let i = 0; i < k; i++) possible[i] |= valForEmpty[i] === 1 ? 1 : 2;
+        }
+        return;
+      }
+      if (zerosLeft > 0) {
+        valForEmpty[pos] = 2;
+        recurse(pos + 1, onesLeft, zerosLeft - 1);
+      }
+      if (onesLeft > 0) {
+        valForEmpty[pos] = 1;
+        recurse(pos + 1, onesLeft - 1, zerosLeft);
+      }
+    }
+    recurse(0, needOnes, k - needOnes);
+
+    if (validCount === 0) return false;
+
+    for (let i = 0; i < k; i++) {
+      const forced = possible[i] === 1 ? 1 : possible[i] === 2 ? 2 : 0;
+      if (forced === 0) continue;
+      const r = axis === 'row' ? index : empties[i];
+      const c = axis === 'row' ? empties[i] : index;
+      if (this._get(r, c) !== 0) continue;
+      if (this._wouldCreateTriple(r, c, forced)) return false;
+      if (this._assign(r, c, forced)) onChange();
+    }
+    return true;
+  }
+
   // Line-restricted lookahead: a single round over rows/columns that need
   // exactly 1 of one value and ≥2 of the other. For each empty cell in
   // such a line, probe both values via local-rule propagation. If exactly
@@ -3138,19 +3254,36 @@ class BinairoSolver {
     let ok = clone.propagate();
     if (!ok) return null;
 
-    // If local rules deduced nothing, try the line-restricted lookahead.
+    // If local rules deduced nothing, try the per-line enumeration first
+    // (enumerates valid completions per row/column with comparison-clue
+    // awareness), then fall back to cell-by-cell line lookahead for cases
+    // the enumeration misses or skips due to combo budget.
     let localChanged = false;
     for (let i = 0; i < before.length; i++) {
       if (before[i] !== clone.grid[i]) { localChanged = true; break; }
     }
     if (!localChanged) {
-      clone._inLookahead = true;
-      try {
-        ok = clone._applyLineLookahead(() => {});
-      } finally {
-        clone._inLookahead = false;
-      }
+      ok = clone._applyLineEnumeration(() => {});
       if (!ok) return null;
+      // After enumeration forces cells, let local rules cascade once more.
+      if (clone.grid.some((v, i) => v !== before[i])) {
+        ok = clone.propagate();
+        if (!ok) return null;
+      }
+      // If still nothing changed, try the cell-by-cell line lookahead.
+      let stillNothing = true;
+      for (let i = 0; i < before.length; i++) {
+        if (before[i] !== clone.grid[i]) { stillNothing = false; break; }
+      }
+      if (stillNothing) {
+        clone._inLookahead = true;
+        try {
+          ok = clone._applyLineLookahead(() => {});
+        } finally {
+          clone._inLookahead = false;
+        }
+        if (!ok) return null;
+      }
     }
 
     const forced = [];
