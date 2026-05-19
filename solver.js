@@ -2795,6 +2795,9 @@ class BinairoSolver {
       return { solved: false, grid: null, error: 'contradiction on initial propagation' };
     }
     if (this._isComplete()) {
+      if (this._gridHasTriple() || this._hasDuplicateLines()) {
+        return { solved: false, grid: null, error: 'givens produce an invalid Binairo grid' };
+      }
       const grid = this._gridTo2D();
       this._storeInCache(key, grid);
       return { solved: true, grid };
