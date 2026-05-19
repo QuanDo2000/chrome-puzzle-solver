@@ -2381,6 +2381,10 @@ function makeWidget() {
   async function previewFirstLoopStep() {
     confirming = false;
     solveBtn.textContent = 'Solve';
+    // Loop has its own commit path (the Confirm state on the Loop button),
+    // so the Apply button must be disabled — otherwise a stale Hint-click
+    // Apply remains enabled while Loop preview is active.
+    clearPendingHint();
 
     // Load any cached solution for this puzzle before deciding whether to
     // pre-solve. Galaxies / aquarium / nonogram each have their own cache
