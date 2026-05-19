@@ -449,3 +449,31 @@ test('BinairoSolver: _applyComparison EQ forces same value', () => {
   assert.equal(changed, true);
   assert.equal(s._get(1, 0), 1, 'cell (1,0) must be forced to match (0,0)=1');
 });
+
+test('BinairoSolver: _applyComparison NE forces opposite value', () => {
+  // R-NE between (0,0) and (0,1): flag = 2 at (0,0).
+  const givens = Array.from({ length: 4 }, () => new Array(4).fill(-1));
+  givens[0][0] = 1;
+  const s = new BinairoSolver({
+    rows: 4, cols: 4, givens,
+    comparisonClues: [[2]],
+  });
+  let changed = false;
+  const ok = s._applyComparison(() => { changed = true; });
+  assert.equal(ok, true);
+  assert.equal(changed, true);
+  assert.equal(s._get(0, 1), 2, 'cell (0,1) must be forced opposite to (0,0)=1');
+});
+
+test('BinairoSolver: _applyComparison flags inconsistent prefill as contradiction', () => {
+  // R-EQ between (0,0) and (0,1), but givens contradict it.
+  const givens = Array.from({ length: 4 }, () => new Array(4).fill(-1));
+  givens[0][0] = 1;
+  givens[0][1] = 0;
+  const s = new BinairoSolver({
+    rows: 4, cols: 4, givens,
+    comparisonClues: [[1]],
+  });
+  const ok = s._applyComparison(() => {});
+  assert.equal(ok, false, 'should report contradiction when EQ holds 1 vs 0');
+});
