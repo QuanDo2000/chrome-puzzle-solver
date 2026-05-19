@@ -1343,25 +1343,12 @@ async function getHint(request = {}) {
         rows, cols, givens: detectedGrid.givens, initialState: grid,
       });
       hint = solver.getHint(grid);
-      // Solver fallback: same shape as nonogram/aquarium. If getHint
-      // exhausts (returns null) we run a full solve via cache → fresh run
-      // and emit one empty cell at a time.
+      // No solve-fallback for binairo: hint is pure deduction by design.
+      // When propagation exhausts, the user clicks Solve (which does
+      // backtracking) — keeping Hint logic-only avoids minute-long hangs
+      // on 30x30 puzzles where backtracking is required.
       if (!hint) {
-        let sol = hintSolution || getCachedGridSolution(detectedGrid);
-        if (!sol) {
-          const result = await runSolve(null, null, grid, 'binairo', solveExtraData());
-          if (result?.solved && result.grid) {
-            cacheGridSolution(detectedGrid, result.grid);
-            sol = result.grid;
-          }
-        }
-        if (sol) {
-          if (firstMismatch(grid, sol)) {
-            return { success: false, error: 'Current game state is wrong.' };
-          }
-          hintSolution = sol;
-          hint = nextChunkHint(grid, getBinairoPath(sol));
-        }
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
     } else {
       if (solution && firstMismatch(grid, solution)) {
