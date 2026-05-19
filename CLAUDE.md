@@ -1,8 +1,9 @@
 # Project conventions for Claude Code
 
-A Chrome MV3 extension that solves Nonogram, Aquarium, and Galaxies puzzles
-on puzzles-mobile.com. Three solver classes in `solver.js`, a content-script
-widget in `content.js`, and a small service worker in `background.js`.
+A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, and Binairo
+puzzles on puzzles-mobile.com. Four solver classes in `solver.js`, a
+content-script widget in `content.js`, and a small service worker in
+`background.js`.
 
 ## Version control: use `jj`, never plain `git`
 
@@ -29,7 +30,7 @@ When dispatching subagents that need to commit work, tell them explicitly to use
 
 | File | Role | Runs in |
 | --- | --- | --- |
-| `solver.js` | `NonogramSolver`, `AquariumSolver`, `GalaxiesSolver` — pure logic, no DOM | Content script + Web Worker (via inlined Blob) + Node tests |
+| `solver.js` | `NonogramSolver`, `AquariumSolver`, `GalaxiesSolver`, `BinairoSolver` — pure logic, no DOM | Content script + Web Worker (via inlined Blob) + Node tests |
 | `solver.worker.js` | Worker entry: imports solver.js + dispatches by puzzle type | Web Worker (inlined into a Blob — see Worker note below) |
 | `content.js` | Widget UI, message dispatch, `runSolve` (Worker proxy), `drawPreview` | Content script (isolated world, page's origin) |
 | `handler.js` | Per-puzzle-type handlers (galaxies/aquarium/puzzles-mobile fallback) | Content script |
@@ -64,6 +65,39 @@ Any function in `main-world.js` that mutates `window.Game.currentState` (`applyG
 2. Fall through `Game.render → Game.redraw → Game.redrawGrid → getSaved+loadGame` **after** the writes. `Game.render` isn't universal across puzzle types — aquarium needs `redraw` or `redrawGrid`.
 
 `applyGameState` is the reference shape; `applyHintCells` now mirrors it (minus the `solved=true` and `Game.check()` calls which are full-solution-only).
+
+### Binairo encoding gotcha
+
+The page exposes two different integer encodings on `window.Game` for the same
+cell positions:
+
+- `window.Game.task` — 2D array of **givens**: `-1=blank, 0=given-zero, 1=given-one`.
+- `window.Game.currentState.cellStatus` — 2D array of **current state**:
+  `0=empty, 1=filled-one (black), 2=filled-zero (white)`.
+
+Translation (givens → initial cellStatus): `-1→0, 0→2, 1→1`.
+
+`BinairoSolver` works internally in **cellStatus encoding** and translates
+givens at the constructor boundary; everything downstream (worker dispatch,
+preview rendering, MAIN-world apply) uses `0/1/2`. Don't reintroduce the
+`-1/0/1` triad into solver/widget code — it's an input-only encoding.
+
+`BinairoSolver.getHint(grid)` requires `grid` in cellStatus encoding. The
+`binairoHandler.readState()` call returns it in that encoding directly.
+
+The comparison-clue variant (`/binairo/comparison/...`) is **not** supported;
+the handler refuses with a clear error if `Game.comparisonClues` is non-empty.
+
+### Backtracking validates triples + duplicates at completion
+
+`BinairoSolver._backtrack` calls `_gridHasTriple()` after every propagation
+pass and `_hasDuplicateLines()` at every completion check. The reason:
+`_applyBalance` and `_applyUniqueness` write values without re-checking
+no-triples against already-filled neighbors, and `_applyUniqueness` only
+detects duplicate lines when one of them has exactly 2 empty cells. The
+post-propagation full-grid scan and the post-completion duplicate check
+catch the cases the per-rule propagation misses. Found via fuzz testing
+(`tests/binairo-fuzz.test.js`) during initial implementation.
 
 ### Galaxies geometry: shared statics on `GalaxiesSolver`
 `GalaxiesSolver.seedCellsForStar(star, rows, cols)` and `GalaxiesSolver.regionsToLines(grid, rows, cols)` are static methods used by the solver itself, `content.js` (hint computation), and `handler.js` (DOM line writing). Don't reintroduce per-file copies — the three previous near-identical implementations drifted and that's the bug audit item #5 fixed.
