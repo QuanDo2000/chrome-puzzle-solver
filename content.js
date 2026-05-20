@@ -1376,6 +1376,14 @@ async function getHint(request = {}) {
       if (!hint) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
+    } else if (detectedGrid.type === 'shikaku') {
+      const solver = new ShikakuSolver({
+        rows, cols, clues: detectedGrid.clues, initialState: grid,
+      });
+      hint = solver.getHint(grid);
+      if (!hint) {
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+      }
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1648,6 +1656,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
     } else if (puzzleData?.type === 'binairo') {
       setStatusNodes('info', prefix, ...binairoHintStatusNodes(h));
+    } else if (puzzleData?.type === 'shikaku') {
+      setStatusNodes('info', prefix, ...shikakuHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -1665,6 +1675,21 @@ function makeWidget() {
       return [
         'Cell ', bold(`(row ${row + 1}, col ${col + 1})`),
         ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(total)), ' cells can be deduced'];
+  }
+
+  function shikakuHintStatusNodes(h) {
+    const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
+    if (total === 0) return ['No hint available'];
+    if (total === 1) {
+      const cell = h.cells?.[0] || h.extraCells?.[0];
+      const row = h.cells?.length ? h.index : cell.row;
+      const col = h.cells?.length ? cell.index : cell.col;
+      return [
+        'Cell ', bold(`(row ${row + 1}, col ${col + 1})`),
+        ' belongs to area ', bold(String(cell.value + 1)),
       ];
     }
     return [bold(String(total)), ' cells can be deduced'];
@@ -2400,6 +2425,12 @@ function makeWidget() {
       if (puzzleData.pendingHint.type === 'galaxies') {
         const r = await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
         ok = !!r?.success;
+      } else if (puzzleData.type === 'shikaku') {
+        const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
+        const cur = await callMainWorld('readShikakuState', [puzzleData.rows, puzzleData.cols]);
+        const grid = cur || Array.from({ length: puzzleData.rows }, () => new Array(puzzleData.cols).fill(-1));
+        for (const cell of hintCells) grid[cell.row][cell.col] = cell.value;
+        ok = !!(await callMainWorld('applyShikakuState', [grid, puzzleData.clues]));
       } else {
         const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
         ok = !!(await callMainWorld('applyHintCells', [hintCells]));
@@ -2553,6 +2584,17 @@ function makeWidget() {
     let result;
     if (puzzleData.pendingHint.type === 'galaxies') {
       result = await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
+    } else if (puzzleData.type === 'shikaku') {
+      // Shikaku uses owner-index cellStatus + currentState.areas; the
+      // generic applyHintCells writer doesn't know that shape. Read the
+      // current state, overlay the hint cells, re-apply via the dedicated
+      // shikaku function.
+      const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
+      const cur = await callMainWorld('readShikakuState', [puzzleData.rows, puzzleData.cols]);
+      const grid = cur || Array.from({ length: puzzleData.rows }, () => new Array(puzzleData.cols).fill(-1));
+      for (const cell of hintCells) grid[cell.row][cell.col] = cell.value;
+      const ok = await callMainWorld('applyShikakuState', [grid, puzzleData.clues]);
+      result = ok ? { success: true } : { success: false, error: 'Shikaku hint apply failed' };
     } else {
       const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
       const ok = await callMainWorld('applyHintCells', [hintCells]);
