@@ -913,6 +913,13 @@ function solveExtraData() {
       comparisonClues: data.comparisonClues || [],
     };
   }
+  if (data.type === 'shikaku') {
+    return {
+      rows: data.rows,
+      cols: data.cols,
+      clues: data.clues,
+    };
+  }
   if (data.type === 'aquarium') {
     return {
       rowCluesFlat: data.rowClues, colCluesFlat: data.colClues,
@@ -942,7 +949,7 @@ function solveExtraData() {
 //     localStorage quota (~5 MB per origin).
 const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SOLUTION_CACHE_MAX = 50;
-const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:'];
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:'];
 
 function isSolutionCacheKey(key) {
   return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
@@ -1082,10 +1089,30 @@ function binairoCacheKey(data) {
   return 'binairo-solution:' + (h >>> 0).toString(16);
 }
 
+function shikakuCacheKey(data) {
+  if (data?.type !== 'shikaku') return null;
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x53); // 'S' nameplate
+  mix(data.rows | 0);
+  mix(data.cols | 0);
+  const clues = Array.isArray(data.clues) ? data.clues : [];
+  mix(clues.length);
+  const sorted = clues.slice().sort((a, b) =>
+    a.row - b.row || a.col - b.col || a.area - b.area);
+  for (const k of sorted) {
+    mix(k.row | 0);
+    mix(k.col | 0);
+    mix(k.area | 0);
+  }
+  return 'shikaku-solution:' + (h >>> 0).toString(16);
+}
+
 function getCachedGridSolution(data) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
     : data?.type === 'binairo' ? binairoCacheKey(data)
+    : data?.type === 'shikaku' ? shikakuCacheKey(data)
     : null;
   if (!key) return null;
   try {
@@ -1107,6 +1134,7 @@ function cacheGridSolution(data, grid) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
     : data?.type === 'binairo' ? binairoCacheKey(data)
+    : data?.type === 'shikaku' ? shikakuCacheKey(data)
     : null;
   if (!key || !Array.isArray(grid)) return;
   try {
@@ -1430,6 +1458,7 @@ const SUPPORTED_PUZZLES = [
   { name: 'Galaxies',     url: 'https://www.puzzles-mobile.com/galaxies/' },
   { name: 'Binairo',      url: 'https://www.puzzles-mobile.com/binairo/' },
   { name: 'Binairo Plus', url: 'https://www.puzzles-mobile.com/binairo-plus/' },
+  { name: 'Shikaku',      url: 'https://www.puzzles-mobile.com/shikaku/' },
 ];
 
 // Reference set by makeWidget() so the top-level message listener (for the
