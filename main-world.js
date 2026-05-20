@@ -605,6 +605,126 @@ function applyBinairoState(solution) {
   }
 }
 
+function readShikakuData() {
+  var maxAttempts = 20;
+  var pollMs = 250;
+
+  function deepCopy2D(g) {
+    if (!Array.isArray(g)) return null;
+    var out = [];
+    for (var r = 0; r < g.length; r++) {
+      if (!Array.isArray(g[r])) return null;
+      out[r] = g[r].slice();
+    }
+    return out;
+  }
+
+  function doRead() {
+    try {
+      if (!window.Game || window.Game.loaded === false) return null;
+      if (!Array.isArray(window.Game.task)) return null;
+      var width = window.Game.puzzleWidth;
+      var height = window.Game.puzzleHeight;
+      if (!width || !height) return null;
+      var task = deepCopy2D(window.Game.task);
+      if (!task) return null;
+      return { task: task, width: width, height: height };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  return new Promise(function(resolve) {
+    function poll() {
+      var r = doRead();
+      if (r) { resolve(r); return; }
+      maxAttempts--;
+      if (maxAttempts <= 0) { resolve(null); return; }
+      setTimeout(poll, pollMs);
+    }
+    poll();
+    setTimeout(function() { resolve(null); }, 10000);
+  });
+}
+
+function readShikakuState(rows, cols) {
+  try {
+    if (!window.Game || !window.Game.currentState) return null;
+    var cs = window.Game.currentState.cellStatus;
+    if (!Array.isArray(cs)) return null;
+    var out = [];
+    for (var r = 0; r < rows && r < cs.length; r++) {
+      var row = cs[r];
+      if (!Array.isArray(row)) return null;
+      out[r] = [];
+      for (var c = 0; c < cols && c < row.length; c++) {
+        var v = row[c];
+        out[r][c] = (typeof v === 'number' && v >= 0) ? v : -1;
+      }
+    }
+    return out;
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyShikakuState(solution, clues) {
+  try {
+    if (!solution || !Array.isArray(solution)) return false;
+    if (!(window.Game && window.Game.currentState && window.Game.currentState.cellStatus)) {
+      return false;
+    }
+    var cs = window.Game.currentState.cellStatus;
+    var rows = solution.length;
+
+    if (typeof window.Game.saveState === 'function') {
+      window.Game.saveState(true);
+    }
+
+    for (var r = 0; r < rows && r < cs.length; r++) {
+      var srcRow = solution[r] || [];
+      var dstRow = cs[r];
+      if (!Array.isArray(dstRow)) continue;
+      for (var c = 0; c < srcRow.length && c < dstRow.length; c++) {
+        var v = srcRow[c];
+        dstRow[c] = (typeof v === 'number' && v >= 0) ? v : -1;
+      }
+    }
+
+    // Build areas list from cellStatus. Each area is the cell list of its
+    // owner-index cells. Field names verified at impl time via a follow-up
+    // Dump — assumed { id, cellList } here.
+    var areas = [];
+    if (Array.isArray(clues)) {
+      for (var i = 0; i < clues.length; i++) {
+        var cellList = [];
+        for (var r2 = 0; r2 < rows && r2 < cs.length; r2++) {
+          for (var c2 = 0; c2 < cs[r2].length; c2++) {
+            if (cs[r2][c2] === i) cellList.push({ r: r2, c: c2 });
+          }
+        }
+        areas.push({ id: i, cellList: cellList });
+      }
+      window.Game.currentState.areas = areas;
+    }
+
+    if (typeof window.Game.drawCurrentState === 'function') {
+      window.Game.drawCurrentState();
+    } else if (typeof window.Game.redraw === 'function') {
+      window.Game.redraw();
+    } else if (typeof window.Game.render === 'function') {
+      window.Game.render();
+    } else if (window.Game.getSaved && window.Game.loadGame) {
+      var saved = window.Game.getSaved();
+      if (saved) window.Game.loadGame(saved);
+    }
+    return true;
+  } catch (e) {
+    console.warn('Shikaku apply failed:', e);
+    return false;
+  }
+}
+
 // Dump the current puzzle in our test/fixtures format, for capturing real
 // puzzles to feed into bench-real.js. On failure returns
 // { error, diagnostic, path } where `diagnostic` describes the shape of
