@@ -366,7 +366,11 @@ const puzzlesMobileHandler = {
   priority: 10,
 
   matches() {
-    return isPuzzlesMobilePage();
+    // Fallback handler for nonogram puzzle pages. Exclude the site homepage
+    // ('/') — it has no puzzle, and without this guard detect() polls
+    // readGameClues for ~5s waiting for a window.Game that never loads.
+    // Every real puzzle URL has a deeper path.
+    return isPuzzlesMobilePage() && window.location.pathname !== '/';
   },
 
   async detect() {
