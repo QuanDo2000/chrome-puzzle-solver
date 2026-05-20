@@ -302,6 +302,63 @@ const binairoHandler = {
 
 registerHandler(binairoHandler);
 
+// ── Shikaku handler (puzzles-mobile.com/shikaku/) ─────────────
+
+const shikakuHandler = {
+  name: 'puzzles-mobile-shikaku',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/shikaku/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readShikakuData', []);
+    if (!data) return { ...result, error: 'No Shikaku task data found' };
+    const rows = data.height, cols = data.width;
+    const clues = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const v = data.task[r]?.[c];
+        if (typeof v === 'number' && v > 0) clues.push({ row: r, col: c, area: v });
+      }
+    }
+    const sumAreas = clues.reduce((s, x) => s + x.area, 0);
+    const gridArea = rows * cols;
+    if (sumAreas !== gridArea) {
+      return { ...result,
+        error: `Clue areas sum to ${sumAreas} but grid is ${gridArea}` };
+    }
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'shikaku',
+      rows, cols, clues,
+      rowClues: [], colClues: [],
+      _cells: [], _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readShikakuState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(-1));
+  },
+
+  async applySolution(solution, ctx) {
+    const ok = await callMainWorld('applyShikakuState', [solution, ctx.clues]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Shikaku apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(shikakuHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
