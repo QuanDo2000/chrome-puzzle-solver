@@ -2560,9 +2560,11 @@ function makeWidget() {
     } else {
       const end = await readGridState();
       if (end?.success) drawPreview(end.grid);
-      const endComplete = puzzleData.type === 'shikaku'
-        ? end.grid.every(row => row.every(c => c !== -1))
-        : end.grid.every(row => row.every(c => c !== 0));
+      const endComplete = end?.grid
+        ? (puzzleData.type === 'shikaku'
+            ? end.grid.every(row => row.every(c => c !== -1))
+            : end.grid.every(row => row.every(c => c !== 0)))
+        : false;
       const done = end?.grid && puzzleData.type !== 'galaxies' && endComplete;
       setStatus(done ? 'Solved!' : 'No more hints available.', done ? 'success' : 'info');
     }
