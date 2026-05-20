@@ -920,6 +920,13 @@ function solveExtraData() {
       clues: data.clues,
     };
   }
+  if (data.type === 'yinyang') {
+    return {
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+    };
+  }
   if (data.type === 'aquarium') {
     return {
       rowCluesFlat: data.rowClues, colCluesFlat: data.colClues,
@@ -949,7 +956,7 @@ function solveExtraData() {
 //     localStorage quota (~5 MB per origin).
 const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SOLUTION_CACHE_MAX = 50;
-const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:'];
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:'];
 
 function isSolutionCacheKey(key) {
   return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
@@ -1108,11 +1115,28 @@ function shikakuCacheKey(data) {
   return 'shikaku-solution:' + (h >>> 0).toString(16);
 }
 
+function yinYangCacheKey(data) {
+  if (data?.type !== 'yinyang') return null;
+  // FNV-1a over (type nameplate, rows, cols, flattened task).
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x59); // 'Y' nameplate so yin-yang keys can't collide with other types
+  mix(data.rows | 0);
+  mix(data.cols | 0);
+  const t = data.task || [];
+  for (let r = 0; r < data.rows; r++) {
+    const row = t[r] || [];
+    for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
+  }
+  return 'yinyang-solution:' + (h >>> 0).toString(16);
+}
+
 function getCachedGridSolution(data) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
     : data?.type === 'binairo' ? binairoCacheKey(data)
     : data?.type === 'shikaku' ? shikakuCacheKey(data)
+    : data?.type === 'yinyang' ? yinYangCacheKey(data)
     : null;
   if (!key) return null;
   try {
@@ -1135,6 +1159,7 @@ function cacheGridSolution(data, grid) {
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
     : data?.type === 'binairo' ? binairoCacheKey(data)
     : data?.type === 'shikaku' ? shikakuCacheKey(data)
+    : data?.type === 'yinyang' ? yinYangCacheKey(data)
     : null;
   if (!key || !Array.isArray(grid)) return;
   try {
