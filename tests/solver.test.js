@@ -700,12 +700,10 @@ test('YinYangSolver: constructor rejects invalid dimensions', () => {
 test('YinYangSolver: 6x6 fixture matches golden', () => {
   YinYangSolver.clearSolutionCache();
   const p = fixtures.yinyang6x6;
-  const result = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task }).solve();
-  assert.deepEqual(
-    { solved: result.solved, grid: result.grid, error: result.error || null },
-    golden.yinyang6x6,
+  const result = clean(
+    new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task }).solve()
   );
-  YinYangSolver.clearSolutionCache();
+  assert.deepEqual(result, golden.yinyang6x6);
 });
 
 test('YinYangSolver: _is2x2Illegal flags monochrome and checkerboard', () => {
