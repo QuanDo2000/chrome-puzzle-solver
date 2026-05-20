@@ -1505,6 +1505,7 @@ const SUPPORTED_PUZZLES = [
   { name: 'Binairo',      url: 'https://www.puzzles-mobile.com/binairo/' },
   { name: 'Binairo Plus', url: 'https://www.puzzles-mobile.com/binairo-plus/' },
   { name: 'Shikaku',      url: 'https://www.puzzles-mobile.com/shikaku/' },
+  { name: 'Yin-Yang',     url: 'https://www.puzzles-mobile.com/yin-yang/' },
 ];
 
 // Reference set by makeWidget() so the top-level message listener (for the
@@ -2184,6 +2185,7 @@ function makeWidget() {
     let xMarkPath = null;
     const isShikaku = puzzleData?.type === 'shikaku';
     const isBinairo = puzzleData?.type === 'binairo';
+    const isYinYang = puzzleData?.type === 'yinyang';
     const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
     ctx.fillStyle = '#1f2937';
     for (let r = 0; r < rows; r++) {
@@ -2213,6 +2215,32 @@ function makeWidget() {
             ctx.fillStyle = '#1f2937';
             ctx.beginPath();
             ctx.arc(cx, cy, discR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (isYinYang) {
+          // cellStatus: 1 = black stone, 2 = white stone.
+          const cx = x + cellSize / 2, cy = y + cellSize / 2;
+          const yyR = Math.max(2, Math.floor(cellSize * 0.35));
+          if (v === 1) {
+            ctx.fillStyle = '#1f2937';
+            ctx.beginPath();
+            ctx.arc(cx, cy, yyR, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (v === 2) {
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#1f2937';
+            ctx.lineWidth = Math.max(1.5, cellSize / 14);
+            ctx.beginPath();
+            ctx.arc(cx, cy, yyR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+          // Given cells get a small contrasting centre dot.
+          const given = puzzleData?.task?.[r]?.[c];
+          if (given === 0 || given === 1) {
+            ctx.fillStyle = v === 1 ? '#fff' : '#1f2937';
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(1, Math.floor(cellSize * 0.1)), 0, Math.PI * 2);
             ctx.fill();
           }
         } else if (puzzleData?.type === 'galaxies' && v > 0) {
@@ -2321,6 +2349,20 @@ function makeWidget() {
           ctx.strokeStyle = '#2e86de';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 7));
           ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+        } else if (puzzleData?.type === 'yinyang' && (cell.value === 1 || cell.value === 2)) {
+          // Draw the hint stone in its colour, ringed blue to mark the hint.
+          const ccx = cx + cellSize / 2;
+          const ccy = cy + cellSize / 2;
+          const hr = Math.max(2, Math.floor(cellSize * 0.35));
+          ctx.fillStyle = cell.value === 1 ? '#1f2937' : '#fff';
+          ctx.beginPath();
+          ctx.arc(ccx, ccy, hr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#2e86de';
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+          ctx.beginPath();
+          ctx.arc(ccx, ccy, hr, 0, Math.PI * 2);
+          ctx.stroke();
         } else if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
           // For binairo hints, draw a translucent disc matching the target value
           // — outlined blue = "play a 1 here", full blue fill = "play a 0 here".
