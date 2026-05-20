@@ -1,7 +1,7 @@
 # Project conventions for Claude Code
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
-Binairo Plus, and Shikaku puzzles on puzzles-mobile.com. Five solver
+Binairo Plus, Shikaku, and Yin-Yang puzzles on puzzles-mobile.com. Six solver
 classes in `solver.js`, a content-script widget in `content.js`, and a
 small service worker in `background.js`.
 
@@ -188,6 +188,42 @@ numbers as bold text. The clue overlay lives in the cached `staticLayer`;
 `staticSig` includes a `|sk=` segment so the layer rebuilds when the clue
 set changes.
 
+### Yin-Yang encoding
+
+The `/yin-yang/*` path is served by a dedicated `YinYangSolver` +
+`yinYangHandler`. Yin-Yang shares Binairo's exact cell encoding:
+
+- `window.Game.task` — 2D givens: `-1` = none, `0` = given white,
+  `1` = given black.
+- `window.Game.currentState.cellStatus` — live state: `0` = empty,
+  `1` = black, `2` = white.
+- Translation givens → cellStatus: `-1→0, 0→2, 1→1`.
+
+`YinYangSolver` works internally in cellStatus encoding and translates
+`task` givens at the constructor boundary, mirroring `BinairoSolver`.
+
+Rules: (1) every cell is black or white; (2) all black cells form one
+orthogonally-connected region, all white cells likewise; (3) no 2×2 window
+may be monochrome OR a diagonal checkerboard (a checkerboard makes both
+colours' diagonal pairs uncrossable, so it is forbidden).
+
+Solver shape: `propagate()` iterates two sound rules — 2×2 forcing
+(`_apply2x2`) and a connectivity-cut probe (`_applyConnectivity`, which
+forces any empty cell whose removal would sever a colour's placed cells) —
+to a fixpoint, then most-constrained backtracking (`_pickCell` picks the
+empty cell with the most placed neighbours). Because the connectivity check
+on a *full* grid reduces to "each colour is connected", a successful
+`propagate()` on a complete grid IS a validity proof — no separate
+completion check. `getHint` runs `propagate()` only and reports the cells
+it forced. Static `_solutionCache` keyed on FNV-1a of `(rows, cols, task)`,
+50-entry LRU. Instance `maxMs` budget so the worker can't hang.
+
+MAIN-world: `readYinYangData` / `readYinYangState` / `applyYinYangState`,
+twins of the Binairo functions. Hints reuse the generic `applyHintCells`
+path (Yin-Yang is `0/1/2` cell-state encoding, like Binairo). The Loop
+done-check needs no special arm — `0` = empty, like the other cell-state
+puzzles.
+
 ### Backtracking validates duplicates at completion; triples validated inline
 
 `BinairoSolver._applyBalance` and `_applyUniqueness` now call
@@ -265,7 +301,7 @@ Click the widget's **📋 Dump** button on any puzzle page. It writes a JSON sni
 
 ## MV3 hardening contract
 
-- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (14 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
+- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (17 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
 - `callMainWorld` has a 15s wall-clock timeout via `Promise.race` — if the SW dies mid-call, the caller resolves `null` instead of hanging.
 - `execMain` targets `sender.tab.id`, not the active tab — handles tab-switch mid-call.
 - `manifest.json` permissions list is minimal (`scripting` only). Don't add `activeTab` / `storage` back without a concrete need.
