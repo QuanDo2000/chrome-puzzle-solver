@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -41,6 +41,14 @@ self.onmessage = function (e) {
         cols: extraData.cols,
         givens: extraData.givens,
         comparisonClues: extraData.comparisonClues || [],
+        initialState: initialGrid || null,
+      });
+      result = s.solve();
+    } else if (type === 'shikaku' && extraData) {
+      const s = new ShikakuSolver({
+        rows: extraData.rows,
+        cols: extraData.cols,
+        clues: extraData.clues,
         initialState: initialGrid || null,
       });
       result = s.solve();
