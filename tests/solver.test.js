@@ -697,6 +697,17 @@ test('YinYangSolver: constructor rejects invalid dimensions', () => {
   assert.throws(() => new YinYangSolver({ rows: 3, cols: 3, task: 'nope' }));
 });
 
+test('YinYangSolver: 6x6 fixture matches golden', () => {
+  YinYangSolver.clearSolutionCache();
+  const p = fixtures.yinyang6x6;
+  const result = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task }).solve();
+  assert.deepEqual(
+    { solved: result.solved, grid: result.grid, error: result.error || null },
+    golden.yinyang6x6,
+  );
+  YinYangSolver.clearSolutionCache();
+});
+
 test('YinYangSolver: _is2x2Illegal flags monochrome and checkerboard', () => {
   const s = new YinYangSolver({ rows: 2, cols: 2, task: [[-1, -1], [-1, -1]] });
   assert.equal(s._is2x2Illegal(1, 1, 1, 1), true, 'all black');

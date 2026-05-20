@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 
 function solveNonogram(p) {
@@ -27,6 +27,10 @@ function solveShikaku(p) {
   ShikakuSolver.clearSolutionCache();
   return new ShikakuSolver({ rows: p.rows, cols: p.cols, clues: p.clues }).solve();
 }
+function solveYinYang(p) {
+  YinYangSolver.clearSolutionCache();
+  return new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task }).solve();
+}
 
 const raw = {
   nonogramDiagonal5: solveNonogram(fixtures.nonogramDiagonal5),
@@ -38,6 +42,7 @@ const raw = {
   binairo6x6:        solveBinairo(fixtures.binairo6x6),
   binairoPlus6x6:    solveBinairo(fixtures.binairoPlus6x6),
   shikaku5x5:        solveShikaku(fixtures.shikaku5x5),
+  yinyang6x6:        solveYinYang(fixtures.yinyang6x6),
 };
 
 // Strip any non-deterministic fields (timing, internal counters) before writing.
