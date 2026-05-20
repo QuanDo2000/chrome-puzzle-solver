@@ -567,3 +567,20 @@ test('ShikakuSolver: candidate enumeration produces all valid rectangles', () =>
   assert.deepEqual(got[1].sort(), ['0,2-1,3', '1,0-1,3'].sort(),
     'clue (1,3)=4 candidates wrong');
 });
+
+test('ShikakuSolver: single-candidate forcing places the rectangle', () => {
+  // 2x2 grid, single clue area=4 at (0,0). Only candidate is the full grid.
+  const s = new ShikakuSolver({
+    rows: 2, cols: 2,
+    clues: [{ row: 0, col: 0, area: 4 }],
+  });
+  assert.equal(s.candidates[0].length, 1, 'should have exactly 1 candidate');
+  const ok = s.propagate();
+  assert.equal(ok, true);
+  assert.equal(s.placed[0], 1, 'clue 0 must be placed');
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < 2; c++) {
+      assert.equal(s.owner[r * 2 + c], 0, `cell (${r},${c}) must be owned by clue 0`);
+    }
+  }
+});

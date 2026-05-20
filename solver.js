@@ -3552,6 +3552,79 @@ class ShikakuSolver {
     }
     return out;
   }
+
+  // Iterate the propagation rules until no rule changes anything. Returns
+  // false on contradiction (any clue's candidate set becomes empty).
+  propagate() {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      // 1. Zero-candidate detection.
+      for (let i = 0; i < this.clues.length; i++) {
+        if (!this.placed[i] && this.candidates[i].length === 0) return false;
+      }
+      // 2. Single-candidate forcing — place the rectangle, prune neighbours.
+      for (let i = 0; i < this.clues.length; i++) {
+        if (this.placed[i]) continue;
+        if (this.candidates[i].length === 1) {
+          if (!this._placeRectangle(i, this.candidates[i][0])) return false;
+          changed = true;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Place clue `i`'s rectangle. Marks every cell owned, prunes overlapping
+  // candidates from other clues, sets placed[i] = 1. Returns false on a
+  // cell-ownership conflict.
+  _placeRectangle(clueIdx, rect) {
+    const C = this.cols;
+    for (let r = rect.r1; r <= rect.r2; r++) {
+      for (let c = rect.c1; c <= rect.c2; c++) {
+        const idx = r * C + c;
+        const cur = this.owner[idx];
+        if (cur !== -1 && cur !== clueIdx) return false;
+        if (cur === -1) this._assign(idx, clueIdx);
+      }
+    }
+    this._setPlaced(clueIdx, 1);
+    this._setCandidates(clueIdx, [rect]);
+    for (let j = 0; j < this.clues.length; j++) {
+      if (j === clueIdx || this.placed[j]) continue;
+      const filtered = this.candidates[j].filter(r2 => !_rectsOverlap(rect, r2));
+      if (filtered.length !== this.candidates[j].length) {
+        this._setCandidates(j, filtered);
+      }
+    }
+    return true;
+  }
+
+  // ── Trail-based undo. Frame kinds: 0=cell-assign, 1=placed, 2=candidates.
+  _assign(idx, value) {
+    this.trail.push({ kind: 0, idx, old: this.owner[idx] });
+    this.owner[idx] = value;
+  }
+  _setPlaced(clueIdx, value) {
+    this.trail.push({ kind: 1, clueIdx, old: this.placed[clueIdx] });
+    this.placed[clueIdx] = value;
+  }
+  _setCandidates(clueIdx, newList) {
+    this.trail.push({ kind: 2, clueIdx, old: this.candidates[clueIdx] });
+    this.candidates[clueIdx] = newList;
+  }
+  _rollback(mark) {
+    while (this.trail.length > mark) {
+      const e = this.trail.pop();
+      if (e.kind === 0) this.owner[e.idx] = e.old;
+      else if (e.kind === 1) this.placed[e.clueIdx] = e.old;
+      else this.candidates[e.clueIdx] = e.old;
+    }
+  }
+}
+
+function _rectsOverlap(a, b) {
+  return !(a.r2 < b.r1 || b.r2 < a.r1 || a.c2 < b.c1 || b.c2 < a.c1);
 }
 
 if (typeof module !== 'undefined' && module.exports) {
