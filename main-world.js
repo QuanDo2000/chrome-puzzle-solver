@@ -829,6 +829,21 @@ function dumpPuzzleForBench() {
       return { type: 'binairo', rows: height, cols: width, givens: givens, comparisonClues: comparison, path: path };
     }
 
+    if (path.indexOf('/shikaku/') !== -1) {
+      if (!Array.isArray(g.task)) {
+        return { error: 'shikaku: g.task is not a 2D array', diagnostic: diagnostic(g), path: path };
+      }
+      var clues = [];
+      for (var r = 0; r < height; r++) {
+        var srcRow = g.task[r] || [];
+        for (var c = 0; c < width; c++) {
+          var v = srcRow[c];
+          if (typeof v === 'number' && v > 0) clues.push({ row: r, col: c, area: v });
+        }
+      }
+      return { type: 'shikaku', rows: height, cols: width, clues: clues, path: path };
+    }
+
     if (path.indexOf('/galaxies/') !== -1) {
       var stars = [];
       // 1. g.task as a sparse 2D matrix of doubled-coord star positions
