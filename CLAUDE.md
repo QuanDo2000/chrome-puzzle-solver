@@ -146,13 +146,22 @@ rectangle that must contain that cell. Zero cells are non-clue cells.
 `window.Game.currentState.cellStatus` is `rows × cols` of int: `-1` =
 unassigned, otherwise the index of the area (rectangle) that owns the
 cell. `currentState.areas` holds the rectangle list, indexed by owner id —
-`applyShikakuState` in `main-world.js` rebuilds it from `cellStatus` as
-`[{ id, startPoint:{row,col}, endPoint:{row,col}, cellList:[{r,c}] }]`. The
-`startPoint`/`endPoint` corners are mandatory: `drawCurrentStateInternal`
-passes each `areas[t]` straight to `drawRect`, which reads
-`area.startPoint.{row,col}` / `area.endPoint.{row,col}`. A clue with no
-cells (partial hint state) is left `undefined` at its index — the page's
-`void 0 !== areas[t]` guard skips it.
+`applyShikakuState` in `main-world.js` rebuilds it from `cellStatus`. Each
+area MUST match the shape the page builds for its own moves (a cloned
+`currentMove`):
+`{ cells:[{row,col}], cellStatus:id, invert:false, startPoint:{row,col}, endPoint:{row,col} }`.
+The field names are load-bearing — three different page functions touch
+areas and each crashes on a mismatch:
+- `drawCurrentStateInternal` passes each `areas[t]` to `drawRect`, which
+  reads `area.startPoint.{row,col}` / `area.endPoint.{row,col}`.
+- `removeArea` (fires when the player draws over an applied area) iterates
+  `area.cells` and reads each `.row`/`.col` — so the cell list MUST be
+  `cells` of `{row,col}`, NOT `cellList` of `{r,c}`.
+- `applyCurrentMoveToState` stores a new area at `areas[move.cellStatus]`,
+  so every area's `cellStatus` field must equal its own array index.
+A clue with no cells (partial hint state) is left `undefined` at its
+index — the page's `void 0 !== areas[t]` guards (in `drawCurrentStateInternal`
+and `removeArea`) skip those.
 
 Solver shape: `ShikakuSolver` per-clue enumerates rectangle candidates
 (axis-aligned rects containing the clue cell, with the right area, no
