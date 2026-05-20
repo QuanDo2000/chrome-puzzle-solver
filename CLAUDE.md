@@ -1,10 +1,9 @@
 # Project conventions for Claude Code
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
-and Binairo Plus puzzles on puzzles-mobile.com. Four solver classes in
-`solver.js` (Binairo Plus reuses `BinairoSolver` with the comparison-clue
-rule enabled), a content-script widget in `content.js`, and a small
-service worker in `background.js`.
+Binairo Plus, and Shikaku puzzles on puzzles-mobile.com. Five solver
+classes in `solver.js`, a content-script widget in `content.js`, and a
+small service worker in `background.js`.
 
 ## Version control: use `jj`, never plain `git`
 
@@ -31,7 +30,7 @@ When dispatching subagents that need to commit work, tell them explicitly to use
 
 | File | Role | Runs in |
 | --- | --- | --- |
-| `solver.js` | `NonogramSolver`, `AquariumSolver`, `GalaxiesSolver`, `BinairoSolver` — pure logic, no DOM | Content script + Web Worker (via inlined Blob) + Node tests |
+| `solver.js` | `NonogramSolver`, `AquariumSolver`, `GalaxiesSolver`, `BinairoSolver`, `ShikakuSolver` — pure logic, no DOM | Content script + Web Worker (via inlined Blob) + Node tests |
 | `solver.worker.js` | Worker entry: imports solver.js + dispatches by puzzle type | Web Worker (inlined into a Blob — see Worker note below) |
 | `content.js` | Widget UI, message dispatch, `runSolve` (Worker proxy), `drawPreview` | Content script (isolated world, page's origin) |
 | `handler.js` | Per-puzzle-type handlers (galaxies/aquarium/puzzles-mobile fallback) | Content script |
@@ -135,6 +134,46 @@ Preview canvas renders `=` / `×` glyphs at cell-boundary midpoints in the
 cached `staticLayer`; `staticSig` includes a `|cc=` segment so the
 layer rebuilds when the clue set changes.
 
+### Shikaku encoding
+
+The `/shikaku/*` path is served by a dedicated `ShikakuSolver` +
+`shikakuHandler` because Shikaku's algorithm doesn't overlap with the
+cell-state puzzles (it partitions the grid into rectangles).
+
+Page exposes the puzzle at `window.Game.task` as a 2D array of integers.
+Non-zero cells are clues — the integer value is the **area** of the
+rectangle that must contain that cell. Zero cells are non-clue cells.
+`window.Game.currentState.cellStatus` is `rows × cols` of int: `-1` =
+unassigned, otherwise the index of the area (rectangle) that owns the
+cell. `currentState.areas` holds the rectangle list — `applyShikakuState`
+in `main-world.js` rebuilds it from `cellStatus` as `[{ id, cellList }]`
+(field shape to be confirmed against the live page on first verification).
+
+Solver shape: `ShikakuSolver` per-clue enumerates rectangle candidates
+(axis-aligned rects containing the clue cell, with the right area, no
+other clue inside, fitting the grid). Propagation: single-candidate
+forcing places a rectangle and prunes overlapping candidates of other
+clues. Most-constrained backtracking when propagation exhausts. `getHint`
+runs propagation, then a forward-checking pass, then a final tier that
+solves and reveals one rectangle. Static `_solutionCache` keyed on
+FNV-1a of `(rows, cols, clues sorted)`, 50-entry LRU.
+
+Solution shape across worker → content → MAIN bridge: 2D `number[][]`
+where each cell holds its owning clue's index (0..K-1) or `-1`. The hint
+shape is row-anchored like other puzzles; cell values are owner indices,
+not 1/2/-1. `applyHintHandler` and `applyAndRunLoop` in `content.js` have
+shikaku-specific arms that re-read state, overlay hint cells, and apply
+via `applyShikakuState` (the generic `applyHintCells` assumes cell-state
+encoding). The Loop done-check uses `-1` as the unassigned sentinel for
+shikaku (`0` is a valid owner index), unlike other puzzles where `0`
+means unassigned.
+
+Preview canvas colors each cell by owner index (`galaxiesColors`
+palette), draws thick borders between distinct owners, and overlays clue
+numbers as bold text. The clue overlay lives in the cached `staticLayer`;
+`staticSig` includes a `|sk=` segment so the layer rebuilds when the clue
+set changes.
+
 ### Backtracking validates duplicates at completion; triples validated inline
 
 `BinairoSolver._applyBalance` and `_applyUniqueness` now call
@@ -212,7 +251,7 @@ Click the widget's **📋 Dump** button on any puzzle page. It writes a JSON sni
 
 ## MV3 hardening contract
 
-- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (11 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
+- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (14 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
 - `callMainWorld` has a 15s wall-clock timeout via `Promise.race` — if the SW dies mid-call, the caller resolves `null` instead of hanging.
 - `execMain` targets `sender.tab.id`, not the active tab — handles tab-switch mid-call.
 - `manifest.json` permissions list is minimal (`scripting` only). Don't add `activeTab` / `storage` back without a concrete need.
