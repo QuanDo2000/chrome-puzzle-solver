@@ -1848,6 +1848,16 @@ function makeWidget() {
     return (h >>> 0).toString(36);
   }
 
+  function shikakuCluesSig(clues) {
+    if (!Array.isArray(clues) || clues.length === 0) return '0';
+    let h = 0x811c9dc5;
+    for (const k of clues) {
+      h ^= (k.row | 0) * 65537 + (k.col | 0) * 31 + (k.area | 0);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return (h >>> 0).toString(36);
+  }
+
   function gridDataSig(grid) {
     let h = FNV_OFFSET;
     for (let r = 0; r < grid.length; r++) {
@@ -1926,6 +1936,9 @@ function makeWidget() {
     if (pd?.type === 'binairo' && Array.isArray(pd.comparisonClues)) {
       drawComparisonCluesOn(ctx, cellSize, pd.comparisonClues);
     }
+    if (pd?.type === 'shikaku' && Array.isArray(pd.clues)) {
+      drawShikakuCluesOn(ctx, cellSize, pd.clues);
+    }
     return c;
   }
 
@@ -1961,6 +1974,25 @@ function makeWidget() {
           ctx.fillText(ch, x, y);
         }
       }
+    }
+    ctx.restore();
+  }
+
+  function drawShikakuCluesOn(ctx, cellSize, clues) {
+    const fontSize = Math.max(10, Math.floor(cellSize * 0.5));
+    ctx.save();
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = '#111827';
+    for (const k of clues) {
+      const x = k.col * cellSize + cellSize / 2;
+      const y = k.row * cellSize + cellSize / 2;
+      const ch = String(k.area);
+      ctx.strokeText(ch, x, y);
+      ctx.fillText(ch, x, y);
     }
     ctx.restore();
   }
@@ -2013,7 +2045,7 @@ function makeWidget() {
   }
 
   function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo') return;
+    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku') return;
     ctx.save();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -2073,7 +2105,8 @@ function makeWidget() {
     const staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
                       '|rm=' + regionMapSig(pd?.regionMap) +
                       '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
-                      '|cc=' + comparisonCluesSig(pd?.comparisonClues);
+                      '|cc=' + comparisonCluesSig(pd?.comparisonClues) +
+                      '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
       staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
@@ -2095,15 +2128,22 @@ function makeWidget() {
     const galaxiesColors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
     const xPad = Math.max(1, Math.floor(cellSize / 5));
     let xMarkPath = null;
+    const isShikaku = puzzleData?.type === 'shikaku';
     const isBinairo = puzzleData?.type === 'binairo';
     const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
     ctx.fillStyle = '#1f2937';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const v = grid[r][c];
-        if (v === 0) continue;
+        if (v === 0 && !isShikaku) continue;
+        if (v === -1 && isShikaku) continue;
         const x = c * cellSize, y = r * cellSize;
-        if (isBinairo) {
+        if (isShikaku) {
+          if (v >= 0) {
+            ctx.fillStyle = galaxiesColors[v % galaxiesColors.length];
+            ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+          }
+        } else if (isBinairo) {
           // cellStatus encoding: 1 = "one" cells (page shows as light/outlined),
           // 2 = "zero" cells (page shows as dark/filled). Match that polarity.
           const cx = x + cellSize / 2, cy = y + cellSize / 2;
@@ -2159,6 +2199,25 @@ function makeWidget() {
         }
       }
       // Stars themselves are part of the cached static layer (puzzle-shape only).
+      ctx.restore();
+    }
+
+    if (puzzleData?.type === 'shikaku') {
+      ctx.save();
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize / 8));
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * cellSize, y = r * cellSize;
+          const v = grid[r][c];
+          if (c + 1 < cols && grid[r][c + 1] !== v) {
+            ctx.beginPath(); ctx.moveTo(x + cellSize, y); ctx.lineTo(x + cellSize, y + cellSize); ctx.stroke();
+          }
+          if (r + 1 < rows && grid[r + 1][c] !== v) {
+            ctx.beginPath(); ctx.moveTo(x, y + cellSize); ctx.lineTo(x + cellSize, y + cellSize); ctx.stroke();
+          }
+        }
+      }
       ctx.restore();
     }
 
