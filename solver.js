@@ -3921,6 +3921,8 @@ class YinYangSolver {
         if (start === -1) start = i;
       }
     }
+    // 0 or 1 placed cells of this colour: nothing to disconnect. (On real
+    // >=6x6 boards the 2x2 rule guarantees both colours appear.)
     if (placedCount <= 1) return true;
     const seen = new Uint8Array(N);
     const stack = [start];

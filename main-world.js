@@ -975,6 +975,23 @@ function dumpPuzzleForBench() {
       return { type: 'shikaku', rows: height, cols: width, clues: clues, path: path };
     }
 
+    if (path.indexOf('/yin-yang/') !== -1) {
+      if (!Array.isArray(g.task)) {
+        return { error: 'yin-yang: g.task is not a 2D array', diagnostic: diagnostic(g), path: path };
+      }
+      var task = [];
+      for (var r = 0; r < height; r++) {
+        var srcRow = g.task[r] || [];
+        var copyRow = [];
+        for (var c = 0; c < width; c++) {
+          var v = srcRow[c];
+          copyRow.push((v === 0 || v === 1) ? v : -1);
+        }
+        task.push(copyRow);
+      }
+      return { type: 'yinyang', rows: height, cols: width, task: task, path: path };
+    }
+
     if (path.indexOf('/galaxies/') !== -1) {
       var stars = [];
       // 1. g.task as a sparse 2D matrix of doubled-coord star positions
