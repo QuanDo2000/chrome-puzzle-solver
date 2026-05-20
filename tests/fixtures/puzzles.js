@@ -143,4 +143,19 @@ module.exports = {
       { row: 4, col: 4, area: 2 },
     ],
   },
+
+  // 6x6 Yin-Yang captured from puzzles-mobile.com/yin-yang/random/6x6-easy
+  // on 2026-05-20. task: -1=no given, 0=given white, 1=given black.
+  yinyang6x6: {
+    rows: 6,
+    cols: 6,
+    task: [
+      [-1, -1, -1,  1, -1,  0],
+      [-1, -1,  0, -1,  1, -1],
+      [-1,  0, -1, -1, -1, -1],
+      [-1, -1,  0,  1, -1, -1],
+      [-1, -1,  0, -1, -1, -1],
+      [ 1, -1, -1, -1, -1, -1],
+    ],
+  },
 };
