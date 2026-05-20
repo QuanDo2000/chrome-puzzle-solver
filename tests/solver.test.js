@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -540,4 +540,30 @@ test('BinairoSolver: _applyLineEnumeration forces cells from per-line completion
   assert.equal(changed, true);
   assert.equal(s._get(2, 0), 1, 'D-NE forces (2,0) != (1,0)=0 → (2,0)=1');
   assert.equal(s._get(3, 0), 2, 'balance forces (3,0)=2 (2 ones already in col)');
+});
+
+test('ShikakuSolver: constructor rejects clue-sum mismatch', () => {
+  assert.throws(() => new ShikakuSolver({
+    rows: 3, cols: 3,
+    clues: [{ row: 0, col: 0, area: 4 }, { row: 2, col: 2, area: 4 }],
+  }), /sum/i);
+});
+
+test('ShikakuSolver: candidate enumeration produces all valid rectangles', () => {
+  // 2x4 grid, clue area=4 at (0,0) and area=4 at (1,3).
+  //   Rectangles containing (0,0) with area 4:
+  //     (0,0)-(0,3) 1×4 → contains (1,3)? No → valid
+  //     (0,0)-(3,0) 4×1 → out of grid (rows=2) → invalid
+  //     (0,0)-(1,1) 2×2 → contains (1,3)? No → valid
+  //   Same shape for clue (1,3)=4 (mirrored).
+  const s = new ShikakuSolver({
+    rows: 2, cols: 4,
+    clues: [{ row: 0, col: 0, area: 4 }, { row: 1, col: 3, area: 4 }],
+  });
+  function key(r) { return `${r.r1},${r.c1}-${r.r2},${r.c2}`; }
+  const got = s.candidates.map(cs => cs.map(key).sort());
+  assert.deepEqual(got[0].sort(), ['0,0-0,3', '0,0-1,1'].sort(),
+    'clue (0,0)=4 candidates wrong');
+  assert.deepEqual(got[1].sort(), ['0,2-1,3', '1,0-1,3'].sort(),
+    'clue (1,3)=4 candidates wrong');
 });

@@ -3471,6 +3471,89 @@ class BinairoSolver {
   }
 }
 
+class ShikakuSolver {
+  /**
+   * @param {{
+   *   rows: number,
+   *   cols: number,
+   *   clues: Array<{ row: number, col: number, area: number }>,
+   *   initialState?: number[][],
+   * }} opts
+   */
+  constructor({ rows, cols, clues, initialState }) {
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
+      throw new Error('ShikakuSolver: rows/cols must be positive integers');
+    }
+    if (!Array.isArray(clues)) {
+      throw new Error('ShikakuSolver: clues must be an array');
+    }
+    const sum = clues.reduce((s, c) => s + (c.area | 0), 0);
+    if (sum !== rows * cols) {
+      throw new Error(`ShikakuSolver: clue area sum ${sum} must equal grid area ${rows * cols}`);
+    }
+    this.rows = rows;
+    this.cols = cols;
+    this.clues = clues.map(c => ({ row: c.row | 0, col: c.col | 0, area: c.area | 0 }));
+
+    this.clueByCell = new Int16Array(rows * cols).fill(-1);
+    for (let i = 0; i < this.clues.length; i++) {
+      const k = this.clues[i];
+      this.clueByCell[k.row * cols + k.col] = i;
+    }
+
+    this.owner = new Int16Array(rows * cols).fill(-1);
+    for (let i = 0; i < this.clues.length; i++) {
+      const k = this.clues[i];
+      this.owner[k.row * cols + k.col] = i;
+    }
+
+    this.placed = new Uint8Array(this.clues.length);
+    this.candidates = this.clues.map((_, i) => this._enumerateCandidates(i));
+    this.trail = [];
+
+    if (initialState) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const v = initialState[r]?.[c];
+          if (Number.isInteger(v) && v >= 0 && v < this.clues.length) {
+            this.owner[r * cols + c] = v;
+          }
+        }
+      }
+    }
+  }
+
+  _enumerateCandidates(clueIdx) {
+    const k = this.clues[clueIdx];
+    const R = this.rows, C = this.cols;
+    const out = [];
+    for (let h = 1; h <= k.area; h++) {
+      if (k.area % h !== 0) continue;
+      const w = k.area / h;
+      for (let r1 = Math.max(0, k.row - h + 1); r1 <= k.row; r1++) {
+        const r2 = r1 + h - 1;
+        if (r2 >= R) continue;
+        for (let c1 = Math.max(0, k.col - w + 1); c1 <= k.col; c1++) {
+          const c2 = c1 + w - 1;
+          if (c2 >= C) continue;
+          let otherClueInside = false;
+          for (let r = r1; r <= r2 && !otherClueInside; r++) {
+            for (let c = c1; c <= c2; c++) {
+              const cellClue = this.clueByCell[r * C + c];
+              if (cellClue !== -1 && cellClue !== clueIdx) {
+                otherClueInside = true;
+                break;
+              }
+            }
+          }
+          if (!otherClueInside) out.push({ r1, c1, r2, c2 });
+        }
+      }
+    }
+    return out;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver };
 }
