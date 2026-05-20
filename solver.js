@@ -3779,6 +3779,87 @@ function _rectsOverlap(a, b) {
   return !(a.r2 < b.r1 || b.r2 < a.r1 || a.c2 < b.c1 || b.c2 < a.c1);
 }
 
+class YinYangSolver {
+  /**
+   * @param {{
+   *   rows: number,
+   *   cols: number,
+   *   task: number[][],
+   *   initialState?: number[][],
+   * }} opts
+   *   `task`         2D givens, page-native (-1=none, 0=given-white, 1=given-black).
+   *   `initialState` optional 2D in cellStatus encoding (0=empty, 1=black, 2=white);
+   *                  when present it seeds the grid instead of the translated givens.
+   */
+  constructor({ rows, cols, task, initialState }) {
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
+      throw new Error('YinYangSolver: rows/cols must be positive integers');
+    }
+    if (!Array.isArray(task)) {
+      throw new Error('YinYangSolver: task must be an array');
+    }
+    this.rows = rows;
+    this.cols = cols;
+    this.task = task.map(row => (Array.isArray(row) ? row.slice() : []));
+
+    // Internal grid: 0=empty, 1=black, 2=white. Flat Uint8Array.
+    this.grid = new Uint8Array(rows * cols);
+    // Trail entries packed as (idx << 2) | oldValue. oldValue in {0,1,2}.
+    this.trail = [];
+    // Solve-time budget. maxMs=0 disables it.
+    this.maxMs = 0;
+    this._startedAt = 0;
+    this._timedOut = false;
+
+    const seed = initialState || this._gridFromGivens();
+    for (let r = 0; r < rows; r++) {
+      const row = seed[r] || [];
+      for (let c = 0; c < cols; c++) {
+        const v = row[c];
+        if (v === 1 || v === 2) this.grid[r * cols + c] = v;
+      }
+    }
+  }
+
+  _gridFromGivens() {
+    const out = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = this.task[r] || [];
+      const dst = new Array(this.cols).fill(0);
+      for (let c = 0; c < this.cols; c++) {
+        const g = row[c];
+        dst[c] = g === 1 ? 1 : g === 0 ? 2 : 0;
+      }
+      out[r] = dst;
+    }
+    return out;
+  }
+
+  _get(r, c) { return this.grid[r * this.cols + c]; }
+
+  // Trailed write. Caller must guarantee grid[idx] is currently 0 (empty).
+  _assign(idx, v) {
+    this.trail.push((idx << 2) | this.grid[idx]);
+    this.grid[idx] = v;
+  }
+
+  _rollback(mark) {
+    while (this.trail.length > mark) {
+      const e = this.trail.pop();
+      this.grid[e >> 2] = e & 3;
+    }
+  }
+
+  _budgetExceeded() {
+    if (this.maxMs <= 0) return false;
+    if (Date.now() - this._startedAt > this.maxMs) {
+      this._timedOut = true;
+      return true;
+    }
+    return false;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver };
 }

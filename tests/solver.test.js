@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -665,4 +665,34 @@ test('ShikakuSolver: 5x5 fixture matches golden', () => {
     new ShikakuSolver({ rows: p.rows, cols: p.cols, clues: p.clues }).solve()
   );
   assert.deepEqual(result, golden.shikaku5x5);
+});
+
+test('YinYangSolver: constructor translates task givens to cellStatus encoding', () => {
+  const task = [
+    [-1, 0, 1],
+    [1, -1, -1],
+  ];
+  const s = new YinYangSolver({ rows: 2, cols: 3, task });
+  // -1 -> 0 empty, 0 -> 2 white, 1 -> 1 black.
+  assert.equal(s._get(0, 0), 0);
+  assert.equal(s._get(0, 1), 2);
+  assert.equal(s._get(0, 2), 1);
+  assert.equal(s._get(1, 0), 1);
+  assert.equal(s._get(1, 1), 0);
+});
+
+test('YinYangSolver: initialState overrides givens when provided', () => {
+  const task = [[-1, -1], [-1, -1]];
+  const s = new YinYangSolver({
+    rows: 2, cols: 2, task,
+    initialState: [[1, 2], [0, 0]],
+  });
+  assert.equal(s._get(0, 0), 1);
+  assert.equal(s._get(0, 1), 2);
+  assert.equal(s._get(1, 0), 0);
+});
+
+test('YinYangSolver: constructor rejects invalid dimensions', () => {
+  assert.throws(() => new YinYangSolver({ rows: 0, cols: 3, task: [] }));
+  assert.throws(() => new YinYangSolver({ rows: 3, cols: 3, task: 'nope' }));
 });
