@@ -735,3 +735,31 @@ test('YinYangSolver: 2x2 rule reports contradiction on an illegal full window', 
   });
   assert.equal(s.propagate(), false);
 });
+
+test('YinYangSolver: _colorConnected detects disconnected placed cells', () => {
+  // Two black cells separated by a white wall, no empty bridge.
+  const s = new YinYangSolver({
+    rows: 1, cols: 3, task: [[-1, -1, -1]],
+    initialState: [[1, 2, 1]],
+  });
+  assert.equal(s._colorConnected(1, -1), false);
+});
+
+test('YinYangSolver: connectivity-cut probe forces a bridging cell', () => {
+  // Row: black, empty, black. The empty cell is the only path between the
+  // two black cells, so it is forced black.
+  const s = new YinYangSolver({
+    rows: 1, cols: 3, task: [[-1, -1, -1]],
+    initialState: [[1, 0, 1]],
+  });
+  assert.equal(s.propagate(), true);
+  assert.equal(s._get(0, 1), 1);
+});
+
+test('YinYangSolver: connectivity reports contradiction on a severed color', () => {
+  const s = new YinYangSolver({
+    rows: 1, cols: 3, task: [[-1, -1, -1]],
+    initialState: [[1, 2, 1]],
+  });
+  assert.equal(s.propagate(), false);
+});

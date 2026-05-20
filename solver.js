@@ -3908,8 +3908,68 @@ class YinYangSolver {
     return true;
   }
 
+  // True iff every placed cell of `color` is mutually reachable through
+  // {color cells ∪ empty cells}. When blockIdx >= 0 that cell is treated as
+  // impassable (removed from the graph) — used by the cut probe below.
+  _colorConnected(color, blockIdx) {
+    const C = this.cols, R = this.rows, N = R * C;
+    let start = -1, placedCount = 0;
+    for (let i = 0; i < N; i++) {
+      if (i === blockIdx) continue;
+      if (this.grid[i] === color) {
+        placedCount++;
+        if (start === -1) start = i;
+      }
+    }
+    if (placedCount <= 1) return true;
+    const seen = new Uint8Array(N);
+    const stack = [start];
+    seen[start] = 1;
+    let reached = 1;
+    while (stack.length) {
+      const cur = stack.pop();
+      const r = (cur / C) | 0, c = cur % C;
+      const nbrs = [];
+      if (r > 0) nbrs.push(cur - C);
+      if (r + 1 < R) nbrs.push(cur + C);
+      if (c > 0) nbrs.push(cur - 1);
+      if (c + 1 < C) nbrs.push(cur + 1);
+      for (const nb of nbrs) {
+        if (seen[nb] || nb === blockIdx) continue;
+        const gv = this.grid[nb];
+        if (gv === color || gv === 0) {
+          seen[nb] = 1;
+          if (gv === color) reached++;
+          stack.push(nb);
+        }
+      }
+    }
+    return reached === placedCount;
+  }
+
+  // Connectivity propagation. Returns false on contradiction; calls
+  // onChange() whenever it forces a cell.
+  _applyConnectivity(onChange) {
+    const N = this.rows * this.cols;
+    for (let color = 1; color <= 2; color++) {
+      if (!this._colorConnected(color, -1)) return false;
+    }
+    for (let i = 0; i < N; i++) {
+      if (this.grid[i] !== 0) continue;
+      for (let color = 1; color <= 2; color++) {
+        if (!this._colorConnected(color, i)) {
+          // Removing empty cell i severs `color` -> i must be `color`.
+          this._assign(i, color);
+          onChange();
+          break;
+        }
+      }
+    }
+    return true;
+  }
+
   // Iterate the propagation rules to a fixpoint. Returns false on
-  // contradiction. (The connectivity rule is added in the next task.)
+  // contradiction.
   propagate() {
     let changed = true;
     while (changed) {
@@ -3917,6 +3977,7 @@ class YinYangSolver {
       changed = false;
       const onChange = () => { changed = true; };
       if (!this._apply2x2(onChange)) return false;
+      if (!this._applyConnectivity(onChange)) return false;
     }
     return true;
   }
