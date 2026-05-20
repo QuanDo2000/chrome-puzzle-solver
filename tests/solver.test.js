@@ -634,17 +634,28 @@ test('ShikakuSolver: static _solutionCache returns prior solve on identical clue
   ShikakuSolver.clearSolutionCache();
 });
 
-test('ShikakuSolver: getHint returns forced cells from fresh state', () => {
+test('ShikakuSolver: getHint reveals a whole rectangle including its clue cell', () => {
+  ShikakuSolver.clearSolutionCache();
   const clues = [
     { row: 0, col: 0, area: 4 },
     { row: 1, col: 3, area: 4 },
   ];
   const s = new ShikakuSolver({ rows: 2, cols: 4, clues });
-  const grid = s._ownerTo2D();
-  const hint = s.getHint(grid);
-  assert.ok(hint, 'getHint must return at least one forced cell');
-  const total = (hint.cells?.length || 0) + (hint.extraCells?.length || 0);
-  assert.ok(total >= 1, `expected ≥1 cell, got ${total}`);
+  const empty = [[-1, -1, -1, -1], [-1, -1, -1, -1]];
+  const hint = s.getHint(empty);
+  assert.ok(hint, 'getHint must return a rectangle from an empty board');
+  assert.ok(hint.clue, 'hint must carry the clue it reveals');
+  // Flatten the hint into absolute {row,col} cells.
+  const cells = [
+    ...(hint.cells || []).map(c => ({ row: hint.index, col: c.index })),
+    ...(hint.extraCells || []).map(c => ({ row: c.row, col: c.col })),
+  ];
+  assert.equal(cells.length, hint.clue.area,
+    `hint must cover the clue's whole ${hint.clue.area}-cell rectangle`);
+  assert.ok(
+    cells.some(c => c.row === hint.clue.row && c.col === hint.clue.col),
+    'hint cells must include the clue (number) cell itself');
+  ShikakuSolver.clearSolutionCache();
 });
 
 test('ShikakuSolver: 5x5 fixture matches golden', () => {

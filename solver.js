@@ -3712,110 +3712,66 @@ class ShikakuSolver {
   }
 
   /**
-   * Run propagation (no backtracking) to find every cell whose owner is
-   * now uniquely forced. If propagation produces nothing, fall back to a
-   * single forward-checking pass: for each unplaced clue, probe each
-   * candidate (place + propagate), keep only candidates that stay
-   * consistent; force any clue whose surviving candidate is unique.
-   * Returns a row-anchored hint shape compatible with content.js, or null.
-   * @param {number[][]} currentGrid  2D of cell owners (or -1).
+   * Reveal one complete rectangle. A Shikaku hint is "draw the rectangle
+   * around this number", so the hint covers every cell of one clue's
+   * rectangle — the clue's own number cell included.
+   *
+   * Real Shikaku puzzles have a unique solution, so the rectangle's shape
+   * is certain; we solve from the clues alone (NOT from `currentGrid`,
+   * whose owner ids are page-assigned and need not match our clue
+   * indices) and consult `currentGrid` only to skip rectangles the player
+   * has already drawn. Returns the first not-yet-drawn rectangle as a
+   * row-anchored hint shape compatible with content.js, or null when the
+   * board is already complete or the puzzle is unsolvable.
+   * @param {number[][]} currentGrid  2D of cell owners (or -1 for undrawn).
    */
   getHint(currentGrid) {
-    const clone = new ShikakuSolver({
-      rows: this.rows, cols: this.cols,
-      clues: this.clues,
-      initialState: currentGrid,
-    });
-    const before = new Int16Array(clone.owner);
-    const ok = clone.propagate();
-    if (!ok) return null;
+    const solved = new ShikakuSolver({
+      rows: this.rows, cols: this.cols, clues: this.clues,
+    }).solve();
+    if (!solved.solved) return null;
+    const sol = solved.grid;
 
-    let anyChange = false;
-    for (let i = 0; i < before.length; i++) {
-      if (before[i] !== clone.owner[i]) { anyChange = true; break; }
-    }
+    const isDrawn = (r, c) => {
+      const row = currentGrid && currentGrid[r];
+      const v = row ? row[c] : -1;
+      return Number.isInteger(v) && v >= 0;
+    };
 
-    if (!anyChange) {
-      const forced = [];
-      for (let i = 0; i < clone.clues.length; i++) {
-        if (clone.placed[i]) continue;
-        const survivors = [];
-        for (const rect of clone.candidates[i].slice()) {
-          const mark = clone.trail.length;
-          if (clone._placeRectangle(i, rect) && clone.propagate()) {
-            survivors.push(rect);
-          }
-          clone._rollback(mark);
-        }
-        if (survivors.length === 0) return null;
-        if (survivors.length === 1) {
-          forced.push({ clueIdx: i, rect: survivors[0] });
-        }
-      }
-      for (const f of forced) {
-        if (!clone._placeRectangle(f.clueIdx, f.rect)) return null;
-      }
-      if (!clone.propagate()) return null;
-    }
-
-    // Collect cells newly assigned by propagation / forced placements.
-    const cells2d = [];
-    for (let i = 0; i < before.length; i++) {
-      if (before[i] === -1 && clone.owner[i] !== -1) {
-        const r = (i / clone.cols) | 0;
-        const c = i % clone.cols;
-        cells2d.push({ row: r, col: c, value: clone.owner[i] });
-      }
-    }
-
-    // Tier 3: propagation + forward-checking both exhausted. Solve fully
-    // and reveal ONE rectangle — the one owning the first still-unassigned
-    // cell. Real Shikaku puzzles have a unique solution, so every cell of
-    // that rectangle is a genuinely forced deduction. Revealing a whole
-    // rectangle matches Shikaku's hint granularity (tiers 1-2 place whole
-    // rectangles too).
-    if (cells2d.length === 0) {
-      const solveClone = new ShikakuSolver({
-        rows: this.rows, cols: this.cols,
-        clues: this.clues,
-        initialState: currentGrid,
-      });
-      const solved = solveClone.solve();
-      if (!solved.solved) return null;
-      // Find the first cell still unassigned in the pre-propagation snapshot.
-      let fr = -1, fc = -1;
-      outer: for (let r = 0; r < this.rows; r++) {
-        for (let c = 0; c < this.cols; c++) {
-          if (before[r * this.cols + c] === -1) { fr = r; fc = c; break outer; }
-        }
-      }
-      if (fr === -1) return null; // already complete
-      const targetOwner = solved.grid[fr][fc];
+    for (let ci = 0; ci < this.clues.length; ci++) {
+      const cells2d = [];
+      let hasUndrawn = false;
       for (let r = 0; r < this.rows; r++) {
         for (let c = 0; c < this.cols; c++) {
-          if (solved.grid[r][c] === targetOwner && before[r * this.cols + c] === -1) {
-            cells2d.push({ row: r, col: c, value: targetOwner });
+          if (sol[r][c] === ci) {
+            cells2d.push({ row: r, col: c, value: ci });
+            if (!isDrawn(r, c)) hasUndrawn = true;
           }
         }
       }
-      if (cells2d.length === 0) return null;
-    }
+      if (!hasUndrawn || cells2d.length === 0) continue;
 
-    const base = cells2d[0];
-    const cells = [];
-    const extraCells = [];
-    for (const f of cells2d) {
-      if (f.row === base.row) cells.push({ index: f.col, value: f.value });
-      else extraCells.push({ row: f.row, col: f.col, value: f.value });
+      const base = cells2d[0];
+      const cells = [];
+      const extraCells = [];
+      for (const f of cells2d) {
+        if (f.row === base.row) cells.push({ index: f.col, value: f.value });
+        else extraCells.push({ row: f.row, col: f.col, value: f.value });
+      }
+      return {
+        type: 'row',
+        index: base.row,
+        clue: {
+          row: this.clues[ci].row,
+          col: this.clues[ci].col,
+          area: this.clues[ci].area,
+        },
+        cells,
+        extraCells,
+        count: cells2d.length,
+      };
     }
-    return {
-      type: 'row',
-      index: base.row,
-      clue: null,
-      cells,
-      extraCells,
-      count: cells2d.length,
-    };
+    return null;
   }
 }
 

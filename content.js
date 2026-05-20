@@ -1683,13 +1683,10 @@ function makeWidget() {
   function shikakuHintStatusNodes(h) {
     const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
     if (total === 0) return ['No hint available'];
-    if (total === 1) {
-      const cell = h.cells?.[0] || h.extraCells?.[0];
-      const row = h.cells?.length ? h.index : cell.row;
-      const col = h.cells?.length ? cell.index : cell.col;
+    if (h.clue) {
       return [
-        'Cell ', bold(`(row ${row + 1}, col ${col + 1})`),
-        ' belongs to area ', bold(String(cell.value + 1)),
+        'Draw the ', bold(`${h.clue.area}`), '-cell rectangle for the clue at ',
+        bold(`(row ${h.clue.row + 1}, col ${h.clue.col + 1})`),
       ];
     }
     return [bold(String(total)), ' cells can be deduced'];
