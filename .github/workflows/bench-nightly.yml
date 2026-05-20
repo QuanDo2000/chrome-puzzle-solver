@@ -31,3 +31,4 @@ jobs:
       - run: node tests/bench-galaxies.js
       - run: node tests/bench-aquarium.js
       - run: node tests/bench-binairo.js
+      - run: node tests/bench-shikaku.js
