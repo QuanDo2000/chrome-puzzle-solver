@@ -2519,7 +2519,10 @@ function makeWidget() {
       if (stopLooping) break;
       const gs = await readGridState();
       if (!gs?.success) break;
-      if (puzzleData.type !== 'galaxies' && gs.grid.every(row => row.every(c => c !== 0))) break;
+      const gsComplete = puzzleData.type === 'shikaku'
+        ? gs.grid.every(row => row.every(c => c !== -1))
+        : gs.grid.every(row => row.every(c => c !== 0));
+      if (puzzleData.type !== 'galaxies' && gsComplete) break;
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
@@ -2557,7 +2560,10 @@ function makeWidget() {
     } else {
       const end = await readGridState();
       if (end?.success) drawPreview(end.grid);
-      const done = end?.grid && puzzleData.type !== 'galaxies' && end.grid.every(row => row.every(c => c !== 0));
+      const endComplete = puzzleData.type === 'shikaku'
+        ? end.grid.every(row => row.every(c => c !== -1))
+        : end.grid.every(row => row.every(c => c !== 0));
+      const done = end?.grid && puzzleData.type !== 'galaxies' && endComplete;
       setStatus(done ? 'Solved!' : 'No more hints available.', done ? 'success' : 'info');
     }
     stopLooping = false;
