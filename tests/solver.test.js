@@ -763,3 +763,41 @@ test('YinYangSolver: connectivity reports contradiction on a severed color', () 
   });
   assert.equal(s.propagate(), false);
 });
+
+test('YinYangSolver: solves the 6x6 fixture into a valid board', () => {
+  YinYangSolver.clearSolutionCache();
+  const p = fixtures.yinyang6x6;
+  const result = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task }).solve();
+  assert.equal(result.solved, true);
+  // Every cell placed.
+  for (const row of result.grid) {
+    for (const v of row) assert.ok(v === 1 || v === 2, 'every cell is black or white');
+  }
+  // Givens respected.
+  for (let r = 0; r < p.rows; r++) {
+    for (let c = 0; c < p.cols; c++) {
+      const g = p.task[r][c];
+      if (g === 1) assert.equal(result.grid[r][c], 1);
+      if (g === 0) assert.equal(result.grid[r][c], 2);
+    }
+  }
+  YinYangSolver.clearSolutionCache();
+});
+
+test('YinYangSolver: reports contradiction on an unsolvable board', () => {
+  // A 2x2 forced into a monochrome by givens.
+  const result = new YinYangSolver({
+    rows: 2, cols: 2, task: [[1, 1], [1, 1]],
+  }).solve();
+  assert.equal(result.solved, false);
+  assert.equal(result.grid, null);
+});
+
+test('YinYangSolver: maxMs budget makes a hard solve bail quickly', () => {
+  const task = Array.from({ length: 14 }, () => new Array(14).fill(-1));
+  const s = new YinYangSolver({ rows: 14, cols: 14, task });
+  s.maxMs = 1;
+  const t0 = Date.now();
+  s.solve();
+  assert.ok(Date.now() - t0 < 500, 'solve must bail within 500ms when maxMs=1');
+});

@@ -3981,6 +3981,118 @@ class YinYangSolver {
     }
     return true;
   }
+
+  _isComplete() {
+    for (let i = 0; i < this.grid.length; i++) {
+      if (this.grid[i] === 0) return false;
+    }
+    return true;
+  }
+
+  _gridTo2D() {
+    const out = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = new Array(this.cols);
+      for (let c = 0; c < this.cols; c++) row[c] = this.grid[r * this.cols + c];
+      out[r] = row;
+    }
+    return out;
+  }
+
+  // Most-constrained variable: the empty cell touching the most non-empty
+  // neighbours. Keeps the search frontier tight so connectivity prunes hard.
+  _pickCell() {
+    const C = this.cols, R = this.rows, N = R * C;
+    let best = -1, bestScore = -1;
+    for (let i = 0; i < N; i++) {
+      if (this.grid[i] !== 0) continue;
+      const r = (i / C) | 0, c = i % C;
+      let score = 0;
+      if (r > 0 && this.grid[i - C] !== 0) score++;
+      if (r + 1 < R && this.grid[i + C] !== 0) score++;
+      if (c > 0 && this.grid[i - 1] !== 0) score++;
+      if (c + 1 < C && this.grid[i + 1] !== 0) score++;
+      if (score > bestScore) { bestScore = score; best = i; }
+    }
+    return best;
+  }
+
+  _backtrack() {
+    if (this._budgetExceeded()) return false;
+    const target = this._pickCell();
+    if (target === -1) return this._isComplete();
+    for (let val = 1; val <= 2; val++) {
+      const mark = this.trail.length;
+      this._assign(target, val);
+      if (this.propagate()) {
+        if (this._isComplete() || this._backtrack()) return true;
+      }
+      this._rollback(mark);
+      if (this._timedOut) return false;
+    }
+    return false;
+  }
+
+  /**
+   * @returns {{ solved: boolean, grid: number[][] | null, error?: string }}
+   */
+  solve() {
+    const key = this._cacheKey();
+    const cached = YinYangSolver._solutionCache.get(key);
+    if (cached) return { solved: true, grid: cached.map(row => row.slice()) };
+
+    this._startedAt = Date.now();
+    this._timedOut = false;
+
+    if (!this.propagate()) {
+      return {
+        solved: false, grid: null,
+        error: this._timedOut ? 'timed out' : 'contradiction on initial propagation',
+      };
+    }
+    if (this._isComplete()) {
+      const grid = this._gridTo2D();
+      this._storeInCache(key, grid);
+      return { solved: true, grid };
+    }
+    if (this._backtrack()) {
+      const grid = this._gridTo2D();
+      this._storeInCache(key, grid);
+      return { solved: true, grid };
+    }
+    return {
+      solved: false, grid: null,
+      error: this._timedOut ? 'timed out' : 'no solution found',
+    };
+  }
+
+  static _solutionCache = new Map();
+  static _maxSolutionCache = 50;
+
+  static clearSolutionCache() {
+    YinYangSolver._solutionCache.clear();
+  }
+
+  _cacheKey() {
+    // FNV-1a over (rows, cols, flattened task). Returns a 32-bit uint string.
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(this.rows);
+    mix(this.cols);
+    for (let r = 0; r < this.rows; r++) {
+      const row = this.task[r] || [];
+      for (let c = 0; c < this.cols; c++) mix((row[c] | 0) + 2); // -1..1 -> 1..3
+    }
+    return String(h >>> 0);
+  }
+
+  _storeInCache(key, grid) {
+    const m = YinYangSolver._solutionCache;
+    if (m.size >= YinYangSolver._maxSolutionCache) {
+      m.delete(m.keys().next().value);
+    }
+    m.set(key, grid.map(row => row.slice()));
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
