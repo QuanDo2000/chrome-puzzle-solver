@@ -240,6 +240,20 @@ module.exports = {
       [],
     ],
   },
+  yinyangReal6x6_a: {
+    type: 'yinyang',
+    rows: 6,
+    cols: 6,
+    task: [
+      [-1, -1, -1,  1, -1,  0],
+      [-1, -1,  0, -1,  1, -1],
+      [-1,  0, -1, -1, -1, -1],
+      [-1, -1,  0,  1, -1, -1],
+      [-1, -1,  0, -1, -1, -1],
+      [ 1, -1, -1, -1, -1, -1],
+    ],
+  },
+
   // Shikaku 5x5 captured from puzzles-mobile.com/shikaku/random/5x5 on
   // 2026-05-19. Mirrors fixtures.shikaku5x5; this copy lives in
   // real-puzzles.js so bench-shikaku.js exercises the shikaku code path.
