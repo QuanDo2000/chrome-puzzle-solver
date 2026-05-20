@@ -366,15 +366,18 @@ const puzzlesMobileHandler = {
   priority: 10,
 
   matches() {
-    // Fallback handler for nonogram puzzle pages. Exclude the site homepage
-    // ('/') — it has no puzzle, and without this guard detect() polls
-    // readGameClues for ~5s waiting for a window.Game that never loads.
-    // Every real puzzle URL has a deeper path.
-    return isPuzzlesMobilePage() && window.location.pathname !== '/';
+    return isPuzzlesMobilePage();
   },
 
   async detect() {
     const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    // The site homepage ('/') has no puzzle. Match it (so the widget still
+    // mounts and shows the supported-puzzles list) but skip detection —
+    // otherwise _detectFromGameAPI polls readGameClues for ~5s waiting for
+    // a window.Game that never loads.
+    if (window.location.pathname === '/') {
+      return { ...result, error: 'No puzzle on the homepage' };
+    }
     const { task, width, height } = parsePuzzleTask();
 
     if (task) {
