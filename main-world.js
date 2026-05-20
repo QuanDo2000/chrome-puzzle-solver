@@ -691,19 +691,39 @@ function applyShikakuState(solution, clues) {
       }
     }
 
-    // Build areas list from cellStatus. Each area is the cell list of its
-    // owner-index cells. Field names verified at impl time via a follow-up
-    // Dump — assumed { id, cellList } here.
-    var areas = [];
+    // Build the areas list from cellStatus, indexed by owner id. The page's
+    // drawRect reads `area.startPoint.{row,col}` and `area.endPoint.{row,col}`
+    // (drawCurrentStateInternal passes each areas[t] straight to drawRect), so
+    // every area must carry the rectangle's two corners. `cellList` is kept
+    // too — it mirrors the page's own area shape. A clue with no cells yet
+    // (partial hint state) is left `undefined` at its index;
+    // drawCurrentStateInternal's `void 0 !== areas[t]` guard skips those.
     if (Array.isArray(clues)) {
+      var areas = [];
       for (var i = 0; i < clues.length; i++) {
         var cellList = [];
+        var minR = Infinity, minC = Infinity, maxR = -Infinity, maxC = -Infinity;
         for (var r2 = 0; r2 < rows && r2 < cs.length; r2++) {
           for (var c2 = 0; c2 < cs[r2].length; c2++) {
-            if (cs[r2][c2] === i) cellList.push({ r: r2, c: c2 });
+            if (cs[r2][c2] === i) {
+              cellList.push({ r: r2, c: c2 });
+              if (r2 < minR) minR = r2;
+              if (r2 > maxR) maxR = r2;
+              if (c2 < minC) minC = c2;
+              if (c2 > maxC) maxC = c2;
+            }
           }
         }
-        areas.push({ id: i, cellList: cellList });
+        if (cellList.length === 0) {
+          areas[i] = undefined;
+        } else {
+          areas[i] = {
+            id: i,
+            startPoint: { row: minR, col: minC },
+            endPoint: { row: maxR, col: maxC },
+            cellList: cellList,
+          };
+        }
       }
       window.Game.currentState.areas = areas;
     }

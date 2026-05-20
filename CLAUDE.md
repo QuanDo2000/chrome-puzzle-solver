@@ -145,9 +145,14 @@ Non-zero cells are clues — the integer value is the **area** of the
 rectangle that must contain that cell. Zero cells are non-clue cells.
 `window.Game.currentState.cellStatus` is `rows × cols` of int: `-1` =
 unassigned, otherwise the index of the area (rectangle) that owns the
-cell. `currentState.areas` holds the rectangle list — `applyShikakuState`
-in `main-world.js` rebuilds it from `cellStatus` as `[{ id, cellList }]`
-(field shape to be confirmed against the live page on first verification).
+cell. `currentState.areas` holds the rectangle list, indexed by owner id —
+`applyShikakuState` in `main-world.js` rebuilds it from `cellStatus` as
+`[{ id, startPoint:{row,col}, endPoint:{row,col}, cellList:[{r,c}] }]`. The
+`startPoint`/`endPoint` corners are mandatory: `drawCurrentStateInternal`
+passes each `areas[t]` straight to `drawRect`, which reads
+`area.startPoint.{row,col}` / `area.endPoint.{row,col}`. A clue with no
+cells (partial hint state) is left `undefined` at its index — the page's
+`void 0 !== areas[t]` guard skips it.
 
 Solver shape: `ShikakuSolver` per-clue enumerates rectangle candidates
 (axis-aligned rects containing the clue cell, with the right area, no
