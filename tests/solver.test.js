@@ -646,3 +646,12 @@ test('ShikakuSolver: getHint returns forced cells from fresh state', () => {
   const total = (hint.cells?.length || 0) + (hint.extraCells?.length || 0);
   assert.ok(total >= 1, `expected ≥1 cell, got ${total}`);
 });
+
+test('ShikakuSolver: 5x5 fixture matches golden', () => {
+  ShikakuSolver.clearSolutionCache();
+  const p = fixtures.shikaku5x5;
+  const result = clean(
+    new ShikakuSolver({ rows: p.rows, cols: p.cols, clues: p.clues }).solve()
+  );
+  assert.deepEqual(result, golden.shikaku5x5);
+});

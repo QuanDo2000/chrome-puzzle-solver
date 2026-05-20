@@ -125,4 +125,22 @@ module.exports = {
       [],
     ],
   },
+
+  // 5x5 Shikaku captured from puzzles-mobile.com/shikaku/random/5x5 on
+  // 2026-05-19. 9 clues, areas summing to 25 (= 5×5).
+  shikaku5x5: {
+    rows: 5,
+    cols: 5,
+    clues: [
+      { row: 0, col: 0, area: 4 },
+      { row: 0, col: 3, area: 2 },
+      { row: 1, col: 1, area: 2 },
+      { row: 2, col: 2, area: 3 },
+      { row: 2, col: 3, area: 4 },
+      { row: 3, col: 1, area: 2 },
+      { row: 3, col: 3, area: 2 },
+      { row: 4, col: 3, area: 4 },
+      { row: 4, col: 4, area: 2 },
+    ],
+  },
 };
