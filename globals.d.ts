@@ -15,6 +15,7 @@ declare const AquariumSolver: any;
 declare const GalaxiesSolver: any;
 declare const BinairoSolver: any;
 declare const ShikakuSolver: any;
+declare const YinYangSolver: any;
 
 // Helpers from handler.js.
 // MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in
@@ -33,6 +34,9 @@ type MainWorldFn =
   | 'readShikakuData'
   | 'readShikakuState'
   | 'applyShikakuState'
+  | 'readYinYangData'
+  | 'readYinYangState'
+  | 'applyYinYangState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
