@@ -3710,6 +3710,100 @@ class ShikakuSolver {
     }
     return false;
   }
+
+  /**
+   * Run propagation (no backtracking) to find every cell whose owner is
+   * now uniquely forced. If propagation produces nothing, fall back to a
+   * single forward-checking pass: for each unplaced clue, probe each
+   * candidate (place + propagate), keep only candidates that stay
+   * consistent; force any clue whose surviving candidate is unique.
+   * Returns a row-anchored hint shape compatible with content.js, or null.
+   * @param {number[][]} currentGrid  2D of cell owners (or -1).
+   */
+  getHint(currentGrid) {
+    const clone = new ShikakuSolver({
+      rows: this.rows, cols: this.cols,
+      clues: this.clues,
+      initialState: currentGrid,
+    });
+    const before = new Int16Array(clone.owner);
+    const ok = clone.propagate();
+    if (!ok) return null;
+
+    let anyChange = false;
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] !== clone.owner[i]) { anyChange = true; break; }
+    }
+
+    if (!anyChange) {
+      const forced = [];
+      for (let i = 0; i < clone.clues.length; i++) {
+        if (clone.placed[i]) continue;
+        const survivors = [];
+        for (const rect of clone.candidates[i].slice()) {
+          const mark = clone.trail.length;
+          if (clone._placeRectangle(i, rect) && clone.propagate()) {
+            survivors.push(rect);
+          }
+          clone._rollback(mark);
+        }
+        if (survivors.length === 0) return null;
+        if (survivors.length === 1) {
+          forced.push({ clueIdx: i, rect: survivors[0] });
+        }
+      }
+      for (const f of forced) {
+        if (!clone._placeRectangle(f.clueIdx, f.rect)) return null;
+      }
+      if (!clone.propagate()) return null;
+    }
+
+    // Collect cells newly assigned by propagation / forced placements.
+    const cells2d = [];
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] === -1 && clone.owner[i] !== -1) {
+        const r = (i / clone.cols) | 0;
+        const c = i % clone.cols;
+        cells2d.push({ row: r, col: c, value: clone.owner[i] });
+      }
+    }
+
+    // Last-resort fallback: solve the puzzle and return the first unassigned
+    // cell from the solution so we always produce a useful hint.
+    if (cells2d.length === 0) {
+      const solved = new ShikakuSolver({
+        rows: this.rows, cols: this.cols,
+        clues: this.clues,
+        initialState: currentGrid,
+      }).solve();
+      if (!solved.solved) return null;
+      for (let r = 0; r < this.rows; r++) {
+        for (let c = 0; c < this.cols; c++) {
+          if (currentGrid[r]?.[c] === -1 || currentGrid[r]?.[c] === null || currentGrid[r]?.[c] === undefined) {
+            const value = solved.grid[r][c];
+            cells2d.push({ row: r, col: c, value });
+          }
+        }
+      }
+      if (cells2d.length === 0) return null;
+    }
+
+    const base = cells2d[0];
+    const cells = [];
+    const extraCells = [];
+    for (const f of cells2d) {
+      if (f.row === base.row) cells.push({ index: f.col, value: f.value });
+      else extraCells.push({ row: f.row, col: f.col, value: f.value });
+    }
+    return {
+      type: 'row',
+      index: base.row,
+      clue: null,
+      cells,
+      extraCells,
+      count: cells2d.length,
+    };
+  }
 }
 
 function _rectsOverlap(a, b) {

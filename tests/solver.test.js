@@ -633,3 +633,16 @@ test('ShikakuSolver: static _solutionCache returns prior solve on identical clue
   assert.deepEqual(r2.grid, r1.grid);
   ShikakuSolver.clearSolutionCache();
 });
+
+test('ShikakuSolver: getHint returns forced cells from fresh state', () => {
+  const clues = [
+    { row: 0, col: 0, area: 4 },
+    { row: 1, col: 3, area: 4 },
+  ];
+  const s = new ShikakuSolver({ rows: 2, cols: 4, clues });
+  const grid = s._ownerTo2D();
+  const hint = s.getHint(grid);
+  assert.ok(hint, 'getHint must return at least one forced cell');
+  const total = (hint.cells?.length || 0) + (hint.extraCells?.length || 0);
+  assert.ok(total >= 1, `expected ≥1 cell, got ${total}`);
+});
