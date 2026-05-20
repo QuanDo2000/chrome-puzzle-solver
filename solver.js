@@ -3254,10 +3254,17 @@ class BinairoSolver {
     let ok = clone.propagate();
     if (!ok) return null;
 
-    // If local rules deduced nothing, try the per-line enumeration first
-    // (enumerates valid completions per row/column with comparison-clue
-    // awareness), then fall back to cell-by-cell line lookahead for cases
-    // the enumeration misses or skips due to combo budget.
+    // If local rules deduced nothing, progressive fallbacks (cheapest first):
+    //   1. Per-line enumeration: enumerate valid completions per row/column
+    //      (with comparison-clue awareness), force cells whose value is
+    //      consistent across all completions. Fast on lines with tractable
+    //      combo counts; skips lines whose enumeration would blow the budget.
+    //   2. Unrestricted 1-pass lookahead: for each empty cell, probe both
+    //      values via local-rule propagation; force the survivor if exactly
+    //      one is legal. Strictly stronger than the older line-restricted
+    //      version since it sees forces across all line patterns. Capped at
+    //      ONE pass (not iterated to fixed point) so Hint stays bounded —
+    //      the iterated form lives in solve()'s propagate() lookahead phase.
     let localChanged = false;
     for (let i = 0; i < before.length; i++) {
       if (before[i] !== clone.grid[i]) { localChanged = true; break; }
@@ -3265,12 +3272,12 @@ class BinairoSolver {
     if (!localChanged) {
       ok = clone._applyLineEnumeration(() => {});
       if (!ok) return null;
-      // After enumeration forces cells, let local rules cascade once more.
+      // Cascade local rules over enumeration's new forces.
       if (clone.grid.some((v, i) => v !== before[i])) {
         ok = clone.propagate();
         if (!ok) return null;
       }
-      // If still nothing changed, try the cell-by-cell line lookahead.
+      // If enumeration found nothing, try unrestricted single-pass lookahead.
       let stillNothing = true;
       for (let i = 0; i < before.length; i++) {
         if (before[i] !== clone.grid[i]) { stillNothing = false; break; }
@@ -3278,11 +3285,16 @@ class BinairoSolver {
       if (stillNothing) {
         clone._inLookahead = true;
         try {
-          ok = clone._applyLineLookahead(() => {});
+          ok = clone._applyLookahead(() => {});
         } finally {
           clone._inLookahead = false;
         }
         if (!ok) return null;
+        // Cascade local rules over lookahead's new forces.
+        if (clone.grid.some((v, i) => v !== before[i])) {
+          ok = clone.propagate();
+          if (!ok) return null;
+        }
       }
     }
 
