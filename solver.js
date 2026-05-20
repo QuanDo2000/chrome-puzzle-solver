@@ -3837,7 +3837,8 @@ class YinYangSolver {
 
   _get(r, c) { return this.grid[r * this.cols + c]; }
 
-  // Trailed write. Caller must guarantee grid[idx] is currently 0 (empty).
+  // Trailed write. Records grid[idx]'s prior value so _rollback restores it.
+  // Propagation and backtracking only ever call this on empty cells.
   _assign(idx, v) {
     this.trail.push((idx << 2) | this.grid[idx]);
     this.grid[idx] = v;
