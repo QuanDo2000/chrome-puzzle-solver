@@ -3621,6 +3621,53 @@ class ShikakuSolver {
       else this.candidates[e.clueIdx] = e.old;
     }
   }
+
+  solve() {
+    if (!this.propagate()) {
+      return { solved: false, grid: null, error: 'contradiction on initial propagation' };
+    }
+    if (this._isComplete()) return { solved: true, grid: this._ownerTo2D() };
+    if (this._backtrack()) return { solved: true, grid: this._ownerTo2D() };
+    return { solved: false, grid: null, error: 'no solution found' };
+  }
+
+  _isComplete() {
+    for (let i = 0; i < this.clues.length; i++) {
+      if (!this.placed[i]) return false;
+    }
+    return true;
+  }
+
+  _ownerTo2D() {
+    const out = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = new Array(this.cols);
+      for (let c = 0; c < this.cols; c++) row[c] = this.owner[r * this.cols + c];
+      out[r] = row;
+    }
+    return out;
+  }
+
+  _backtrack() {
+    // MRV: pick the unplaced clue with the fewest remaining candidates.
+    let target = -1;
+    let bestCount = Infinity;
+    for (let i = 0; i < this.clues.length; i++) {
+      if (this.placed[i]) continue;
+      const n = this.candidates[i].length;
+      if (n < bestCount) { bestCount = n; target = i; }
+    }
+    if (target === -1) return this._isComplete();
+    const cands = this.candidates[target].slice();
+    for (const rect of cands) {
+      const mark = this.trail.length;
+      if (this._placeRectangle(target, rect) && this.propagate()) {
+        if (this._isComplete() || this._backtrack()) return true;
+      }
+      this._rollback(mark);
+    }
+    return false;
+  }
 }
 
 function _rectsOverlap(a, b) {

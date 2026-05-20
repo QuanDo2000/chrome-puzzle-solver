@@ -584,3 +584,38 @@ test('ShikakuSolver: single-candidate forcing places the rectangle', () => {
     }
   }
 });
+
+test('ShikakuSolver: solves a trivial 2x2 single-clue puzzle', () => {
+  const s = new ShikakuSolver({
+    rows: 2, cols: 2,
+    clues: [{ row: 0, col: 0, area: 4 }],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.equal(r.grid.length, 2);
+  assert.equal(r.grid[0].length, 2);
+  for (let r2 = 0; r2 < 2; r2++) {
+    for (let c = 0; c < 2; c++) {
+      assert.equal(r.grid[r2][c], 0);
+    }
+  }
+});
+
+test('ShikakuSolver: solves a 2x4 two-clue puzzle requiring backtracking', () => {
+  const s = new ShikakuSolver({
+    rows: 2, cols: 4,
+    clues: [{ row: 0, col: 0, area: 4 }, { row: 1, col: 3, area: 4 }],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  const counts = [0, 0];
+  for (let r2 = 0; r2 < 2; r2++) {
+    for (let c = 0; c < 4; c++) {
+      const o = r.grid[r2][c];
+      assert.ok(o === 0 || o === 1, `cell (${r2},${c}) has owner ${o}`);
+      counts[o]++;
+    }
+  }
+  assert.equal(counts[0], 4);
+  assert.equal(counts[1], 4);
+});
