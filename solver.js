@@ -3768,20 +3768,33 @@ class ShikakuSolver {
       }
     }
 
-    // Last-resort fallback: solve the puzzle and return the first unassigned
-    // cell from the solution so we always produce a useful hint.
+    // Tier 3: propagation + forward-checking both exhausted. Solve fully
+    // and reveal ONE rectangle — the one owning the first still-unassigned
+    // cell. Real Shikaku puzzles have a unique solution, so every cell of
+    // that rectangle is a genuinely forced deduction. Revealing a whole
+    // rectangle matches Shikaku's hint granularity (tiers 1-2 place whole
+    // rectangles too).
     if (cells2d.length === 0) {
-      const solved = new ShikakuSolver({
+      const solveClone = new ShikakuSolver({
         rows: this.rows, cols: this.cols,
         clues: this.clues,
         initialState: currentGrid,
-      }).solve();
+      });
+      const solved = solveClone.solve();
       if (!solved.solved) return null;
+      // Find the first cell still unassigned in the pre-propagation snapshot.
+      let fr = -1, fc = -1;
+      outer: for (let r = 0; r < this.rows; r++) {
+        for (let c = 0; c < this.cols; c++) {
+          if (before[r * this.cols + c] === -1) { fr = r; fc = c; break outer; }
+        }
+      }
+      if (fr === -1) return null; // already complete
+      const targetOwner = solved.grid[fr][fc];
       for (let r = 0; r < this.rows; r++) {
         for (let c = 0; c < this.cols; c++) {
-          if (currentGrid[r]?.[c] === -1 || currentGrid[r]?.[c] === null || currentGrid[r]?.[c] === undefined) {
-            const value = solved.grid[r][c];
-            cells2d.push({ row: r, col: c, value });
+          if (solved.grid[r][c] === targetOwner && before[r * this.cols + c] === -1) {
+            cells2d.push({ row: r, col: c, value: targetOwner });
           }
         }
       }
