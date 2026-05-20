@@ -3859,6 +3859,67 @@ class YinYangSolver {
     }
     return false;
   }
+
+  // a=TL, b=TR, c=BL, d=BR; each in {1,2}. A full 2x2 window is illegal
+  // when monochrome (all four equal) or a diagonal checkerboard (the two
+  // diagonals are opposite colors).
+  _is2x2Illegal(a, b, c, d) {
+    const mono = a === b && b === c && c === d;
+    const checker = a === d && b === c && a !== b;
+    return mono || checker;
+  }
+
+  // 2x2 propagation rule. Returns false on contradiction; calls onChange()
+  // whenever it forces a cell.
+  _apply2x2(onChange) {
+    const C = this.cols;
+    for (let r = 0; r + 1 < this.rows; r++) {
+      for (let c = 0; c + 1 < C; c++) {
+        const idxs = [r * C + c, r * C + c + 1, (r + 1) * C + c, (r + 1) * C + c + 1];
+        const vals = [
+          this.grid[idxs[0]], this.grid[idxs[1]],
+          this.grid[idxs[2]], this.grid[idxs[3]],
+        ];
+        let emptyCount = 0, emptyPos = -1;
+        for (let k = 0; k < 4; k++) {
+          if (vals[k] === 0) { emptyCount++; emptyPos = k; }
+        }
+        if (emptyCount === 0) {
+          if (this._is2x2Illegal(vals[0], vals[1], vals[2], vals[3])) return false;
+          continue;
+        }
+        if (emptyCount !== 1) continue;
+        let legalVal = 0, legalCount = 0;
+        for (let val = 1; val <= 2; val++) {
+          vals[emptyPos] = val;
+          if (!this._is2x2Illegal(vals[0], vals[1], vals[2], vals[3])) {
+            legalVal = val;
+            legalCount++;
+          }
+        }
+        vals[emptyPos] = 0;
+        if (legalCount === 0) return false;
+        if (legalCount === 1) {
+          this._assign(idxs[emptyPos], legalVal);
+          onChange();
+        }
+      }
+    }
+    return true;
+  }
+
+  // Iterate the propagation rules to a fixpoint. Returns false on
+  // contradiction. (The connectivity rule is added in the next task.)
+  propagate() {
+    let changed = true;
+    while (changed) {
+      if (this._budgetExceeded()) return false;
+      changed = false;
+      const onChange = () => { changed = true; };
+      if (!this._apply2x2(onChange)) return false;
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

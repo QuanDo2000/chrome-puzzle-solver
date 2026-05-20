@@ -696,3 +696,42 @@ test('YinYangSolver: constructor rejects invalid dimensions', () => {
   assert.throws(() => new YinYangSolver({ rows: 0, cols: 3, task: [] }));
   assert.throws(() => new YinYangSolver({ rows: 3, cols: 3, task: 'nope' }));
 });
+
+test('YinYangSolver: _is2x2Illegal flags monochrome and checkerboard', () => {
+  const s = new YinYangSolver({ rows: 2, cols: 2, task: [[-1, -1], [-1, -1]] });
+  assert.equal(s._is2x2Illegal(1, 1, 1, 1), true, 'all black');
+  assert.equal(s._is2x2Illegal(2, 2, 2, 2), true, 'all white');
+  assert.equal(s._is2x2Illegal(1, 2, 2, 1), true, 'checkerboard B/W');
+  assert.equal(s._is2x2Illegal(2, 1, 1, 2), true, 'checkerboard W/B');
+  assert.equal(s._is2x2Illegal(1, 1, 2, 2), false, 'split is legal');
+  assert.equal(s._is2x2Illegal(1, 2, 1, 2), false, 'column split is legal');
+});
+
+test('YinYangSolver: 2x2 rule forces the 4th cell of a monochrome-3 window', () => {
+  // TL,TR,BL all black -> BR must be white (else 2x2 monochrome).
+  const s = new YinYangSolver({
+    rows: 2, cols: 2, task: [[-1, -1], [-1, -1]],
+    initialState: [[1, 1], [1, 0]],
+  });
+  assert.equal(s.propagate(), true);
+  assert.equal(s._get(1, 1), 2);
+});
+
+test('YinYangSolver: 2x2 rule forces the 4th cell of a checkerboard-3 window', () => {
+  // TL=black, TR=white, BL=white, BR empty. BR=black -> checkerboard;
+  // so BR is forced white.
+  const s = new YinYangSolver({
+    rows: 2, cols: 2, task: [[-1, -1], [-1, -1]],
+    initialState: [[1, 2], [2, 0]],
+  });
+  assert.equal(s.propagate(), true);
+  assert.equal(s._get(1, 1), 2);
+});
+
+test('YinYangSolver: 2x2 rule reports contradiction on an illegal full window', () => {
+  const s = new YinYangSolver({
+    rows: 2, cols: 2, task: [[-1, -1], [-1, -1]],
+    initialState: [[1, 1], [1, 1]],
+  });
+  assert.equal(s.propagate(), false);
+});
