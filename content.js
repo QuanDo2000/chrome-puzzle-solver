@@ -2242,6 +2242,9 @@ function makeWidget() {
           ctx.stroke();
         }
         ctx.restore();
+      } else if (puzzleData?.type === 'shikaku') {
+        // Shikaku hints reveal a rectangle, not a row/column — skip the
+        // band highlight; the per-cell loop below paints each hint cell.
       } else if (hint.type === 'row') {
         ctx.fillStyle = highlightColor;
         ctx.fillRect(0, hint.index * cellSize, w, cellSize);
@@ -2255,7 +2258,16 @@ function makeWidget() {
       for (const cell of hintAbsoluteCells(hint)) {
         const cx = cell.col * cellSize;
         const cy = cell.row * cellSize;
-        if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
+        if (puzzleData?.type === 'shikaku' && cell.value >= 0) {
+          // Shikaku hint cell: paint it in its owning rectangle's colour
+          // (so the rectangle visibly takes shape) with a blue ring to
+          // mark it as the newly-revealed hint.
+          ctx.fillStyle = galaxiesColors[cell.value % galaxiesColors.length];
+          ctx.fillRect(cx + 1, cy + 1, cellSize - 2, cellSize - 2);
+          ctx.strokeStyle = '#2e86de';
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 7));
+          ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+        } else if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
           // For binairo hints, draw a translucent disc matching the target value
           // — outlined blue = "play a 1 here", full blue fill = "play a 0 here".
           const ccx = cx + cellSize / 2;
