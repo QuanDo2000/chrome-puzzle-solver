@@ -30,6 +30,9 @@ type MainWorldFn =
   | 'readBinairoData'
   | 'readBinairoState'
   | 'applyBinairoState'
+  | 'readShikakuData'
+  | 'readShikakuState'
+  | 'applyShikakuState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
