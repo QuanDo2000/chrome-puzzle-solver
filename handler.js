@@ -359,6 +359,53 @@ const shikakuHandler = {
 
 registerHandler(shikakuHandler);
 
+// ── Yin-Yang handler (puzzles-mobile.com/yin-yang/) ───────────
+
+const yinYangHandler = {
+  name: 'puzzles-mobile-yinyang',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/yin-yang/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readYinYangData', []);
+    if (!data) return { ...result, error: 'No Yin-Yang task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'yinyang',
+      rows: data.height,
+      cols: data.width,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readYinYangState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyYinYangState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Yin-Yang apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(yinYangHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
