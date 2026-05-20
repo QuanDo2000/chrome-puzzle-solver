@@ -1401,6 +1401,19 @@ async function getHint(request = {}) {
       if (!hint) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
+    } else if (detectedGrid.type === 'yinyang') {
+      if (solution && firstMismatch(grid, solution)) {
+        return { success: false, error: 'Current game state is wrong.' };
+      }
+      const solver = new YinYangSolver({
+        rows, cols, task: detectedGrid.task, initialState: grid,
+      });
+      hint = solver.getHint(grid);
+      // Pure deduction by design — no solve fallback. When propagation
+      // exhausts, the user clicks Solve (which backtracks).
+      if (!hint) {
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+      }
     } else if (detectedGrid.type === 'shikaku') {
       const solver = new ShikakuSolver({
         rows, cols, clues: detectedGrid.clues, initialState: grid,
@@ -1683,6 +1696,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...binairoHintStatusNodes(h));
     } else if (puzzleData?.type === 'shikaku') {
       setStatusNodes('info', prefix, ...shikakuHintStatusNodes(h));
+    } else if (puzzleData?.type === 'yinyang') {
+      setStatusNodes('info', prefix, ...yinYangHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -1697,6 +1712,23 @@ function makeWidget() {
       const col = h.cells?.length ? cell.index : cell.col;
       // Binairo cellStatus: 1 = "one", 2 = "zero". Translate for display.
       const valueStr = cell.value === 1 ? '1' : '0';
+      return [
+        'Cell ', bold(`(row ${row + 1}, col ${col + 1})`),
+        ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(total)), ' cells can be deduced'];
+  }
+
+  function yinYangHintStatusNodes(h) {
+    const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
+    if (total === 0) return ['No hint available'];
+    if (total === 1) {
+      const cell = h.cells?.[0] || h.extraCells?.[0];
+      const row = h.cells?.length ? h.index : cell.row;
+      const col = h.cells?.length ? cell.index : cell.col;
+      // Yin-Yang cellStatus: 1 = black, 2 = white.
+      const valueStr = cell.value === 1 ? 'black' : 'white';
       return [
         'Cell ', bold(`(row ${row + 1}, col ${col + 1})`),
         ' must be ', bold(valueStr),
