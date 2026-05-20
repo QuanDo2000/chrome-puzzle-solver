@@ -3622,12 +3622,54 @@ class ShikakuSolver {
     }
   }
 
+  static _solutionCache = new Map();
+  static _maxSolutionCache = 50;
+
+  static clearSolutionCache() {
+    ShikakuSolver._solutionCache.clear();
+  }
+
+  _cacheKey() {
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(this.rows);
+    mix(this.cols);
+    mix(this.clues.length);
+    const sorted = this.clues.slice().sort((a, b) =>
+      a.row - b.row || a.col - b.col || a.area - b.area);
+    for (const k of sorted) {
+      mix(k.row); mix(k.col); mix(k.area);
+    }
+    return String(h >>> 0);
+  }
+
+  _storeInCache(key, grid) {
+    const m = ShikakuSolver._solutionCache;
+    if (m.size >= ShikakuSolver._maxSolutionCache) {
+      const first = m.keys().next().value;
+      m.delete(first);
+    }
+    m.set(key, grid.map(row => row.slice()));
+  }
+
   solve() {
+    const key = this._cacheKey();
+    const cached = ShikakuSolver._solutionCache.get(key);
+    if (cached) return { solved: true, grid: cached.map(row => row.slice()) };
+
     if (!this.propagate()) {
       return { solved: false, grid: null, error: 'contradiction on initial propagation' };
     }
-    if (this._isComplete()) return { solved: true, grid: this._ownerTo2D() };
-    if (this._backtrack()) return { solved: true, grid: this._ownerTo2D() };
+    if (this._isComplete()) {
+      const grid = this._ownerTo2D();
+      this._storeInCache(key, grid);
+      return { solved: true, grid };
+    }
+    if (this._backtrack()) {
+      const grid = this._ownerTo2D();
+      this._storeInCache(key, grid);
+      return { solved: true, grid };
+    }
     return { solved: false, grid: null, error: 'no solution found' };
   }
 

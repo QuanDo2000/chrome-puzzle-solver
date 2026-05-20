@@ -619,3 +619,17 @@ test('ShikakuSolver: solves a 2x4 two-clue puzzle requiring backtracking', () =>
   assert.equal(counts[0], 4);
   assert.equal(counts[1], 4);
 });
+
+test('ShikakuSolver: static _solutionCache returns prior solve on identical clues', () => {
+  ShikakuSolver.clearSolutionCache();
+  const clues = [
+    { row: 0, col: 0, area: 4 },
+    { row: 1, col: 3, area: 4 },
+  ];
+  const r1 = new ShikakuSolver({ rows: 2, cols: 4, clues }).solve();
+  assert.equal(r1.solved, true);
+  const r2 = new ShikakuSolver({ rows: 2, cols: 4, clues }).solve();
+  assert.equal(r2.solved, true);
+  assert.deepEqual(r2.grid, r1.grid);
+  ShikakuSolver.clearSolutionCache();
+});
