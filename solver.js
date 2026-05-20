@@ -4034,6 +4034,43 @@ class YinYangSolver {
   }
 
   /**
+   * Run propagation only (no backtracking) on `currentGrid` and return every
+   * cell forced from empty to placed — all cells deducible by pure logic.
+   * Returns null when the current board is contradictory or nothing is
+   * forced. Shape is row-anchored, matching BinairoSolver.getHint.
+   * @param {number[][]} currentGrid  2D in cellStatus encoding (0/1/2).
+   */
+  getHint(currentGrid) {
+    const clone = new YinYangSolver({
+      rows: this.rows, cols: this.cols, task: this.task,
+      initialState: currentGrid,
+    });
+    const before = new Uint8Array(clone.grid);
+    if (!clone.propagate()) return null;
+
+    const cells2d = [];
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] === 0 && clone.grid[i] !== 0) {
+        cells2d.push({
+          row: (i / clone.cols) | 0,
+          col: i % clone.cols,
+          value: clone.grid[i],
+        });
+      }
+    }
+    if (cells2d.length === 0) return null;
+
+    const base = cells2d[0];
+    const cells = [];
+    const extraCells = [];
+    for (const f of cells2d) {
+      if (f.row === base.row) cells.push({ index: f.col, value: f.value });
+      else extraCells.push({ row: f.row, col: f.col, value: f.value });
+    }
+    return { type: 'row', index: base.row, cells, extraCells, count: cells2d.length };
+  }
+
+  /**
    * @returns {{ solved: boolean, grid: number[][] | null, error?: string }}
    */
   solve() {

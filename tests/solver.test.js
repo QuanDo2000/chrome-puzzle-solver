@@ -801,3 +801,26 @@ test('YinYangSolver: maxMs budget makes a hard solve bail quickly', () => {
   s.solve();
   assert.ok(Date.now() - t0 < 500, 'solve must bail within 500ms when maxMs=1');
 });
+
+test('YinYangSolver: getHint returns cells forced by propagation', () => {
+  // Row: black, empty, black -> the empty cell is forced black.
+  const s = new YinYangSolver({ rows: 1, cols: 3, task: [[-1, -1, -1]] });
+  const hint = s.getHint([[1, 0, 1]]);
+  assert.ok(hint, 'getHint must return a hint');
+  const all = [
+    ...(hint.cells || []).map(c => ({ row: hint.index, col: c.index, value: c.value })),
+    ...(hint.extraCells || []),
+  ];
+  assert.ok(all.some(c => c.row === 0 && c.col === 1 && c.value === 1),
+    'cell (0,1) must be forced black');
+});
+
+test('YinYangSolver: getHint returns null when nothing is deducible', () => {
+  // A fully solved 6x6 — propagation forces nothing.
+  YinYangSolver.clearSolutionCache();
+  const p = fixtures.yinyang6x6;
+  const solved = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task }).solve();
+  const s = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task });
+  assert.equal(s.getHint(solved.grid), null);
+  YinYangSolver.clearSolutionCache();
+});
