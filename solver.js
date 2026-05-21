@@ -4052,23 +4052,32 @@ class YinYangSolver {
     return out;
   }
 
-  // Connectivity propagation. Returns false on contradiction; calls
-  // onChange() whenever it forces a cell.
-  _applyConnectivity(onChange) {
-    const N = this.rows * this.cols;
-    for (let color = 1; color <= 2; color++) {
-      if (!this._colorConnected(color, -1)) return false;
-    }
-    for (let i = 0; i < N; i++) {
-      if (this.grid[i] !== 0) continue;
-      for (let color = 1; color <= 2; color++) {
-        if (!this._colorConnected(color, i)) {
-          // Removing empty cell i severs `color` -> i must be `color`.
-          this._assign(i, color);
-          onChange();
-          break;
-        }
+  // Cut deduction for one colour. Any articulation point of the
+  // {color ∪ empty} graph that is empty and whose removal would sever the
+  // colour's placed cells must itself be that colour. Calls onChange() for
+  // each forced cell.
+  _applyCut(color, onChange) {
+    const aps = this._articulationPoints(color);
+    for (const ap of aps) {
+      if (this.grid[ap] !== 0) continue;
+      if (!this._colorConnected(color, ap)) {
+        this._assign(ap, color);
+        onChange();
       }
+    }
+  }
+
+  // Connectivity propagation. Returns false on contradiction; calls
+  // onChange() whenever it forces a cell. Runs the reachability rule (forces
+  // cells that can never be a colour, and detects severed colours) then the
+  // cut rule (forces bottleneck cells) for each colour. The propagate()
+  // fixpoint loop re-runs this until nothing changes.
+  _applyConnectivity(onChange) {
+    for (let color = 1; color <= 2; color++) {
+      if (!this._applyReachability(color, onChange)) return false;
+    }
+    for (let color = 1; color <= 2; color++) {
+      this._applyCut(color, onChange);
     }
     return true;
   }

@@ -887,3 +887,17 @@ test('YinYangSolver: _articulationPoints excludes cells not in the colour graph'
   });
   assert.deepEqual([...s._articulationPoints(1)], []);
 });
+
+test('YinYangSolver: propagate forces unreachable cells via reachability', () => {
+  // 1x5: black, white, empty, empty, empty. The three empties cannot reach
+  // the black region (the white cell blocks) -> all forced white. The old
+  // per-cell cut probe missed this; the reachability rule catches it.
+  const s = new YinYangSolver({
+    rows: 1, cols: 5, task: [[-1, -1, -1, -1, -1]],
+    initialState: [[1, 2, 0, 0, 0]],
+  });
+  assert.equal(s.propagate(), true);
+  assert.equal(s._get(0, 2), 2);
+  assert.equal(s._get(0, 3), 2);
+  assert.equal(s._get(0, 4), 2);
+});
