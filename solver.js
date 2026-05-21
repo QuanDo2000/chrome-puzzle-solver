@@ -4089,11 +4089,31 @@ class YinYangSolver {
     return true;
   }
 
-  // 1-step lookahead. For each empty cell, tentatively assign each colour
-  // and run a (lookahead-free) propagate(); if exactly one colour leads to a
-  // contradiction, force the other. If both do, the board is unsolvable.
-  // Returns false on contradiction, true otherwise. Calls onChange() for
-  // each forced cell. Expensive — propagate() runs it only at the top level.
+  // Probe one empty cell `idx`: tentatively place each colour and run a
+  // (lookahead-free) propagate(). Returns 1 or 2 if exactly that colour is
+  // forced (the other colour leads to a contradiction), -1 if both colours
+  // lead to a contradiction, 0 if neither does. The caller must have set
+  // `_inLookahead` so the probe's propagate() does not recurse into lookahead.
+  _lookaheadProbe(idx) {
+    let mark = this.trail.length;
+    this._assign(idx, 1);
+    const blackBad = !this.propagate();
+    this._rollback(mark);
+    mark = this.trail.length;
+    this._assign(idx, 2);
+    const whiteBad = !this.propagate();
+    this._rollback(mark);
+    if (blackBad && whiteBad) return -1;
+    if (blackBad) return 2;
+    if (whiteBad) return 1;
+    return 0;
+  }
+
+  // 1-step lookahead. For each empty cell, probe both colours; if exactly
+  // one colour leads to a contradiction, force the other. If both do, the
+  // board is unsolvable. Returns false on contradiction, true otherwise.
+  // Calls onChange() for each forced cell. Expensive — propagate() runs it
+  // only at the top level.
   _applyLookahead(onChange) {
     const N = this.rows * this.cols;
     this._inLookahead = true;
@@ -4101,17 +4121,9 @@ class YinYangSolver {
       for (let i = 0; i < N; i++) {
         if (this.grid[i] !== 0) continue;
         if (this._budgetExceeded()) return true;
-        let mark = this.trail.length;
-        this._assign(i, 1);
-        const blackBad = !this.propagate();
-        this._rollback(mark);
-        mark = this.trail.length;
-        this._assign(i, 2);
-        const whiteBad = !this.propagate();
-        this._rollback(mark);
-        if (blackBad && whiteBad) return false;
-        if (blackBad) { this._assign(i, 2); onChange(); }
-        else if (whiteBad) { this._assign(i, 1); onChange(); }
+        const forced = this._lookaheadProbe(i);
+        if (forced === -1) return false;
+        if (forced !== 0) { this._assign(i, forced); onChange(); }
       }
       return true;
     } finally {
@@ -4254,39 +4266,76 @@ class YinYangSolver {
   }
 
   /**
-   * Return every cell deducible from `currentGrid` by pure logic, as a
-   * row-anchored hint (matching BinairoSolver.getHint), or null if nothing
-   * is deducible / the board is contradictory. First tries the fast local
-   * rules only; if they deduce nothing it falls back to the slower
-   * lookahead pass, so Hint never dead-ends while the puzzle is still
-   * solvable.
+   * Return a hint for `currentGrid` — a row-anchored shape matching
+   * BinairoSolver.getHint, or null if nothing is deducible / the board is
+   * contradictory. First tries the fast local rules; if they deduce
+   * nothing, falls back to a single lookahead deduction plus the local
+   * cascade it triggers — an immediate next step, not the whole solvable
+   * remainder.
    * @param {number[][]} currentGrid  2D in cellStatus encoding (0/1/2).
    */
   getHint(currentGrid) {
-    return this._hintWithDepth(currentGrid, 1)
-      || this._hintWithDepth(currentGrid, 0);
+    return this._localHint(currentGrid) || this._lookaheadStepHint(currentGrid);
   }
 
-  // One hint pass over `currentGrid`. depth 1 = local rules only (fast);
-  // depth 0 = also run the top-level lookahead (slower, much stronger).
-  // Returns a row-anchored hint of every cell forced from empty, or null
-  // when nothing is forced / the board is contradictory.
-  _hintWithDepth(currentGrid, depth) {
+  // Hint from the local rules only (2x2, connectivity, border-arc) — fast.
+  // Returns a row-anchored hint of every cell the local rules force, or
+  // null when they force nothing / the board is contradictory.
+  _localHint(currentGrid) {
     const clone = new YinYangSolver({
       rows: this.rows, cols: this.cols, task: this.task,
       initialState: currentGrid,
     });
-    clone._depth = depth;
+    clone._depth = 1; // local rules only — no lookahead
     const before = new Uint8Array(clone.grid);
     if (!clone.propagate()) return null;
+    return clone._collectHint(before);
+  }
 
+  // Hint from ONE lookahead deduction plus the local cascade it triggers.
+  // Probes empty cells in order, applies the first cell a 1-step lookahead
+  // can force, then lets the local rules settle — keeping each Hint to an
+  // immediate next step rather than the whole solvable remainder. Returns
+  // null if no lookahead deduction is available / the board is contradictory.
+  _lookaheadStepHint(currentGrid) {
+    const clone = new YinYangSolver({
+      rows: this.rows, cols: this.cols, task: this.task,
+      initialState: currentGrid,
+    });
+    clone._depth = 1; // the cascade uses local rules only
+    if (!clone.propagate()) return null;
+    const before = new Uint8Array(clone.grid);
+
+    let forcedIdx = -1, forcedColor = 0;
+    clone._inLookahead = true;
+    try {
+      for (let i = 0; i < clone.grid.length; i++) {
+        if (clone.grid[i] !== 0) continue;
+        const forced = clone._lookaheadProbe(i);
+        if (forced === -1) return null;
+        if (forced !== 0) { forcedIdx = i; forcedColor = forced; break; }
+      }
+    } finally {
+      clone._inLookahead = false;
+    }
+    if (forcedIdx === -1) return null;
+
+    clone._assign(forcedIdx, forcedColor);
+    if (!clone.propagate()) return null;
+    return clone._collectHint(before);
+  }
+
+  // Build a row-anchored hint (matching BinairoSolver.getHint) from the
+  // cells that went from empty in `before` to placed in the current grid.
+  // Returns null if nothing changed.
+  _collectHint(before) {
     const cells2d = [];
     for (let i = 0; i < before.length; i++) {
-      if (before[i] === 0 && clone.grid[i] !== 0) {
+      if (before[i] === 0 && this.grid[i] !== 0) {
         cells2d.push({
-          row: (i / clone.cols) | 0,
-          col: i % clone.cols,
-          value: clone.grid[i],
+          row: (i / this.cols) | 0,
+          col: i % this.cols,
+          value: this.grid[i],
         });
       }
     }

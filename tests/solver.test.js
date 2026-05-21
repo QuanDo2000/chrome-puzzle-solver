@@ -834,21 +834,29 @@ test('YinYangSolver: getHint returns null when nothing is deducible', () => {
   YinYangSolver.clearSolutionCache();
 });
 
-test('YinYangSolver: getHint falls back to lookahead when local rules stall', () => {
+test('YinYangSolver: getHint falls back to a bounded lookahead step when local rules stall', () => {
   // The 35x35 weekly: local rules stall well short of a solution. Drive the
   // board to that local-rules fixpoint, then confirm the fast (local-only)
-  // hint pass finds nothing there but getHint's lookahead fallback does.
+  // hint finds nothing there, getHint falls back to a lookahead step, and
+  // that step is bounded — an immediate next step, not the whole remainder.
   const real = require('./fixtures/real-puzzles.js');
   const p = real.yinyangWeekly35x35;
   const stall = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task });
   stall._depth = 1; // local rules only — lookahead disabled
   stall.propagate();
   const stalledGrid = stall._gridTo2D();
+  let remainingEmpty = 0;
+  for (const row of stalledGrid) for (const v of row) if (v === 0) remainingEmpty++;
+  assert.ok(remainingEmpty > 0, 'the local rules should leave the 35x35 incomplete');
+
   const probe = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task });
-  assert.equal(probe._hintWithDepth(stalledGrid, 1), null,
-    'local-only hint pass should stall (find nothing) on the stalled grid');
-  assert.ok(probe.getHint(stalledGrid),
-    'getHint must fall back to lookahead and still return a hint');
+  assert.equal(probe._localHint(stalledGrid), null,
+    'the local-only hint should find nothing on the stalled grid');
+  const hint = probe.getHint(stalledGrid);
+  assert.ok(hint, 'getHint must fall back to a lookahead step and return a hint');
+  const total = hint.cells.length + hint.extraCells.length;
+  assert.ok(total < remainingEmpty,
+    `lookahead-step hint (${total} cells) must be smaller than the ${remainingEmpty} remaining empties`);
 });
 
 test('YinYangSolver: reachability forces an unreachable empty cell', () => {
