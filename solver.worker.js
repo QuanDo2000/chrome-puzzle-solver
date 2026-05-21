@@ -59,7 +59,7 @@ self.onmessage = function (e) {
         task: extraData.task,
         initialState: initialGrid || null,
       });
-      s.maxMs = 8000;
+      s.maxMs = 30000;
       result = s.solve();
     } else {
       const s = new NonogramSolver(rowClues, colClues);
