@@ -3810,6 +3810,9 @@ class YinYangSolver {
     this.maxMs = 0;
     this._startedAt = 0;
     this._timedOut = false;
+    // Reusable scratch buffer for the reachability BFS (avoids per-call
+    // typed-array allocation in the hot propagation path).
+    this._scratchSeen = new Uint8Array(rows * cols);
 
     const seed = initialState || this._gridFromGivens();
     for (let r = 0; r < rows; r++) {
@@ -3947,6 +3950,57 @@ class YinYangSolver {
       }
     }
     return reached === placedCount;
+  }
+
+  // Reachability deduction for one colour. BFS the graph of cells that are
+  // `color` or empty, starting from a placed-`color` cell. Returns false if
+  // the colour's placed cells are severed (a contradiction). Any empty cell
+  // the BFS cannot reach can never be `color`, so it is forced to the other
+  // colour. Calls onChange() for each forced cell.
+  _applyReachability(color, onChange) {
+    const C = this.cols, R = this.rows, N = R * C;
+    let start = -1, placedCount = 0;
+    for (let i = 0; i < N; i++) {
+      if (this.grid[i] === color) {
+        placedCount++;
+        if (start === -1) start = i;
+      }
+    }
+    if (placedCount === 0) return true;
+
+    const seen = this._scratchSeen;
+    seen.fill(0);
+    const stack = [start];
+    seen[start] = 1;
+    let reachedPlaced = 1;
+    const consider = (nb) => {
+      if (seen[nb]) return;
+      const gv = this.grid[nb];
+      if (gv === color || gv === 0) {
+        seen[nb] = 1;
+        if (gv === color) reachedPlaced++;
+        stack.push(nb);
+      }
+    };
+    while (stack.length) {
+      const cur = stack.pop();
+      const r = (cur / C) | 0, c = cur % C;
+      if (r > 0) consider(cur - C);
+      if (r + 1 < R) consider(cur + C);
+      if (c > 0) consider(cur - 1);
+      if (c + 1 < C) consider(cur + 1);
+    }
+
+    if (reachedPlaced !== placedCount) return false;
+
+    const other = color === 1 ? 2 : 1;
+    for (let i = 0; i < N; i++) {
+      if (this.grid[i] === 0 && !seen[i]) {
+        this._assign(i, other);
+        onChange();
+      }
+    }
+    return true;
   }
 
   // Connectivity propagation. Returns false on contradiction; calls

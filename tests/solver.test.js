@@ -833,3 +833,34 @@ test('YinYangSolver: getHint returns null when nothing is deducible', () => {
   assert.equal(s.getHint(solved.grid), null);
   YinYangSolver.clearSolutionCache();
 });
+
+test('YinYangSolver: reachability forces an unreachable empty cell', () => {
+  // 1x3: black at (0,0), white wall at (0,1), empty (0,2). (0,2) cannot
+  // reach the black region -> it can never be black -> forced white.
+  const s = new YinYangSolver({
+    rows: 1, cols: 3, task: [[-1, -1, -1]],
+    initialState: [[1, 2, 0]],
+  });
+  assert.equal(s._applyReachability(1, () => {}), true);
+  assert.equal(s._get(0, 2), 2);
+});
+
+test('YinYangSolver: reachability reports contradiction on a severed colour', () => {
+  // black at (0,0) and (0,2), white wall between -> black cannot connect.
+  const s = new YinYangSolver({
+    rows: 1, cols: 3, task: [[-1, -1, -1]],
+    initialState: [[1, 2, 1]],
+  });
+  assert.equal(s._applyReachability(1, () => {}), false);
+});
+
+test('YinYangSolver: reachability is a no-op when the colour has no placed cells', () => {
+  const s = new YinYangSolver({
+    rows: 1, cols: 3, task: [[-1, -1, -1]],
+    initialState: [[0, 0, 0]],
+  });
+  assert.equal(s._applyReachability(1, () => {}), true);
+  assert.equal(s._get(0, 0), 0);
+  assert.equal(s._get(0, 1), 0);
+  assert.equal(s._get(0, 2), 0);
+});
