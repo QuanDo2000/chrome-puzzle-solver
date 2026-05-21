@@ -40,7 +40,7 @@ type MainWorldFn =
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
-declare function computePuzzleDiff(type: string, grid: any, solution: any): { row: number, col: number }[];
+declare function computePuzzleDiff(type: string, grid: any, solution: any, stars?: any): { row: number, col: number }[];
 declare function callMainWorld(funcName: MainWorldFn, args?: unknown[]): Promise<any>;
 declare function getActiveHandler(): any;
 declare function parsePuzzleTask(): any;

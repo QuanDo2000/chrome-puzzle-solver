@@ -974,10 +974,26 @@ test('computePuzzleDiff: flags a wrongly-placed cell, ignores correct and empty'
   assert.deepEqual(computePuzzleDiff('binairo', grid, solution), [{ row: 0, col: 1 }]);
 });
 
-test('computePuzzleDiff: galaxies compares region ids directly', () => {
-  const solution = [[1, 1], [2, 2]];
-  const grid = [[1, 2], [0, 2]]; // (0,1)=2 vs solution 1 -> mistake
-  assert.deepEqual(computePuzzleDiff('galaxies', grid, solution), [{ row: 0, col: 1 }]);
+test('computePuzzleDiff: galaxies normalizes by star — relabeled regions are not mistakes', () => {
+  // 2x2 grid, 2 stars in doubled coords: (0,0)->anchor (0,0), (2,2)->anchor (1,1).
+  const stars = [{ row: 0, col: 0 }, { row: 2, col: 2 }];
+  const solution = [[1, 2], [1, 2]]; // star 0 owns the left column, star 1 the right
+  // Same partition, but the player's regions are labelled 5/8 instead of 1/2:
+  const relabeled = [[5, 8], [5, 8]];
+  assert.deepEqual(computePuzzleDiff('galaxies', relabeled, solution, stars), [],
+    'a correct partition with different region labels must not be flagged');
+});
+
+test('computePuzzleDiff: galaxies flags cells in the wrong galaxy', () => {
+  const stars = [{ row: 0, col: 0 }, { row: 2, col: 2 }];
+  const solution = [[1, 2], [1, 2]]; // columns
+  const wrong = [[5, 5], [8, 8]];    // player split by rows instead
+  const set = new Set(
+    computePuzzleDiff('galaxies', wrong, solution, stars).map(d => d.row + ',' + d.col));
+  assert.equal(set.has('0,1'), true, 'cell in the wrong galaxy is flagged');
+  assert.equal(set.has('1,0'), true);
+  assert.equal(set.has('0,0'), false, 'cell in the right galaxy is not flagged');
+  assert.equal(set.has('1,1'), false);
 });
 
 test('computePuzzleDiff: shikaku flags a wrongly-shaped rectangle, not a correct one', () => {

@@ -4465,6 +4465,43 @@ function _shikakuDiff(grid, solution) {
   return out;
 }
 
+// Galaxies diff: region ids are numbered differently by the solver (star
+// order) and the page (BFS), so a direct comparison is meaningless. Each
+// region holds exactly one star, so normalize: map each grid's region ids
+// to star indices (via each star's anchor cell) and compare those. `stars`
+// are in doubled coordinates — star (R,C) anchors to real cell (R>>1, C>>1).
+function _galaxiesDiff(grid, solution, stars) {
+  const out = [];
+  if (!Array.isArray(stars)) return out;
+  const rows = Math.min(grid.length, solution.length);
+  if (rows === 0) return out;
+  const cols = Math.min((grid[0] || []).length, (solution[0] || []).length);
+
+  const mapRegions = (board) => {
+    const m = new Map();
+    for (let i = 0; i < stars.length; i++) {
+      const ar = stars[i].row >> 1, ac = stars[i].col >> 1;
+      if (ar < 0 || ar >= rows || ac < 0 || ac >= cols) continue;
+      const rid = board[ar] && board[ar][ac];
+      if (rid > 0) m.set(rid, i);
+    }
+    return m;
+  };
+  const userMap = mapRegions(grid);
+  const solMap = mapRegions(solution);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const gv = grid[r][c];
+      if (!(gv > 0)) continue; // unassigned cell — not a mistake
+      if (userMap.get(gv) !== solMap.get(solution[r][c])) {
+        out.push({ row: r, col: c });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Compare a player's board to the puzzle's solution; return the cells the
  * player has PLACED incorrectly (empty cells are never flagged). Pure — no
@@ -4473,15 +4510,17 @@ function _shikakuDiff(grid, solution) {
  * @param {string} type   'nonogram'|'aquarium'|'binairo'|'yinyang'|'galaxies'|'shikaku'
  * @param {number[][]} grid      the player's current board
  * @param {number[][]} solution  the solved board
+ * @param {{row:number,col:number}[]} [stars]  galaxies stars (doubled coords); galaxies only
  * @returns {{row:number, col:number}[]}
  */
-function computePuzzleDiff(type, grid, solution) {
+function computePuzzleDiff(type, grid, solution, stars) {
   const out = [];
   if (!Array.isArray(grid) || !Array.isArray(solution)) return out;
   if (type === 'shikaku') return _shikakuDiff(grid, solution);
-  // Cell-state puzzles and galaxies: a cell is a mistake when it is placed
-  // (non-empty; the empty sentinel is 0 for all of these) and its value
-  // differs from the solution.
+  if (type === 'galaxies') return _galaxiesDiff(grid, solution, stars);
+  // Nonogram, Aquarium, Binairo, Yin-Yang: a cell is a mistake when the
+  // player has placed something there (its value is not 0 = "not yet
+  // placed") and that value differs from the solution.
   const rows = Math.min(grid.length, solution.length);
   for (let r = 0; r < rows; r++) {
     const gRow = grid[r] || [], sRow = solution[r] || [];
