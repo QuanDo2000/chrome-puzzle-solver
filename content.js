@@ -2500,6 +2500,11 @@ function makeWidget() {
     const cached = getCachedGalaxiesSolution(puzzleData);
     if (!puzzleData.solution && cached) puzzleData.solution = cached;
 
+    if (!puzzleData.solution && pendingAutoSolve) {
+      setStatus('Solving...', 'info');
+      await pendingAutoSolve;
+    }
+
     if (puzzleData.solution) {
       loopConfirming = false;
       clearPendingHint();
@@ -2760,6 +2765,10 @@ function makeWidget() {
       if (cached) puzzleData.solution = cached;
     }
 
+    if (!puzzleData.solution && pendingAutoSolve) {
+      await pendingAutoSolve;
+    }
+
     // Nonogram pre-solves so the loop's getHint can compare against the
     // solution. With a cache hit we skip the solve; otherwise solve once
     // up front and cache the result.
@@ -2799,6 +2808,10 @@ function makeWidget() {
     loopConfirming = false;
     solveBtn.textContent = 'Solve';
     loopBtn.textContent = 'Loop';
+    if (!puzzleData.solution && pendingAutoSolve) {
+      setStatus('Solving...', 'info');
+      await pendingAutoSolve;
+    }
     setStatus('Computing hint...', 'info');
     const result = await getHint({ solution: puzzleData.solution });
     if (!result?.success) {
