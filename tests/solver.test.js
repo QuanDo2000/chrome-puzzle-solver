@@ -921,3 +921,24 @@ test('YinYangSolver: _applyLookahead detects unsolvability via the both-fail pro
   });
   assert.equal(s._applyLookahead(() => {}), false);
 });
+
+test('YinYangSolver: _applyBorderArc rejects a board with >2 border arcs', () => {
+  // 3x3 with all 8 border cells placed in an alternating B/W ring -> the
+  // border has 8 colour transitions (4 arcs) -> unsolvable.
+  const s = new YinYangSolver({
+    rows: 3, cols: 3, task: [[-1, -1, -1], [-1, -1, -1], [-1, -1, -1]],
+    initialState: [[1, 2, 1], [2, 0, 2], [1, 2, 1]],
+  });
+  assert.equal(s._applyBorderArc(() => {}), false);
+});
+
+test('YinYangSolver: _applyBorderArc forces a border cell to avoid a 3rd arc', () => {
+  // Border has placed cells B,W,B forming 2 arcs; the empty cell at (1,0)
+  // would create a 3rd arc if white, so it is forced black.
+  const s = new YinYangSolver({
+    rows: 3, cols: 3, task: [[-1, -1, -1], [-1, -1, -1], [-1, -1, -1]],
+    initialState: [[0, 1, 0], [0, 0, 2], [1, 0, 0]],
+  });
+  assert.equal(s._applyBorderArc(() => {}), true);
+  assert.equal(s._get(1, 0), 1);
+});

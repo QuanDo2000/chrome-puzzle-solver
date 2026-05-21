@@ -3822,6 +3822,8 @@ class YinYangSolver {
     this._apDisc = new Int32Array(rows * cols);
     this._apLow = new Int32Array(rows * cols);
     this._apIsAP = new Uint8Array(rows * cols);
+    // Perimeter cells in cyclic order, for the border-arc rule.
+    this._border = this._computeBorderCycle();
 
     const seed = initialState || this._gridFromGivens();
     for (let r = 0; r < rows; r++) {
@@ -4117,6 +4119,62 @@ class YinYangSolver {
     }
   }
 
+  // The perimeter cells in cyclic order (top L->R, right T->B, bottom R->L,
+  // left B->T). Empty for grids too small to have a perimeter cycle.
+  _computeBorderCycle() {
+    const R = this.rows, C = this.cols;
+    if (R < 2 || C < 2) return [];
+    const out = [];
+    for (let c = 0; c < C; c++) out.push(c);
+    for (let r = 1; r < R; r++) out.push(r * C + (C - 1));
+    for (let c = C - 2; c >= 0; c--) out.push((R - 1) * C + c);
+    for (let r = R - 2; r >= 1; r--) out.push(r * C);
+    return out;
+  }
+
+  // Count colour transitions around the border cycle, considering only
+  // placed cells (empties skipped). `extraIdx`/`extraColor` let a probe
+  // treat one otherwise-empty cell as tentatively coloured (pass -1/0 for
+  // no probe). The transition count equals the number of border arcs when
+  // it is >= 2; 0 transitions means a single arc.
+  _borderTransitions(extraIdx, extraColor) {
+    const border = this._border;
+    const seq = [];
+    for (let i = 0; i < border.length; i++) {
+      const idx = border[i];
+      const v = idx === extraIdx ? extraColor : this.grid[idx];
+      if (v === 1 || v === 2) seq.push(v);
+    }
+    const L = seq.length;
+    if (L < 2) return 0;
+    let t = 0;
+    for (let i = 0; i < L; i++) {
+      if (seq[i] !== seq[(i + 1) % L]) t++;
+    }
+    return t;
+  }
+
+  // Border-arc deduction. A valid Yin-Yang has at most 2 border arcs, i.e.
+  // at most 2 colour transitions around the perimeter; >= 4 transitions is
+  // impossible. Returns false on contradiction; forces any empty border
+  // cell whose wrong colour would create a 3rd arc. Calls onChange() for
+  // each forced cell.
+  _applyBorderArc(onChange) {
+    if (this.rows < 2 || this.cols < 2) return true;
+    if (this._borderTransitions(-1, 0) >= 4) return false;
+    const border = this._border;
+    for (let i = 0; i < border.length; i++) {
+      const idx = border[i];
+      if (this.grid[idx] !== 0) continue;
+      const blackBad = this._borderTransitions(idx, 1) >= 4;
+      const whiteBad = this._borderTransitions(idx, 2) >= 4;
+      if (blackBad && whiteBad) return false;
+      if (blackBad) { this._assign(idx, 2); onChange(); }
+      else if (whiteBad) { this._assign(idx, 1); onChange(); }
+    }
+    return true;
+  }
+
   // Iterate the propagation rules to a fixpoint. Returns false on
   // contradiction. The local rules (2x2, connectivity) run to a fixpoint;
   // then at the top level (_depth === 0, not already inside a lookahead
@@ -4133,6 +4191,7 @@ class YinYangSolver {
         const onChange = () => { changed = true; };
         if (!this._apply2x2(onChange)) return false;
         if (!this._applyConnectivity(onChange)) return false;
+        if (!this._applyBorderArc(onChange)) return false;
       }
       if (this._depth === 0 && !this._inLookahead) {
         let laChanged = false;
