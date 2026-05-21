@@ -996,6 +996,15 @@ test('computePuzzleDiff: galaxies flags cells in the wrong galaxy', () => {
   assert.equal(set.has('1,1'), false);
 });
 
+test('computePuzzleDiff: galaxies does not flag a blank board (region holds multiple stars)', () => {
+  const stars = [{ row: 0, col: 0 }, { row: 2, col: 2 }];
+  const solution = [[1, 2], [1, 2]];
+  // A blank galaxies board flood-fills to ONE region (id 1) holding BOTH
+  // stars — uncommitted, so nothing is a mistake.
+  const blank = [[1, 1], [1, 1]];
+  assert.deepEqual(computePuzzleDiff('galaxies', blank, solution, stars), []);
+});
+
 test('computePuzzleDiff: shikaku flags a wrongly-shaped rectangle, not a correct one', () => {
   // 2x4 solution: clue 0 owns the left 2x2, clue 1 owns the right 2x2.
   const solution = [[0, 0, 1, 1], [0, 0, 1, 1]];

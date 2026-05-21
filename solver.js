@@ -4466,10 +4466,13 @@ function _shikakuDiff(grid, solution) {
 }
 
 // Galaxies diff: region ids are numbered differently by the solver (star
-// order) and the page (BFS), so a direct comparison is meaningless. Each
-// region holds exactly one star, so normalize: map each grid's region ids
-// to star indices (via each star's anchor cell) and compare those. `stars`
-// are in doubled coordinates — star (R,C) anchors to real cell (R>>1, C>>1).
+// order) and the page (flood-fill order), so map both to star indices and
+// compare. The page flood-fills the WHOLE grid into regions — there is no
+// "unassigned" cell — so a region the player has not yet split still holds
+// multiple stars. Only flag cells in a region the player has committed to
+// exactly ONE star; a region with 0 or 2+ stars is incomplete, not wrong
+// (this is why a blank board rings nothing). Stars are in doubled
+// coordinates — star (R,C) anchors to real cell (R>>1, C>>1).
 function _galaxiesDiff(grid, solution, stars) {
   const out = [];
   if (!Array.isArray(stars)) return out;
@@ -4477,24 +4480,28 @@ function _galaxiesDiff(grid, solution, stars) {
   if (rows === 0) return out;
   const cols = Math.min((grid[0] || []).length, (solution[0] || []).length);
 
-  const mapRegions = (board) => {
-    const m = new Map();
-    for (let i = 0; i < stars.length; i++) {
-      const ar = stars[i].row >> 1, ac = stars[i].col >> 1;
-      if (ar < 0 || ar >= rows || ac < 0 || ac >= cols) continue;
-      const rid = board[ar] && board[ar][ac];
-      if (rid > 0) m.set(rid, i);
+  const solStar = new Map();      // solution region id -> star index
+  const userStar = new Map();     // player region id -> a star index in it
+  const userStarCount = new Map(); // player region id -> how many stars it holds
+  for (let i = 0; i < stars.length; i++) {
+    const ar = stars[i].row >> 1, ac = stars[i].col >> 1;
+    if (ar < 0 || ar >= rows || ac < 0 || ac >= cols) continue;
+    const sRid = solution[ar] && solution[ar][ac];
+    if (sRid > 0) solStar.set(sRid, i);
+    const gRid = grid[ar] && grid[ar][ac];
+    if (gRid > 0) {
+      userStar.set(gRid, i);
+      userStarCount.set(gRid, (userStarCount.get(gRid) || 0) + 1);
     }
-    return m;
-  };
-  const userMap = mapRegions(grid);
-  const solMap = mapRegions(solution);
+  }
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const gv = grid[r][c];
-      if (!(gv > 0)) continue; // unassigned cell — not a mistake
-      if (userMap.get(gv) !== solMap.get(solution[r][c])) {
+      if (!(gv > 0)) continue;
+      // Skip cells whose region is not yet committed to exactly one star.
+      if (userStarCount.get(gv) !== 1) continue;
+      if (userStar.get(gv) !== solStar.get(solution[r][c])) {
         out.push({ row: r, col: c });
       }
     }
