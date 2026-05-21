@@ -2218,25 +2218,26 @@ function makeWidget() {
             ctx.fill();
           }
         } else if (isYinYang) {
-          // cellStatus: 1 = black square, 2 = white square.
+          // cellStatus 1 renders light, 2 renders dark — matching the game
+          // (Yin-Yang shares Binairo's cell encoding/polarity).
           const yyInset = Math.max(1, Math.floor(cellSize * 0.15));
           const yySide = cellSize - 2 * yyInset;
           const sx = x + yyInset, sy = y + yyInset;
           if (v === 1) {
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(sx, sy, yySide, yySide);
-          } else if (v === 2) {
             ctx.fillStyle = '#fff';
             ctx.fillRect(sx, sy, yySide, yySide);
             ctx.strokeStyle = '#1f2937';
             ctx.lineWidth = Math.max(1.5, cellSize / 14);
             ctx.strokeRect(sx, sy, yySide, yySide);
+          } else if (v === 2) {
+            ctx.fillStyle = '#1f2937';
+            ctx.fillRect(sx, sy, yySide, yySide);
           }
           // Given cells get a small contrasting centre square.
           const given = puzzleData?.task?.[r]?.[c];
           if (given === 0 || given === 1) {
             const dotSide = Math.max(2, Math.floor(cellSize * 0.2));
-            ctx.fillStyle = v === 1 ? '#fff' : '#1f2937';
+            ctx.fillStyle = v === 1 ? '#1f2937' : '#fff';
             ctx.fillRect(x + (cellSize - dotSide) / 2, y + (cellSize - dotSide) / 2, dotSide, dotSide);
           }
         } else if (puzzleData?.type === 'galaxies' && v > 0) {
@@ -2350,7 +2351,7 @@ function makeWidget() {
           const inset = Math.max(1, Math.floor(cellSize * 0.15));
           const side = cellSize - 2 * inset;
           const sx = cx + inset, sy = cy + inset;
-          ctx.fillStyle = cell.value === 1 ? '#1f2937' : '#fff';
+          ctx.fillStyle = cell.value === 1 ? '#fff' : '#1f2937';
           ctx.fillRect(sx, sy, side, side);
           ctx.strokeStyle = '#2e86de';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
