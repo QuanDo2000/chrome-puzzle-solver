@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, computePuzzleDiff } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -966,4 +966,39 @@ test('YinYangSolver: _applyBorderArc forces a border cell to avoid a 3rd arc', (
   });
   assert.equal(s._applyBorderArc(() => {}), true);
   assert.equal(s._get(1, 0), 1);
+});
+
+test('computePuzzleDiff: flags a wrongly-placed cell, ignores correct and empty', () => {
+  const solution = [[1, 2], [1, 2]];
+  const grid = [[0, 1], [1, 0]]; // (0,1)=1 vs solution 2 -> mistake; (1,0) ok; (0,0),(1,1) empty
+  assert.deepEqual(computePuzzleDiff('binairo', grid, solution), [{ row: 0, col: 1 }]);
+});
+
+test('computePuzzleDiff: galaxies compares region ids directly', () => {
+  const solution = [[1, 1], [2, 2]];
+  const grid = [[1, 2], [0, 2]]; // (0,1)=2 vs solution 1 -> mistake
+  assert.deepEqual(computePuzzleDiff('galaxies', grid, solution), [{ row: 0, col: 1 }]);
+});
+
+test('computePuzzleDiff: shikaku flags a wrongly-shaped rectangle, not a correct one', () => {
+  // 2x4 solution: clue 0 owns the left 2x2, clue 1 owns the right 2x2.
+  const solution = [[0, 0, 1, 1], [0, 0, 1, 1]];
+  // Player board with page owner ids (7/9/5) that DON'T match solver indices:
+  // owner 7 = the correct left 2x2; owners 9 and 5 = wrong 2x1 columns.
+  const grid = [[7, 7, 9, 5], [7, 7, 9, 5]];
+  const set = new Set(computePuzzleDiff('shikaku', grid, solution).map(d => d.row + ',' + d.col));
+  assert.equal(set.has('0,0'), false, 'correct left rectangle not flagged');
+  assert.equal(set.has('1,1'), false);
+  assert.equal(set.has('0,2'), true, 'wrong-shaped right rectangle flagged');
+  assert.equal(set.has('0,3'), true);
+  assert.equal(set.has('1,2'), true);
+  assert.equal(set.has('1,3'), true);
+});
+
+test('computePuzzleDiff: shikaku ignores unassigned (-1) cells', () => {
+  assert.deepEqual(computePuzzleDiff('shikaku', [[-1, -1], [-1, -1]], [[0, 0], [0, 0]]), []);
+});
+
+test('computePuzzleDiff: returns empty when grids are missing', () => {
+  assert.deepEqual(computePuzzleDiff('binairo', null, [[1]]), []);
 });

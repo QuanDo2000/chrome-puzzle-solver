@@ -4416,6 +4416,86 @@ class YinYangSolver {
   }
 }
 
+// Bounding box of every distinct owner value on a board (skipping `empty`).
+// Returns a Map: ownerValue -> { r1, c1, r2, c2 }.
+function _ownerBoxes(board, rows, cols, empty) {
+  const m = new Map();
+  for (let r = 0; r < rows; r++) {
+    const row = board[r] || [];
+    for (let c = 0; c < cols; c++) {
+      const v = row[c];
+      if (v === empty || v === undefined) continue;
+      const b = m.get(v);
+      if (!b) {
+        m.set(v, { r1: r, c1: c, r2: r, c2: c });
+      } else {
+        if (r < b.r1) b.r1 = r;
+        if (r > b.r2) b.r2 = r;
+        if (c < b.c1) b.c1 = c;
+        if (c > b.c2) b.c2 = c;
+      }
+    }
+  }
+  return m;
+}
+
+// Shikaku diff: owner ids differ between the page board and the solver
+// solution, so compare rectangle GEOMETRY — a placed cell is a mistake when
+// its owner's bounding box does not match the solution rectangle covering it.
+function _shikakuDiff(grid, solution) {
+  const out = [];
+  const rows = Math.min(grid.length, solution.length);
+  if (rows === 0) return out;
+  const cols = Math.min((grid[0] || []).length, (solution[0] || []).length);
+  const gBox = _ownerBoxes(grid, rows, cols, -1);
+  const sBox = _ownerBoxes(solution, rows, cols, -1);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const gv = grid[r][c];
+      if (gv === -1 || gv === undefined) continue; // unassigned — not a mistake
+      const gb = gBox.get(gv);
+      const sb = sBox.get(solution[r][c]);
+      if (!gb || !sb ||
+          gb.r1 !== sb.r1 || gb.c1 !== sb.c1 ||
+          gb.r2 !== sb.r2 || gb.c2 !== sb.c2) {
+        out.push({ row: r, col: c });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Compare a player's board to the puzzle's solution; return the cells the
+ * player has PLACED incorrectly (empty cells are never flagged). Pure — no
+ * DOM. Used by the widget preview to highlight mistakes.
+ *
+ * @param {string} type   'nonogram'|'aquarium'|'binairo'|'yinyang'|'galaxies'|'shikaku'
+ * @param {number[][]} grid      the player's current board
+ * @param {number[][]} solution  the solved board
+ * @returns {{row:number, col:number}[]}
+ */
+function computePuzzleDiff(type, grid, solution) {
+  const out = [];
+  if (!Array.isArray(grid) || !Array.isArray(solution)) return out;
+  if (type === 'shikaku') return _shikakuDiff(grid, solution);
+  // Cell-state puzzles and galaxies: a cell is a mistake when it is placed
+  // (non-empty; the empty sentinel is 0 for all of these) and its value
+  // differs from the solution.
+  const rows = Math.min(grid.length, solution.length);
+  for (let r = 0; r < rows; r++) {
+    const gRow = grid[r] || [], sRow = solution[r] || [];
+    const cols = Math.min(gRow.length, sRow.length);
+    for (let c = 0; c < cols; c++) {
+      const g = gRow[c];
+      if (g !== 0 && g !== undefined && g !== sRow[c]) {
+        out.push({ row: r, col: c });
+      }
+    }
+  }
+  return out;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, computePuzzleDiff };
 }

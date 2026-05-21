@@ -147,6 +147,8 @@ module.exports = [
         // Defined in handler.js, called from content.js.
         getActiveHandler: 'readonly',
         callMainWorld: 'readonly',
+        // Defined in solver.js, called from content.js.
+        computePuzzleDiff: 'readonly',
       },
     },
     rules: sharedRules,
