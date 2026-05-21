@@ -4254,18 +4254,29 @@ class YinYangSolver {
   }
 
   /**
-   * Run propagation only (no backtracking) on `currentGrid` and return every
-   * cell forced from empty to placed — all cells deducible by pure logic.
-   * Returns null when the current board is contradictory or nothing is
-   * forced. Shape is row-anchored, matching BinairoSolver.getHint.
+   * Return every cell deducible from `currentGrid` by pure logic, as a
+   * row-anchored hint (matching BinairoSolver.getHint), or null if nothing
+   * is deducible / the board is contradictory. First tries the fast local
+   * rules only; if they deduce nothing it falls back to the slower
+   * lookahead pass, so Hint never dead-ends while the puzzle is still
+   * solvable.
    * @param {number[][]} currentGrid  2D in cellStatus encoding (0/1/2).
    */
   getHint(currentGrid) {
+    return this._hintWithDepth(currentGrid, 1)
+      || this._hintWithDepth(currentGrid, 0);
+  }
+
+  // One hint pass over `currentGrid`. depth 1 = local rules only (fast);
+  // depth 0 = also run the top-level lookahead (slower, much stronger).
+  // Returns a row-anchored hint of every cell forced from empty, or null
+  // when nothing is forced / the board is contradictory.
+  _hintWithDepth(currentGrid, depth) {
     const clone = new YinYangSolver({
       rows: this.rows, cols: this.cols, task: this.task,
       initialState: currentGrid,
     });
-    clone._depth = 1; // Hint uses local rules only — lookahead is too slow here.
+    clone._depth = depth;
     const before = new Uint8Array(clone.grid);
     if (!clone.propagate()) return null;
 

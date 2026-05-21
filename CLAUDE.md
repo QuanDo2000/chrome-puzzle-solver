@@ -223,8 +223,9 @@ is forced). After the local rules stall, at the top level only (`_depth ===
 if exactly one colour propagates to a contradiction, force the other). Then
 most-constrained backtracking (`_pickCell`). On a complete grid a successful
 `propagate()` IS a validity proof — no separate completion check. `getHint`
-runs the local rules only (lookahead is excluded — too slow for an
-interactive hint) and reports the cells it forced. Static `_solutionCache`
+first runs the local rules only (fast); if they deduce nothing it falls
+back to a full lookahead pass (`_hintWithDepth` at depth 0), so Hint never
+dead-ends while the puzzle is still solvable. Static `_solutionCache`
 keyed on FNV-1a of `(rows, cols, task)`, 50-entry LRU. Instance `maxMs`
 budget; the worker sets 30 s so large weeklies are not cut off (a 35×35
 weekly solves fully by deduction in ~5 s).

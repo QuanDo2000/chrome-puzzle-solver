@@ -834,6 +834,23 @@ test('YinYangSolver: getHint returns null when nothing is deducible', () => {
   YinYangSolver.clearSolutionCache();
 });
 
+test('YinYangSolver: getHint falls back to lookahead when local rules stall', () => {
+  // The 35x35 weekly: local rules stall well short of a solution. Drive the
+  // board to that local-rules fixpoint, then confirm the fast (local-only)
+  // hint pass finds nothing there but getHint's lookahead fallback does.
+  const real = require('./fixtures/real-puzzles.js');
+  const p = real.yinyangWeekly35x35;
+  const stall = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task });
+  stall._depth = 1; // local rules only — lookahead disabled
+  stall.propagate();
+  const stalledGrid = stall._gridTo2D();
+  const probe = new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task });
+  assert.equal(probe._hintWithDepth(stalledGrid, 1), null,
+    'local-only hint pass should stall (find nothing) on the stalled grid');
+  assert.ok(probe.getHint(stalledGrid),
+    'getHint must fall back to lookahead and still return a hint');
+});
+
 test('YinYangSolver: reachability forces an unreachable empty cell', () => {
   // 1x3: black at (0,0), white wall at (0,1), empty (0,2). (0,2) cannot
   // reach the black region -> it can never be black -> forced white.
