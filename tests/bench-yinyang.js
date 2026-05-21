@@ -21,13 +21,16 @@ let failed = false;
 for (const { name, puzzle } of targets) {
   for (let i = 0; i < WARMUP; i++) {
     YinYangSolver.clearSolutionCache();
-    new YinYangSolver({ rows: puzzle.rows, cols: puzzle.cols, task: puzzle.task }).solve();
+    const w = new YinYangSolver({ rows: puzzle.rows, cols: puzzle.cols, task: puzzle.task });
+    w.maxMs = 30000;
+    w.solve();
   }
   const times = [];
   let solvedFlag = null;
   for (let i = 0; i < N; i++) {
     YinYangSolver.clearSolutionCache();
     const s = new YinYangSolver({ rows: puzzle.rows, cols: puzzle.cols, task: puzzle.task });
+    s.maxMs = 30000;
     const t0 = process.hrtime.bigint();
     const r = s.solve();
     const t1 = process.hrtime.bigint();

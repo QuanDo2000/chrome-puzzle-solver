@@ -901,3 +901,23 @@ test('YinYangSolver: propagate forces unreachable cells via reachability', () =>
   assert.equal(s._get(0, 3), 2);
   assert.equal(s._get(0, 4), 2);
 });
+
+test('YinYangSolver: _applyLookahead forces nothing and returns true on an open board', () => {
+  // 4x4 all empty — many valid solutions, no single cell is forced.
+  const s = new YinYangSolver({
+    rows: 4, cols: 4, task: Array.from({ length: 4 }, () => [-1, -1, -1, -1]),
+  });
+  let changes = 0;
+  assert.equal(s._applyLookahead(() => { changes++; }), true);
+  assert.equal(changes, 0);
+});
+
+test('YinYangSolver: _applyLookahead detects unsolvability via the both-fail probe', () => {
+  // 2x4 board where black corners cannot be 2-coloured validly: probing the
+  // first empty cell, BOTH colours propagate to a connectivity contradiction.
+  const s = new YinYangSolver({
+    rows: 2, cols: 4, task: [[-1, -1, -1, -1], [-1, -1, -1, -1]],
+    initialState: [[1, 1, 0, 0], [0, 0, 1, 1]],
+  });
+  assert.equal(s._applyLookahead(() => {}), false);
+});

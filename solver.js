@@ -3810,6 +3810,11 @@ class YinYangSolver {
     this.maxMs = 0;
     this._startedAt = 0;
     this._timedOut = false;
+    // Lookahead control: _depth gates lookahead to the top level of the
+    // search; _inLookahead prevents a probe's propagate() from recursing
+    // into lookahead.
+    this._depth = 0;
+    this._inLookahead = false;
     // Reusable scratch buffer for the reachability BFS (avoids per-call
     // typed-array allocation in the hot propagation path).
     this._scratchSeen = new Uint8Array(rows * cols);
@@ -4082,16 +4087,58 @@ class YinYangSolver {
     return true;
   }
 
+  // 1-step lookahead. For each empty cell, tentatively assign each colour
+  // and run a (lookahead-free) propagate(); if exactly one colour leads to a
+  // contradiction, force the other. If both do, the board is unsolvable.
+  // Returns false on contradiction, true otherwise. Calls onChange() for
+  // each forced cell. Expensive — propagate() runs it only at the top level.
+  _applyLookahead(onChange) {
+    const N = this.rows * this.cols;
+    this._inLookahead = true;
+    try {
+      for (let i = 0; i < N; i++) {
+        if (this.grid[i] !== 0) continue;
+        if (this._budgetExceeded()) return true;
+        let mark = this.trail.length;
+        this._assign(i, 1);
+        const blackBad = !this.propagate();
+        this._rollback(mark);
+        mark = this.trail.length;
+        this._assign(i, 2);
+        const whiteBad = !this.propagate();
+        this._rollback(mark);
+        if (blackBad && whiteBad) return false;
+        if (blackBad) { this._assign(i, 2); onChange(); }
+        else if (whiteBad) { this._assign(i, 1); onChange(); }
+      }
+      return true;
+    } finally {
+      this._inLookahead = false;
+    }
+  }
+
   // Iterate the propagation rules to a fixpoint. Returns false on
-  // contradiction.
+  // contradiction. The local rules (2x2, connectivity) run to a fixpoint;
+  // then at the top level (_depth === 0, not already inside a lookahead
+  // probe) the 1-step lookahead runs, and if it forces anything the whole
+  // process repeats.
   propagate() {
-    let changed = true;
-    while (changed) {
-      if (this._budgetExceeded()) return false;
-      changed = false;
-      const onChange = () => { changed = true; };
-      if (!this._apply2x2(onChange)) return false;
-      if (!this._applyConnectivity(onChange)) return false;
+    let progress = true;
+    while (progress) {
+      progress = false;
+      let changed = true;
+      while (changed) {
+        if (this._budgetExceeded()) return false;
+        changed = false;
+        const onChange = () => { changed = true; };
+        if (!this._apply2x2(onChange)) return false;
+        if (!this._applyConnectivity(onChange)) return false;
+      }
+      if (this._depth === 0 && !this._inLookahead) {
+        let laChanged = false;
+        if (!this._applyLookahead(() => { laChanged = true; })) return false;
+        if (laChanged) progress = true;
+      }
     }
     return true;
   }
@@ -4159,6 +4206,7 @@ class YinYangSolver {
       rows: this.rows, cols: this.cols, task: this.task,
       initialState: currentGrid,
     });
+    clone._depth = 1; // Hint uses local rules only — lookahead is too slow here.
     const before = new Uint8Array(clone.grid);
     if (!clone.propagate()) return null;
 
@@ -4194,6 +4242,8 @@ class YinYangSolver {
 
     this._startedAt = Date.now();
     this._timedOut = false;
+    this._depth = 0;
+    this._inLookahead = false;
 
     if (!this.propagate()) {
       return {
@@ -4206,6 +4256,7 @@ class YinYangSolver {
       this._storeInCache(key, grid);
       return { solved: true, grid };
     }
+    this._depth = 1;
     if (this._backtrack()) {
       const grid = this._gridTo2D();
       this._storeInCache(key, grid);
