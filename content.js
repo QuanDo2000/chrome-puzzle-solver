@@ -1533,6 +1533,7 @@ function makeWidget() {
   let looping = false;
   let stopLooping = false;
   let stopLoopWait = null;  // set to a cancellation fn while the loop is sleeping
+  let pendingAutoSolve = null;
   let solveBtn = null;
   let loopBtn = null;
 
@@ -2152,7 +2153,8 @@ function makeWidget() {
                 '|rm=' + regionMapSig(pd?.regionMap) +
                 '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
                 '|g=' + gridDataSig(grid) +
-                '|h=' + hintSig(hint);
+                '|h=' + hintSig(hint) +
+                '|sol=' + (pd?.solution ? '1' : '0');
     if (sig === lastDrawSig) return;
     lastDrawSig = sig;
 
@@ -2473,6 +2475,7 @@ function makeWidget() {
     }
     updateUndoRedoButtons();
     startStateWatch();
+    pendingAutoSolve = autoSolve();
   }
 
   async function solveHandler() {
@@ -2536,6 +2539,50 @@ function makeWidget() {
       return;
     }
     applySolveResult(result);
+  }
+
+  // Background solve kicked off by Detect. Non-blocking: detectHandler does
+  // not await it. Populates puzzleData.solution + the localStorage caches so
+  // Solve/Hint/Loop reuse it, and triggers the mistake overlay. Solves from
+  // the puzzle's givens (initialGrid = null) so the result is the canonical
+  // solution, not biased by the player's possibly-wrong moves. Background
+  // failures are silent — features still solve on demand.
+  async function autoSolve() {
+    const pd = puzzleData; // capture — a later Detect must not be clobbered
+    if (!pd || pd.solution) return;
+    const cached = pd.type === 'galaxies'
+      ? getCachedGalaxiesSolution(pd)
+      : getCachedGridSolution(pd);
+    if (cached) {
+      if (puzzleData === pd) { pd.solution = cached; await afterAutoSolve(pd); }
+      return;
+    }
+    const result = await runSolve(pd.rowClues, pd.colClues, null, pd.type, solveExtraData());
+    if (puzzleData !== pd) return; // a newer Detect superseded this solve
+    if (result && result.solved) {
+      recordSolveSuccess(result);
+      await afterAutoSolve(pd);
+    } else {
+      console.warn('[puzzle-solver] background auto-solve did not solve:', result && result.error);
+    }
+  }
+
+  // After the auto-solve lands: redraw the preview (so mistakes show) and, if
+  // the widget is still idle on the post-detect message, note the count.
+  async function afterAutoSolve(pd) {
+    const state = await readGridState();
+    if (puzzleData !== pd || !pd.solution) return;
+    const grid = state && state.success ? state.grid : null;
+    if (!grid) return;
+    drawPreview(grid);
+    if (!confirming && !looping && !loopConfirming && !puzzleData.pendingHint) {
+      const mistakes = computePuzzleDiff(pd.type, grid, pd.solution, pd.stars);
+      const label = (pd.type || 'puzzle').charAt(0).toUpperCase() + (pd.type || 'puzzle').slice(1);
+      const note = mistakes.length
+        ? `${mistakes.length} mistake${mistakes.length === 1 ? '' : 's'}`
+        : 'no mistakes';
+      setStatus(`Found ${pd.rows}×${pd.cols} ${label} — ${note}.`, 'success');
+    }
   }
 
   // Cache solver outputs so subsequent operations (apply, hint, loop) can
