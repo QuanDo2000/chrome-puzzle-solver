@@ -864,3 +864,26 @@ test('YinYangSolver: reachability is a no-op when the colour has no placed cells
   assert.equal(s._get(0, 1), 0);
   assert.equal(s._get(0, 2), 0);
 });
+
+test('YinYangSolver: _articulationPoints finds the cut cell of a path graph', () => {
+  // 1x3 all empty -> G is a 3-cell path A-B-C -> middle cell (index 1) is
+  // the only articulation point.
+  const s = new YinYangSolver({ rows: 1, cols: 3, task: [[-1, -1, -1]] });
+  assert.deepEqual([...s._articulationPoints(1)].sort((a, b) => a - b), [1]);
+});
+
+test('YinYangSolver: _articulationPoints finds none in a 2x2 cycle', () => {
+  // 2x2 all empty -> G is a 4-cycle (2-connected) -> no articulation points.
+  const s = new YinYangSolver({ rows: 2, cols: 2, task: [[-1, -1], [-1, -1]] });
+  assert.deepEqual([...s._articulationPoints(1)], []);
+});
+
+test('YinYangSolver: _articulationPoints excludes cells not in the colour graph', () => {
+  // 1x3 with the middle cell = white. For colour 1 the graph is just the two
+  // endpoints (disconnected) -> no articulation points.
+  const s = new YinYangSolver({
+    rows: 1, cols: 3, task: [[-1, -1, -1]],
+    initialState: [[1, 2, 1]],
+  });
+  assert.deepEqual([...s._articulationPoints(1)], []);
+});

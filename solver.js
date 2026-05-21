@@ -3813,6 +3813,10 @@ class YinYangSolver {
     // Reusable scratch buffer for the reachability BFS (avoids per-call
     // typed-array allocation in the hot propagation path).
     this._scratchSeen = new Uint8Array(rows * cols);
+    // Reusable scratch buffers for the articulation-points DFS.
+    this._apDisc = new Int32Array(rows * cols);
+    this._apLow = new Int32Array(rows * cols);
+    this._apIsAP = new Uint8Array(rows * cols);
 
     const seed = initialState || this._gridFromGivens();
     for (let r = 0; r < rows; r++) {
@@ -4001,6 +4005,51 @@ class YinYangSolver {
       }
     }
     return true;
+  }
+
+  // Articulation points of the graph of cells that are `color` or empty
+  // (4-neighbour adjacency), via a standard Tarjan DFS. Returns an array of
+  // cell indices. Recursion depth is bounded by the cell count, which is
+  // safe for the puzzle sizes here (<= ~40x40).
+  _articulationPoints(color) {
+    const C = this.cols, R = this.rows, N = R * C;
+    const grid = this.grid;
+    const disc = this._apDisc; disc.fill(-1);
+    const low = this._apLow;
+    const isAP = this._apIsAP; isAP.fill(0);
+    let timer = 0;
+
+    const dfs = (u, parent) => {
+      disc[u] = low[u] = timer++;
+      let children = 0;
+      const r = (u / C) | 0, c = u % C;
+      for (let d = 0; d < 4; d++) {
+        let v = -1;
+        if (d === 0) { if (r > 0) v = u - C; }
+        else if (d === 1) { if (r + 1 < R) v = u + C; }
+        else if (d === 2) { if (c > 0) v = u - 1; }
+        else { if (c + 1 < C) v = u + 1; }
+        if (v < 0) continue;
+        if (grid[v] !== color && grid[v] !== 0) continue;
+        if (disc[v] === -1) {
+          children++;
+          dfs(v, u);
+          if (low[v] < low[u]) low[u] = low[v];
+          if (parent !== -1 && low[v] >= disc[u]) isAP[u] = 1;
+        } else if (v !== parent) {
+          if (disc[v] < low[u]) low[u] = disc[v];
+        }
+      }
+      if (parent === -1 && children > 1) isAP[u] = 1;
+    };
+
+    for (let i = 0; i < N; i++) {
+      if ((grid[i] === color || grid[i] === 0) && disc[i] === -1) dfs(i, -1);
+    }
+
+    const out = [];
+    for (let i = 0; i < N; i++) if (isAP[i]) out.push(i);
+    return out;
   }
 
   // Connectivity propagation. Returns false on contradiction; calls
