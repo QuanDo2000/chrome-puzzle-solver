@@ -28,10 +28,10 @@ function buildSolver(p) {
 
 for (const name of Object.keys(fixtures)) {
   const p = fixtures[name];
-  if (!buildSolver(p)) {
-    console.error(`FAIL: ${name} has unknown puzzle type: ${p.type}`);
-    process.exit(1);
-  }
+  // bench-real.js covers nonogram/aquarium/galaxies. The newer puzzle types
+  // (binairo, shikaku, yin-yang) share real-puzzles.js but have their own
+  // dedicated bench scripts (bench-binairo.js etc.), so skip them here.
+  if (!buildSolver(p)) continue;
   // Discard WARMUP iterations to skip V8 JIT cold-start cost.
   for (let i = 0; i < WARMUP; i++) {
     GalaxiesSolver.clearSolutionCache();
