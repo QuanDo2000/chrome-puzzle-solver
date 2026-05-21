@@ -2394,6 +2394,26 @@ function makeWidget() {
     // and hints (the lattice layer painted at the start of this function
     // already covers the under-fill case).
     if (staticLayer) ctx.drawImage(staticLayer, 0, 0);
+
+    // Mistake overlay: when the auto-solved solution is known, ring every
+    // cell the player has placed wrong. Recomputed each redraw, so it tracks
+    // the board live as the state-watch refreshes the preview.
+    if (puzzleData?.solution) {
+      const mistakes = computePuzzleDiff(
+        puzzleData.type, grid, puzzleData.solution, puzzleData.stars);
+      if (mistakes.length) {
+        ctx.save();
+        ctx.strokeStyle = '#e63946';
+        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 8));
+        for (const m of mistakes) {
+          const mx = m.col * cellSize, my = m.row * cellSize;
+          ctx.fillStyle = 'rgba(230, 57, 70, 0.22)';
+          ctx.fillRect(mx, my, cellSize, cellSize);
+          ctx.strokeRect(mx + 1, my + 1, cellSize - 2, cellSize - 2);
+        }
+        ctx.restore();
+      }
+    }
   }
 
   function setExpanded(val) {
