@@ -2218,30 +2218,26 @@ function makeWidget() {
             ctx.fill();
           }
         } else if (isYinYang) {
-          // cellStatus: 1 = black stone, 2 = white stone.
-          const cx = x + cellSize / 2, cy = y + cellSize / 2;
-          const yyR = Math.max(2, Math.floor(cellSize * 0.35));
+          // cellStatus: 1 = black square, 2 = white square.
+          const yyInset = Math.max(1, Math.floor(cellSize * 0.15));
+          const yySide = cellSize - 2 * yyInset;
+          const sx = x + yyInset, sy = y + yyInset;
           if (v === 1) {
             ctx.fillStyle = '#1f2937';
-            ctx.beginPath();
-            ctx.arc(cx, cy, yyR, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillRect(sx, sy, yySide, yySide);
           } else if (v === 2) {
             ctx.fillStyle = '#fff';
+            ctx.fillRect(sx, sy, yySide, yySide);
             ctx.strokeStyle = '#1f2937';
             ctx.lineWidth = Math.max(1.5, cellSize / 14);
-            ctx.beginPath();
-            ctx.arc(cx, cy, yyR, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
+            ctx.strokeRect(sx, sy, yySide, yySide);
           }
-          // Given cells get a small contrasting centre dot.
+          // Given cells get a small contrasting centre square.
           const given = puzzleData?.task?.[r]?.[c];
           if (given === 0 || given === 1) {
+            const dotSide = Math.max(2, Math.floor(cellSize * 0.2));
             ctx.fillStyle = v === 1 ? '#fff' : '#1f2937';
-            ctx.beginPath();
-            ctx.arc(cx, cy, Math.max(1, Math.floor(cellSize * 0.1)), 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillRect(x + (cellSize - dotSide) / 2, y + (cellSize - dotSide) / 2, dotSide, dotSide);
           }
         } else if (puzzleData?.type === 'galaxies' && v > 0) {
           ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
@@ -2350,19 +2346,15 @@ function makeWidget() {
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 7));
           ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
         } else if (puzzleData?.type === 'yinyang' && (cell.value === 1 || cell.value === 2)) {
-          // Draw the hint stone in its colour, ringed blue to mark the hint.
-          const ccx = cx + cellSize / 2;
-          const ccy = cy + cellSize / 2;
-          const hr = Math.max(2, Math.floor(cellSize * 0.35));
+          // Draw the hint square in its colour, ringed blue to mark the hint.
+          const inset = Math.max(1, Math.floor(cellSize * 0.15));
+          const side = cellSize - 2 * inset;
+          const sx = cx + inset, sy = cy + inset;
           ctx.fillStyle = cell.value === 1 ? '#1f2937' : '#fff';
-          ctx.beginPath();
-          ctx.arc(ccx, ccy, hr, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillRect(sx, sy, side, side);
           ctx.strokeStyle = '#2e86de';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-          ctx.beginPath();
-          ctx.arc(ccx, ccy, hr, 0, Math.PI * 2);
-          ctx.stroke();
+          ctx.strokeRect(sx, sy, side, side);
         } else if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
           // For binairo hints, draw a translucent disc matching the target value
           // — outlined blue = "play a 1 here", full blue fill = "play a 0 here".
