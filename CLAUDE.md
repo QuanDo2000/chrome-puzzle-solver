@@ -207,16 +207,27 @@ orthogonally-connected region, all white cells likewise; (3) no 2×2 window
 may be monochrome OR a diagonal checkerboard (a checkerboard makes both
 colours' diagonal pairs uncrossable, so it is forbidden).
 
-Solver shape: `propagate()` iterates two sound rules — 2×2 forcing
-(`_apply2x2`) and a connectivity-cut probe (`_applyConnectivity`, which
-forces any empty cell whose removal would sever a colour's placed cells) —
-to a fixpoint, then most-constrained backtracking (`_pickCell` picks the
-empty cell with the most placed neighbours). Because the connectivity check
-on a *full* grid reduces to "each colour is connected", a successful
-`propagate()` on a complete grid IS a validity proof — no separate
-completion check. `getHint` runs `propagate()` only and reports the cells
-it forced. Static `_solutionCache` keyed on FNV-1a of `(rows, cols, task)`,
-50-entry LRU. Instance `maxMs` budget so the worker can't hang.
+Solver shape: `propagate()` iterates four sound local rules to a fixpoint —
+2×2 forcing (`_apply2x2`: no 2×2 monochrome or diagonal checkerboard),
+reachability (`_applyReachability`: BFS the `{colour ∪ empty}` graph from a
+colour's placed cells; an empty cell the BFS cannot reach can never be that
+colour, so force the other), articulation-point cut (`_applyCut` +
+`_articulationPoints`: an empty articulation point of the `{colour ∪ empty}`
+graph whose removal severs the colour's placed cells is forced to that
+colour), and border-arc (`_applyBorderArc`: a valid Yin-Yang has at most 2
+border arcs, so the perimeter cycle has at most 2 colour transitions — ≥4 is
+a contradiction, and a border cell whose wrong colour would create a 3rd arc
+is forced). After the local rules stall, at the top level only (`_depth ===
+0`, with an `_inLookahead` guard against re-entry) `propagate()` runs a
+1-step lookahead (`_applyLookahead`: probe each empty cell with each colour;
+if exactly one colour propagates to a contradiction, force the other). Then
+most-constrained backtracking (`_pickCell`). On a complete grid a successful
+`propagate()` IS a validity proof — no separate completion check. `getHint`
+runs the local rules only (lookahead is excluded — too slow for an
+interactive hint) and reports the cells it forced. Static `_solutionCache`
+keyed on FNV-1a of `(rows, cols, task)`, 50-entry LRU. Instance `maxMs`
+budget; the worker sets 30 s so large weeklies are not cut off (a 35×35
+weekly solves fully by deduction in ~5 s).
 
 MAIN-world: `readYinYangData` / `readYinYangState` / `applyYinYangState`,
 twins of the Binairo functions. Hints reuse the generic `applyHintCells`
