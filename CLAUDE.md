@@ -308,6 +308,16 @@ regression test that asserts the solver bails within 500 ms.
 - `mutatingOp` token serializes apply/undo/redo so they can't interleave.
 - The Loop button repurposes as Stop while looping — `setButtonsDisabled(true)` must be followed by `loopBtn.disabled = false`. The inter-step 300ms sleep is cancellable via `stopLoopWait` so Stop is instant.
 - Lifecycle: `pagehide(persisted=false)` drains `solverPending`, terminates the worker, stops the state-watch observer. `pagehide(persisted=true)` no-ops (BFCache). `pageshow(persisted=true)` nulls the (now-dead) worker so the next call rebuilds lazily.
+- `detectHandler` fires `autoSolve()` (non-blocking) after a successful
+  detect: it cache-checks then runs a background worker solve from the
+  puzzle's givens, populating `puzzleData.solution` + the localStorage
+  caches so Solve/Hint/Loop reuse it (`pendingAutoSolve` bridges the race
+  window when a feature is clicked before the solve lands). `drawPreview`
+  then rings cells where the board disagrees with the solution
+  (`computePuzzleDiff` in `solver.js`), recomputed each redraw so it tracks
+  the board live. Shikaku's diff compares rectangle geometry and Galaxies'
+  is star-normalized, because their owner/region ids don't align between
+  the page board and the solver solution.
 
 ## Capturing new real puzzles
 
