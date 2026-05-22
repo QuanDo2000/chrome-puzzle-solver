@@ -1111,3 +1111,56 @@ test('SlitherlinkSolver: _setEdge returns false when overwriting an existing val
   assert.equal(s._setEdge(id, 'H', 2), false);  // overwrite -> false
   assert.equal(s.H[id], 1);                     // unchanged
 });
+
+test('SlitherlinkSolver: _propagateClues forces EMPTY when m==clue', () => {
+  // Clue 0 at (0,0): all 4 edges of that cell must be EMPTY.
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[0, -1], [-1, -1]],
+  });
+  const onChange = () => {};
+  assert.equal(s._propagateClues(onChange), true);
+  // top H[0][0], bottom H[1][0], left V[0][0], right V[0][1] all EMPTY.
+  assert.equal(s.H[s._hIdx(0, 0)], 2);
+  assert.equal(s.H[s._hIdx(1, 0)], 2);
+  assert.equal(s.V[s._vIdx(0, 0)], 2);
+  assert.equal(s.V[s._vIdx(0, 1)], 2);
+});
+
+test('SlitherlinkSolver: _propagateClues forces LINE when m+n==clue', () => {
+  // Clue 2 at (0,0) with top and left edges pre-EMPTY: forces bottom + right to LINE.
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[2, -1], [-1, -1]],
+  });
+  // Pre-set top edge to EMPTY, left edge to EMPTY.
+  s._setEdge(s._hIdx(0, 0), 'H', 2);
+  s._setEdge(s._vIdx(0, 0), 'V', 2);
+  const onChange = () => {};
+  assert.equal(s._propagateClues(onChange), true);
+  // bottom + right must now both be LINE.
+  assert.equal(s.H[s._hIdx(1, 0)], 1);
+  assert.equal(s.V[s._vIdx(0, 1)], 1);
+});
+
+test('SlitherlinkSolver: _propagateClues reports contradiction when m > clue', () => {
+  // Clue 1 at (0,0), but two of its edges already LINE.
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[1, -1], [-1, -1]],
+  });
+  s._setEdge(s._hIdx(0, 0), 'H', 1);
+  s._setEdge(s._vIdx(0, 0), 'V', 1);
+  assert.equal(s._propagateClues(() => {}), false);
+});
+
+test('SlitherlinkSolver: _propagateClues reports contradiction when m+n < clue', () => {
+  // Clue 3 at (0,0), with 2 edges already EMPTY: only 2 edges left, can't reach 3.
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[3, -1], [-1, -1]],
+  });
+  s._setEdge(s._hIdx(0, 0), 'H', 2);
+  s._setEdge(s._vIdx(0, 0), 'V', 2);
+  assert.equal(s._propagateClues(() => {}), false);
+});

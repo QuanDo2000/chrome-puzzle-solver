@@ -4577,6 +4577,59 @@ class SlitherlinkSolver {
     }
     return false;
   }
+
+  // Return an array of 4 {kind, idx} entries describing cell (r,c)'s edges
+  // in a fixed order: top, bottom, left, right.
+  _cellEdges(r, c) {
+    return [
+      { kind: 'H', idx: this._hIdx(r, c) },         // top
+      { kind: 'H', idx: this._hIdx(r + 1, c) },     // bottom
+      { kind: 'V', idx: this._vIdx(r, c) },         // left
+      { kind: 'V', idx: this._vIdx(r, c + 1) },     // right
+    ];
+  }
+
+  // Clue forcing rule. Returns false on contradiction; calls onChange()
+  // whenever it forces an edge.
+  _propagateClues(onChange) {
+    const H = this.height, W = this.width;
+    for (let r = 0; r < H; r++) {
+      const row = this.task[r] || [];
+      for (let c = 0; c < W; c++) {
+        const clue = row[c];
+        if (clue === undefined || clue < 0 || clue > 4) continue;
+        const edges = this._cellEdges(r, c);
+        let m = 0, n = 0;
+        for (const e of edges) {
+          const v = (e.kind === 'H' ? this.H : this.V)[e.idx];
+          if (v === 1) m++;
+          else if (v === 0) n++;
+        }
+        if (m > clue) return false;
+        if (m + n < clue) return false;
+        if (m === clue && n > 0) {
+          // All UNKNOWN edges → EMPTY.
+          for (const e of edges) {
+            const arr = e.kind === 'H' ? this.H : this.V;
+            if (arr[e.idx] === 0) {
+              if (!this._setEdge(e.idx, e.kind, 2)) return false;
+              onChange();
+            }
+          }
+        } else if (m + n === clue && n > 0) {
+          // All UNKNOWN edges → LINE.
+          for (const e of edges) {
+            const arr = e.kind === 'H' ? this.H : this.V;
+            if (arr[e.idx] === 0) {
+              if (!this._setEdge(e.idx, e.kind, 1)) return false;
+              onChange();
+            }
+          }
+        }
+      }
+    }
+    return true;
+  }
 }
 
 // Bounding box of every distinct owner value on a board (skipping `empty`).
