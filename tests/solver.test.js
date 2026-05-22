@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, computePuzzleDiff } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, computePuzzleDiff } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -1026,4 +1026,88 @@ test('computePuzzleDiff: shikaku ignores unassigned (-1) cells', () => {
 
 test('computePuzzleDiff: returns empty when grids are missing', () => {
   assert.deepEqual(computePuzzleDiff('binairo', null, [[1]]), []);
+});
+
+test('SlitherlinkSolver: constructor builds H/V edge arrays of the right shape', () => {
+  const task = [
+    [-1, -1, -1, -1,  3],
+    [-1,  2, -1, -1, -1],
+    [-1,  2, -1,  0,  3],
+    [-1,  1, -1, -1,  3],
+    [-1,  2,  3,  1, -1],
+  ];
+  const s = new SlitherlinkSolver({ width: 5, height: 5, task });
+  assert.equal(s.width, 5);
+  assert.equal(s.height, 5);
+  // (H+1) * W horizontal slots, H * (W+1) vertical slots.
+  assert.equal(s.H.length, 6 * 5);
+  assert.equal(s.V.length, 5 * 6);
+  // All edges UNKNOWN (0) initially.
+  for (let i = 0; i < s.H.length; i++) assert.equal(s.H[i], 0);
+  for (let i = 0; i < s.V.length; i++) assert.equal(s.V[i], 0);
+  // Dot counters all zero.
+  for (let i = 0; i < s.lineCount.length; i++) assert.equal(s.lineCount[i], 0);
+  for (let i = 0; i < s.unknownCount.length; i++) {
+    // Every dot has between 2 and 4 incident edges (corner=2, edge=3, interior=4).
+    assert.ok(s.unknownCount[i] >= 2 && s.unknownCount[i] <= 4);
+  }
+});
+
+test('SlitherlinkSolver: _setEdge LINE/EMPTY updates dot counters and trails', () => {
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[-1, -1], [-1, -1]],
+  });
+  // Pick H[0][0] (top edge of top-left cell): joins dot (0,0) and dot (0,1).
+  const mark = s.trail.length;
+  const id = s._hIdx(0, 0);
+  const d00 = s._dotId(0, 0);
+  const d01 = s._dotId(0, 1);
+  const u00Before = s.unknownCount[d00];
+  const u01Before = s.unknownCount[d01];
+  assert.equal(s._setEdge(id, 'H', 1), true);  // assign LINE
+  assert.equal(s.H[id], 1);
+  assert.equal(s.lineCount[d00], 1);
+  assert.equal(s.lineCount[d01], 1);
+  assert.equal(s.unknownCount[d00], u00Before - 1);
+  assert.equal(s.unknownCount[d01], u01Before - 1);
+  s._rollback(mark);
+  assert.equal(s.H[id], 0);
+  assert.equal(s.lineCount[d00], 0);
+  assert.equal(s.lineCount[d01], 0);
+  assert.equal(s.unknownCount[d00], u00Before);
+  assert.equal(s.unknownCount[d01], u01Before);
+
+  // Same edge, now assign EMPTY. unknownCount should still decrement, but
+  // lineCount must stay at 0 (EMPTY isn't a loop edge).
+  const mark2 = s.trail.length;
+  assert.equal(s._setEdge(id, 'H', 2), true);   // assign EMPTY
+  assert.equal(s.H[id], 2);
+  assert.equal(s.lineCount[d00], 0);
+  assert.equal(s.lineCount[d01], 0);
+  assert.equal(s.unknownCount[d00], u00Before - 1);
+  assert.equal(s.unknownCount[d01], u01Before - 1);
+  s._rollback(mark2);
+  assert.equal(s.H[id], 0);
+  assert.equal(s.lineCount[d00], 0);
+  assert.equal(s.lineCount[d01], 0);
+  assert.equal(s.unknownCount[d00], u00Before);
+  assert.equal(s.unknownCount[d01], u01Before);
+});
+
+test('SlitherlinkSolver: constructor rejects invalid dimensions', () => {
+  assert.throws(() => new SlitherlinkSolver({ width: 0, height: 3, task: [] }));
+  assert.throws(() => new SlitherlinkSolver({ width: 3, height: 3, task: 'nope' }));
+});
+
+test('SlitherlinkSolver: _setEdge returns false when overwriting an existing value', () => {
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[-1, -1], [-1, -1]],
+  });
+  const id = s._hIdx(0, 0);
+  assert.equal(s._setEdge(id, 'H', 1), true);   // first assign
+  assert.equal(s._setEdge(id, 'H', 1), true);   // same value -> no-op true
+  assert.equal(s._setEdge(id, 'H', 2), false);  // overwrite -> false
+  assert.equal(s.H[id], 1);                     // unchanged
 });

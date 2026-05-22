@@ -4416,6 +4416,169 @@ class YinYangSolver {
   }
 }
 
+/**
+ * Slitherlink ("Loop") solver. Edge-variable propagation + backtracking,
+ * modeled on GalaxiesSolver's trail-based undo. See CLAUDE.md "Slitherlink
+ * encoding" for the design notes.
+ *
+ * Edge encoding (internal): 0=UNKNOWN, 1=LINE, 2=EMPTY. Chosen so 1 maps
+ * straight onto the page's `cellHorizontalStatus`/`cellVerticalStatus`
+ * encoding for apply.
+ *
+ * Edge indexing: horizontal edge H[r][c] (r in 0..H, c in 0..W-1) joins
+ * dot (r,c) and dot (r,c+1). Vertical edge V[r][c] (r in 0..H-1, c in
+ * 0..W) joins dot (r,c) and dot (r+1,c). Flat ids:
+ *   _hIdx(r, c) = r * W + c
+ *   _vIdx(r, c) = r * (W + 1) + c
+ *   _dotId(r, c) = r * (W + 1) + c
+ */
+class SlitherlinkSolver {
+  /**
+   * @param {{
+   *   width: number,
+   *   height: number,
+   *   task: number[][],
+   *   initialState?: { horizontal: number[][], vertical: number[][] },
+   *   maxMs?: number,
+   * }} opts
+   */
+  constructor({ width, height, task, initialState, maxMs }) {
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+      throw new Error('SlitherlinkSolver: width/height must be positive integers');
+    }
+    if (!Array.isArray(task)) {
+      throw new Error('SlitherlinkSolver: task must be an array');
+    }
+    this.width = width;
+    this.height = height;
+    this.task = task.map(row => (Array.isArray(row) ? row.slice() : []));
+    this.maxMs = maxMs | 0;
+    this._startedAt = 0;
+    this._timedOut = false;
+
+    const W = width, H = height;
+    // (H+1) * W horizontal edge slots; H * (W+1) vertical edge slots.
+    this.H = new Uint8Array((H + 1) * W);
+    this.V = new Uint8Array(H * (W + 1));
+
+    // Trail entries: pack `(kindBit << 24) | idx` where kindBit 0 = horizontal,
+    // 1 = vertical, idx fits in 24 bits (more than enough for the puzzle sizes
+    // we target). The "old" value is always 0 (UNKNOWN) because _setEdge
+    // guards against overwriting a non-zero edge — so we don't trail it.
+    this.trail = [];
+
+    // Per-dot incidence counters. Maintained incrementally so propagation
+    // never has to recount.
+    const D = (H + 1) * (W + 1);
+    this.lineCount = new Int16Array(D);
+    this.unknownCount = new Int16Array(D);
+    // Initialize unknownCount with each dot's actual edge count (corners=2,
+    // borders=3, interior=4).
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c <= W; c++) {
+        let cnt = 0;
+        if (c > 0) cnt++;            // H[r][c-1]
+        if (c < W) cnt++;            // H[r][c]
+        if (r > 0) cnt++;            // V[r-1][c]
+        if (r < H) cnt++;            // V[r][c]
+        this.unknownCount[r * (W + 1) + c] = cnt;
+      }
+    }
+
+    // Apply initialState if provided. We DO go through _setEdge so dot
+    // counters stay consistent; we just discard the trail afterwards (the
+    // initial state is the baseline, not something to roll back).
+    if (initialState) {
+      const ih = initialState.horizontal || [];
+      const iv = initialState.vertical || [];
+      for (let r = 0; r <= H; r++) {
+        const row = ih[r] || [];
+        for (let c = 0; c < W; c++) {
+          if (row[c] === 1) this._setEdge(this._hIdx(r, c), 'H', 1);
+        }
+      }
+      for (let r = 0; r < H; r++) {
+        const row = iv[r] || [];
+        for (let c = 0; c <= W; c++) {
+          if (row[c] === 1) this._setEdge(this._vIdx(r, c), 'V', 1);
+        }
+      }
+      this.trail.length = 0;  // baseline — never roll back through it
+    }
+  }
+
+  _hIdx(r, c) { return r * this.width + c; }
+  _vIdx(r, c) { return r * (this.width + 1) + c; }
+  _dotId(r, c) { return r * (this.width + 1) + c; }
+
+  // Returns [u, v] dot ids that an edge joins.
+  _edgeEndpoints(kind, idx) {
+    const W = this.width;
+    if (kind === 'H') {
+      // H[r][c] joins (r, c) and (r, c+1).
+      const r = (idx / W) | 0;
+      const c = idx - r * W;
+      return [this._dotId(r, c), this._dotId(r, c + 1)];
+    } else {
+      // V[r][c] joins (r, c) and (r+1, c).
+      const stride = W + 1;
+      const r = (idx / stride) | 0;
+      const c = idx - r * stride;
+      return [this._dotId(r, c), this._dotId(r + 1, c)];
+    }
+  }
+
+  // Trailed write. Returns false if the new value would conflict with an
+  // existing assignment (i.e., the edge is already set to a different
+  // non-UNKNOWN value). UNKNOWN→UNKNOWN is a no-op and returns true.
+  _setEdge(idx, kind, val) {
+    const arr = kind === 'H' ? this.H : this.V;
+    const old = arr[idx];
+    if (old === val) return true;
+    if (old !== 0) return false;  // attempted to overwrite an existing value
+    const kindBit = kind === 'H' ? 0 : 1;
+    this.trail.push((kindBit << 24) | idx);
+    arr[idx] = val;
+    // Update endpoint counters.
+    const [u, v] = this._edgeEndpoints(kind, idx);
+    this.unknownCount[u]--;
+    this.unknownCount[v]--;
+    if (val === 1) {
+      this.lineCount[u]++;
+      this.lineCount[v]++;
+    }
+    return true;
+  }
+
+  _rollback(mark) {
+    while (this.trail.length > mark) {
+      const e = this.trail.pop();
+      const idx = e & 0xFFFFFF;
+      const kindBit = (e >> 24) & 1;
+      const kind = kindBit === 0 ? 'H' : 'V';
+      const arr = kind === 'H' ? this.H : this.V;
+      const cur = arr[idx];
+      arr[idx] = 0;
+      const [u, v] = this._edgeEndpoints(kind, idx);
+      this.unknownCount[u]++;
+      this.unknownCount[v]++;
+      if (cur === 1) {
+        this.lineCount[u]--;
+        this.lineCount[v]--;
+      }
+    }
+  }
+
+  _budgetExceeded() {
+    if (this.maxMs <= 0) return false;
+    if (Date.now() - this._startedAt > this.maxMs) {
+      this._timedOut = true;
+      return true;
+    }
+    return false;
+  }
+}
+
 // Bounding box of every distinct owner value on a board (skipping `empty`).
 // Returns a Map: ownerValue -> { r1, c1, r2, c2 }.
 function _ownerBoxes(board, rows, cols, empty) {
@@ -4543,5 +4706,5 @@ function computePuzzleDiff(type, grid, solution, stars) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, computePuzzleDiff };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, computePuzzleDiff };
 }
