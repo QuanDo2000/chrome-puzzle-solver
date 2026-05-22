@@ -329,7 +329,6 @@ function getGalaxiesHint(grid, stars) {
   const makeHint = (selected) => {
     const lines = cloneGalaxiesLines(current);
     for (const item of selected) lines[item.orientation][item.row][item.col] = 1;
-    lines.check = false;
     return {
       type: 'galaxies',
       orientation: selected[0].orientation,
@@ -471,7 +470,6 @@ function nextGalaxyHint(grid, solution) {
       vertical: current.vertical.map(row => row.slice()),
     };
     for (const lh of lineHints) lines[lh.orientation][lh.row][lh.col] = 1;
-    lines.check = false;
     return {
       type: 'galaxies',
       orientation: lineHints[0].orientation,

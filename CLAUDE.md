@@ -64,7 +64,7 @@ Any function in `main-world.js` that mutates `window.Game.currentState` (`applyG
 1. Call `window.Game.saveState(true)` **before** the writes. Without it, aquarium silently keeps its prior visible state even though `cellStatus` was updated — symptom: "preview shows hint, board shows no change". `applyHintCells` had this bug pre-2026-05-17.
 2. Fall through `Game.render → Game.redraw → Game.redrawGrid → getSaved+loadGame` **after** the writes. `Game.render` isn't universal across puzzle types — aquarium needs `redraw` or `redrawGrid`.
 
-`applyGameState` is the reference shape; `applyHintCells` now mirrors it (minus the `solved=true` and `Game.check()` calls which are full-solution-only).
+`applyGameState` is the reference shape; `applyHintCells` now mirrors it (minus the `solved=true` flag, which is full-solution-only). Neither calls `window.Game.check()` — the extension never auto-submits a solution, because the site flags an instant solve as a DNF.
 
 ### Binairo encoding gotcha
 
