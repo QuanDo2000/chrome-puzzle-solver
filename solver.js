@@ -4684,6 +4684,111 @@ class SlitherlinkSolver {
     }
     return true;
   }
+
+  _dsuMakeArrays() {
+    const D = (this.height + 1) * (this.width + 1);
+    if (!this._dsuParent || this._dsuParent.length !== D) {
+      this._dsuParent = new Int32Array(D);
+      this._dsuRank = new Int8Array(D);
+    }
+  }
+
+  _dsuFind(x) {
+    const p = this._dsuParent;
+    let r = x;
+    while (p[r] !== r) r = p[r];
+    // Path compression.
+    while (p[x] !== r) { const next = p[x]; p[x] = r; x = next; }
+    return r;
+  }
+
+  // Rebuild the DSU over all currently-LINE edges. Sets `_cycleClosed` true
+  // iff at least one LINE edge's endpoints were already in the same
+  // component before that edge was unioned in (i.e., a cycle exists).
+  // O(E α(D)) — cheap.
+  _dsuRebuild() {
+    this._dsuMakeArrays();
+    const p = this._dsuParent;
+    const rank = this._dsuRank;
+    for (let i = 0; i < p.length; i++) { p[i] = i; rank[i] = 0; }
+    this._cycleClosed = false;
+    const H = this.height, W = this.width;
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        if (this.H[this._hIdx(r, c)] !== 1) continue;
+        const [u, v] = this._edgeEndpoints('H', this._hIdx(r, c));
+        const ru = this._dsuFind(u), rv = this._dsuFind(v);
+        if (ru === rv) { this._cycleClosed = true; continue; }
+        if (rank[ru] < rank[rv]) p[ru] = rv;
+        else if (rank[ru] > rank[rv]) p[rv] = ru;
+        else { p[rv] = ru; rank[ru]++; }
+      }
+    }
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        if (this.V[this._vIdx(r, c)] !== 1) continue;
+        const [u, v] = this._edgeEndpoints('V', this._vIdx(r, c));
+        const ru = this._dsuFind(u), rv = this._dsuFind(v);
+        if (ru === rv) { this._cycleClosed = true; continue; }
+        if (rank[ru] < rank[rv]) p[ru] = rv;
+        else if (rank[ru] > rank[rv]) p[rv] = ru;
+        else { p[rv] = ru; rank[ru]++; }
+      }
+    }
+  }
+
+  // True iff (a) every clue is satisfied exactly, (b) no UNKNOWN edges remain,
+  // (c) every dot has degree 0 or 2, and (d) all LINE edges form a single
+  // connected component. Assumes _dsuRebuild() has just been called.
+  _checkSingleLoopComplete() {
+    const H = this.height, W = this.width;
+    // (a) clue check.
+    for (let r = 0; r < H; r++) {
+      const row = this.task[r] || [];
+      for (let c = 0; c < W; c++) {
+        const clue = row[c];
+        if (clue === undefined || clue < 0 || clue > 4) continue;
+        const edges = this._cellEdges(r, c);
+        let m = 0;
+        for (const e of edges) {
+          if ((e.kind === 'H' ? this.H : this.V)[e.idx] === 1) m++;
+        }
+        if (m !== clue) return false;
+      }
+    }
+    // (b) no UNKNOWN edges.
+    for (let i = 0; i < this.H.length; i++) if (this.H[i] === 0) return false;
+    for (let i = 0; i < this.V.length; i++) if (this.V[i] === 0) return false;
+    // (c) every dot is degree 0 or 2.
+    for (let i = 0; i < this.lineCount.length; i++) {
+      const m = this.lineCount[i];
+      if (m !== 0 && m !== 2) return false;
+    }
+    // (d) all LINE edges share one component.
+    let totalLines = 0;
+    let firstRoot = -1;
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        if (this.H[this._hIdx(r, c)] !== 1) continue;
+        totalLines++;
+        const [u] = this._edgeEndpoints('H', this._hIdx(r, c));
+        const ru = this._dsuFind(u);
+        if (firstRoot === -1) firstRoot = ru;
+        else if (firstRoot !== ru) return false;
+      }
+    }
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        if (this.V[this._vIdx(r, c)] !== 1) continue;
+        totalLines++;
+        const [u] = this._edgeEndpoints('V', this._vIdx(r, c));
+        const ru = this._dsuFind(u);
+        if (firstRoot === -1) firstRoot = ru;
+        else if (firstRoot !== ru) return false;
+      }
+    }
+    return totalLines > 0;
+  }
 }
 
 // Bounding box of every distinct owner value on a board (skipping `empty`).

@@ -1202,3 +1202,94 @@ test('SlitherlinkSolver: _propagateVertices reports contradiction when m==1 && n
   s._setEdge(s._vIdx(0, 0), 'V', 2);
   assert.equal(s._propagateVertices(() => {}), false);
 });
+
+test('SlitherlinkSolver: _dsuRebuild and _checkSingleLoopComplete accept a single closed loop', () => {
+  // 2x2 grid; the perimeter is a single closed loop with 8 edges.
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2, task: [[-1, -1], [-1, -1]],
+  });
+  // Perimeter LINE edges.
+  s._setEdge(s._hIdx(0, 0), 'H', 1);
+  s._setEdge(s._hIdx(0, 1), 'H', 1);
+  s._setEdge(s._hIdx(2, 0), 'H', 1);
+  s._setEdge(s._hIdx(2, 1), 'H', 1);
+  s._setEdge(s._vIdx(0, 0), 'V', 1);
+  s._setEdge(s._vIdx(1, 0), 'V', 1);
+  s._setEdge(s._vIdx(0, 2), 'V', 1);
+  s._setEdge(s._vIdx(1, 2), 'V', 1);
+  // All interior edges EMPTY.
+  s._setEdge(s._hIdx(1, 0), 'H', 2);
+  s._setEdge(s._hIdx(1, 1), 'H', 2);
+  s._setEdge(s._vIdx(0, 1), 'V', 2);
+  s._setEdge(s._vIdx(1, 1), 'V', 2);
+  s._dsuRebuild();
+  assert.equal(s._checkSingleLoopComplete(), true);
+});
+
+test('SlitherlinkSolver: _checkSingleLoopComplete rejects a premature subloop', () => {
+  // 3x3 grid; close the 4 edges around the top-left cell (a 4-edge subloop)
+  // and leave the rest UNKNOWN.
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3, task: [
+      [-1, -1, -1],
+      [-1, -1, -1],
+      [-1, -1, -1],
+    ],
+  });
+  s._setEdge(s._hIdx(0, 0), 'H', 1);
+  s._setEdge(s._hIdx(1, 0), 'H', 1);
+  s._setEdge(s._vIdx(0, 0), 'V', 1);
+  s._setEdge(s._vIdx(0, 1), 'V', 1);
+  s._dsuRebuild();
+  assert.equal(s._cycleClosed, true);    // cycle detected during rebuild
+  assert.equal(s._checkSingleLoopComplete(), false);
+});
+
+test('SlitherlinkSolver: _checkSingleLoopComplete rejects two disjoint loops (check d)', () => {
+  // 4×2 grid (4 cols, 2 rows). Draw two disjoint perimeter loops, one over
+  // cells (0,0)+(1,0) and one over cells (0,2)+(1,2) — i.e. two separate
+  // vertical 2x1 rectangles. Every edge is resolved (LINE or EMPTY); every
+  // dot is degree 0 or 2; no clues so check (a) passes trivially. The only
+  // failure mode is check (d): two components.
+  const s = new SlitherlinkSolver({
+    width: 4, height: 2, task: [
+      [-1, -1, -1, -1],
+      [-1, -1, -1, -1],
+    ],
+  });
+  // Loop A — perimeter of the left 1×2 block (cells (0,0)+(1,0)).
+  s._setEdge(s._hIdx(0, 0), 'H', 1);            // top
+  s._setEdge(s._hIdx(2, 0), 'H', 1);            // bottom
+  s._setEdge(s._vIdx(0, 0), 'V', 1);            // left top
+  s._setEdge(s._vIdx(1, 0), 'V', 1);            // left bottom
+  s._setEdge(s._vIdx(0, 1), 'V', 1);            // right top
+  s._setEdge(s._vIdx(1, 1), 'V', 1);            // right bottom
+  // Loop B — perimeter of the right 1×2 block (cells (0,3)+(1,3)).
+  s._setEdge(s._hIdx(0, 3), 'H', 1);            // top
+  s._setEdge(s._hIdx(2, 3), 'H', 1);            // bottom
+  s._setEdge(s._vIdx(0, 3), 'V', 1);            // left top
+  s._setEdge(s._vIdx(1, 3), 'V', 1);            // left bottom
+  s._setEdge(s._vIdx(0, 4), 'V', 1);            // right top
+  s._setEdge(s._vIdx(1, 4), 'V', 1);            // right bottom
+  // Every remaining edge → EMPTY.
+  // Horizontals:
+  s._setEdge(s._hIdx(0, 1), 'H', 2);
+  s._setEdge(s._hIdx(0, 2), 'H', 2);
+  s._setEdge(s._hIdx(1, 0), 'H', 2);
+  s._setEdge(s._hIdx(1, 1), 'H', 2);
+  s._setEdge(s._hIdx(1, 2), 'H', 2);
+  s._setEdge(s._hIdx(1, 3), 'H', 2);
+  s._setEdge(s._hIdx(2, 1), 'H', 2);
+  s._setEdge(s._hIdx(2, 2), 'H', 2);
+  // Verticals:
+  s._setEdge(s._vIdx(0, 2), 'V', 2);
+  s._setEdge(s._vIdx(1, 2), 'V', 2);
+  // Sanity-check the setup: no UNKNOWNs left.
+  for (let i = 0; i < s.H.length; i++) assert.equal(s.H[i] === 0, false);
+  for (let i = 0; i < s.V.length; i++) assert.equal(s.V[i] === 0, false);
+  s._dsuRebuild();
+  // Each loop independently closes a cycle, so _cycleClosed is true.
+  assert.equal(s._cycleClosed, true);
+  // Check (d) must catch the two-component case.
+  assert.equal(s._checkSingleLoopComplete(), false);
+});
