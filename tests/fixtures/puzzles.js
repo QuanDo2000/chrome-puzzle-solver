@@ -158,4 +158,18 @@ module.exports = {
       [ 1, -1, -1, -1, -1, -1],
     ],
   },
+
+  // 5x5 Slitherlink captured from puzzles-mobile.com/loop/random/5x5-normal
+  // on 2026-05-22. task: -1=no clue, 0/1/2/3=count of loop edges around cell.
+  slitherlink5x5: {
+    rows: 5,
+    cols: 5,
+    task: [
+      [-1, -1, -1, -1,  3],
+      [-1,  2, -1, -1, -1],
+      [-1,  2, -1,  0,  3],
+      [-1,  1, -1, -1,  3],
+      [-1,  2,  3,  1, -1],
+    ],
+  },
 };
