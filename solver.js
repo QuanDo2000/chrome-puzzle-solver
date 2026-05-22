@@ -4630,6 +4630,60 @@ class SlitherlinkSolver {
     }
     return true;
   }
+
+  // Return {kind, idx} entries for the (up to 4) edges incident to dot (r,c).
+  _dotEdges(r, c) {
+    const H = this.height, W = this.width;
+    const out = [];
+    if (c > 0) out.push({ kind: 'H', idx: this._hIdx(r, c - 1) });   // left
+    if (c < W) out.push({ kind: 'H', idx: this._hIdx(r, c) });       // right
+    if (r > 0) out.push({ kind: 'V', idx: this._vIdx(r - 1, c) });   // up
+    if (r < H) out.push({ kind: 'V', idx: this._vIdx(r, c) });       // down
+    return out;
+  }
+
+  // Vertex forcing rule. Returns false on contradiction; calls onChange()
+  // whenever it forces an edge.
+  _propagateVertices(onChange) {
+    const H = this.height, W = this.width;
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c <= W; c++) {
+        const dotId = this._dotId(r, c);
+        const m = this.lineCount[dotId];
+        const n = this.unknownCount[dotId];
+        if (m > 2) return false;
+        if (m === 1 && n === 0) return false;
+        if (m === 2 && n > 0) {
+          for (const e of this._dotEdges(r, c)) {
+            const arr = e.kind === 'H' ? this.H : this.V;
+            if (arr[e.idx] === 0) {
+              if (!this._setEdge(e.idx, e.kind, 2)) return false;
+              onChange();
+            }
+          }
+        } else if (m === 1 && n === 1) {
+          for (const e of this._dotEdges(r, c)) {
+            const arr = e.kind === 'H' ? this.H : this.V;
+            if (arr[e.idx] === 0) {
+              if (!this._setEdge(e.idx, e.kind, 1)) return false;
+              onChange();
+              break;
+            }
+          }
+        } else if (m === 0 && n === 1) {
+          for (const e of this._dotEdges(r, c)) {
+            const arr = e.kind === 'H' ? this.H : this.V;
+            if (arr[e.idx] === 0) {
+              if (!this._setEdge(e.idx, e.kind, 2)) return false;
+              onChange();
+              break;
+            }
+          }
+        }
+      }
+    }
+    return true;
+  }
 }
 
 // Bounding box of every distinct owner value on a board (skipping `empty`).

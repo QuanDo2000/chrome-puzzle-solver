@@ -1164,3 +1164,41 @@ test('SlitherlinkSolver: _propagateClues reports contradiction when m+n < clue',
   s._setEdge(s._vIdx(0, 0), 'V', 2);
   assert.equal(s._propagateClues(() => {}), false);
 });
+
+test('SlitherlinkSolver: _propagateVertices forces EMPTY when m==2', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1, -1], [-1, -1]] });
+  s._setEdge(s._hIdx(1, 0), 'H', 1);
+  s._setEdge(s._vIdx(1, 1), 'V', 1);
+  assert.equal(s._propagateVertices(() => {}), true);
+  assert.equal(s.H[s._hIdx(1, 1)], 2);
+  assert.equal(s.V[s._vIdx(0, 1)], 2);
+});
+
+test('SlitherlinkSolver: _propagateVertices forces LINE when m==1 && n==1', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1, -1], [-1, -1]] });
+  s._setEdge(s._hIdx(0, 0), 'H', 1);
+  assert.equal(s._propagateVertices(() => {}), true);
+  assert.equal(s.V[s._vIdx(0, 0)], 1);
+});
+
+test('SlitherlinkSolver: _propagateVertices forces EMPTY when m==0 && n==1', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1, -1], [-1, -1]] });
+  s._setEdge(s._hIdx(0, 0), 'H', 2);
+  assert.equal(s._propagateVertices(() => {}), true);
+  assert.equal(s.V[s._vIdx(0, 0)], 2);
+});
+
+test('SlitherlinkSolver: _propagateVertices reports contradiction when m > 2', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1, -1], [-1, -1]] });
+  s._setEdge(s._hIdx(1, 0), 'H', 1);
+  s._setEdge(s._hIdx(1, 1), 'H', 1);
+  s._setEdge(s._vIdx(1, 1), 'V', 1);
+  assert.equal(s._propagateVertices(() => {}), false);
+});
+
+test('SlitherlinkSolver: _propagateVertices reports contradiction when m==1 && n==0', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1, -1], [-1, -1]] });
+  s._setEdge(s._hIdx(0, 0), 'H', 1);
+  s._setEdge(s._vIdx(0, 0), 'V', 2);
+  assert.equal(s._propagateVertices(() => {}), false);
+});
