@@ -406,6 +406,59 @@ const yinYangHandler = {
 
 registerHandler(yinYangHandler);
 
+// ── Slitherlink handler (puzzles-mobile.com/loop/) ────────────
+
+const slitherlinkHandler = {
+  name: 'puzzles-mobile-slitherlink',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/loop/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readSlitherlinkData', []);
+    if (!data) return { ...result, error: 'No Slitherlink task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'slitherlink',
+      rows: data.height,
+      cols: data.width,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readSlitherlinkState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return {
+      horizontal: Array.from({ length: ctx.rows + 1 }, () => new Array(ctx.cols).fill(0)),
+      vertical:   Array.from({ length: ctx.rows },     () => new Array(ctx.cols + 1).fill(0)),
+    };
+  },
+
+  async applySolution(solution, _ctx) {
+    if (!solution || !solution.horizontal || !solution.vertical) {
+      return { success: false, error: 'Slitherlink applySolution: missing horizontal/vertical' };
+    }
+    const ok = await callMainWorld('applySlitherlinkState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Slitherlink apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(slitherlinkHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
