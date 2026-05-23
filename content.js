@@ -3042,6 +3042,11 @@ function makeWidget() {
     }
 
     if (!puzzleData.solution && pendingAutoSolve) {
+      // Mirror hintHandler: show "Solving..." while we wait for the background
+      // auto-solve, otherwise the Loop button looks dead for the duration of
+      // the await. Status gets overwritten by "Computing hint..." or the
+      // nonogram pre-solve below as soon as the await returns.
+      setStatus('Solving...', 'info');
       await pendingAutoSolve;
     }
 
