@@ -3089,7 +3089,12 @@ function makeWidget() {
     loopConfirming = false;
     solveBtn.textContent = 'Solve';
     loopBtn.textContent = 'Loop';
-    if (!puzzleData.solution && pendingAutoSolve) {
+    // Slitherlink's getHint propagates from the live board state without
+    // touching puzzleData.solution, so don't block on pendingAutoSolve —
+    // on hard 30×30 dailies that solve can take >30 s, while the
+    // propagation hint returns in ~1 ms. Other puzzle types still need
+    // the cached solution for mistake comparison.
+    if (puzzleData.type !== 'slitherlink' && !puzzleData.solution && pendingAutoSolve) {
       setStatus('Solving...', 'info');
       await pendingAutoSolve;
     }
