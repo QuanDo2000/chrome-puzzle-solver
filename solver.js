@@ -5197,6 +5197,65 @@ class SlitherlinkSolver {
     return true;
   }
 
+  // Line-crossing parity rule. A closed Slitherlink loop crosses any straight
+  // scan line an even number of times.
+  //
+  // Geometry: dots are at integer coordinates (row, col) 0..H x 0..W.
+  //   - H[r][c]: horizontal edge at y=r, spanning x from c to c+1.
+  //   - V[r][c]: vertical edge at x=c, spanning y from r to r+1.
+  //
+  // A horizontal scan at y = R + 0.5 (between dot rows R and R+1) crosses
+  // VERTICAL edges that span over y = R + 0.5, i.e., V[R][c] for c = 0..W.
+  //
+  // A vertical scan at x = C + 0.5 (between dot cols C and C+1) crosses
+  // HORIZONTAL edges that span over x = C + 0.5, i.e., H[r][C] for r = 0..H.
+  //
+  // Per scan line, let m = count of LINE edges, n = count of UNKNOWN edges:
+  //   - n == 0 && m is odd  → contradiction.
+  //   - n == 1              → force the unknown: if m odd → LINE, if m even → EMPTY.
+  //   - n >= 2              → no forced deduction.
+  //
+  // Returns false on contradiction; calls onChange() for each forced edge.
+  _propagateParity(onChange) {
+    const H = this.height, W = this.width;
+
+    // ── Horizontal scans R = 0..H-1 (cross V[R][c] for c = 0..W) ──────────
+    for (let R = 0; R < H; R++) {
+      let m = 0, n = 0, unknownC = -1;
+      for (let c = 0; c <= W; c++) {
+        const v = this.V[this._vIdx(R, c)];
+        if (v === 1) m++;
+        else if (v === 0) { n++; unknownC = c; }
+      }
+      if (n === 0) {
+        if (m & 1) return false;
+      } else if (n === 1) {
+        const forced = (m & 1) ? 1 : 2;
+        if (!this._setEdge(this._vIdx(R, unknownC), 'V', forced)) return false;
+        onChange();
+      }
+    }
+
+    // ── Vertical scans C = 0..W-1 (cross H[r][C] for r = 0..H) ─────────────
+    for (let C = 0; C < W; C++) {
+      let m = 0, n = 0, unknownR = -1;
+      for (let r = 0; r <= H; r++) {
+        const v = this.H[this._hIdx(r, C)];
+        if (v === 1) m++;
+        else if (v === 0) { n++; unknownR = r; }
+      }
+      if (n === 0) {
+        if (m & 1) return false;
+      } else if (n === 1) {
+        const forced = (m & 1) ? 1 : 2;
+        if (!this._setEdge(this._hIdx(unknownR, C), 'H', forced)) return false;
+        onChange();
+      }
+    }
+
+    return true;
+  }
+
   // INSIDE reachability deduction. BFS from a single known-INSIDE cell through
   // the {INSIDE ∪ UNKNOWN} graph. Returns false if not all known-INSIDE cells
   // are reachable (they're disconnected → contradiction). Any UNKNOWN cell not
@@ -5605,6 +5664,7 @@ class SlitherlinkSolver {
         // the probe edge alone. This halves inner-probe propagation time.
         if (!this._inLookahead && !this._propagateAdvanced(onLocalChange)) return false;
         if (!this._propagateColors(onLocalChange)) return false;
+        if (!this._propagateParity(onLocalChange)) return false;
         if (!this._inLookahead && !this._propagateConnectivity(onLocalChange)) return false;
       }
 

@@ -1766,3 +1766,45 @@ test('SlitherlinkSolver: connectivity detects contradiction when known cells are
   // No path from (0,0) to (0,2) through {INSIDE ∪ UNKNOWN} → contradiction.
   assert.equal(s._propagateConnectivity(() => {}), false);
 });
+
+// ── _propagateParity tests ────────────────────────────────────────────────────
+
+test('SlitherlinkSolver: parity forces last unknown to make crossings even', () => {
+  // Horizontal scan at y = 0.5 (between dot rows 0 and 1) crosses V[0][c]
+  // for c = 0..W. If 3 of the 5 V[0] edges are LINE and 1 is UNKNOWN, the
+  // unknown must be LINE (3+1=4 = even). W=4 → V[0][0..4] = 5 edges.
+  const s = new SlitherlinkSolver({ width: 4, height: 4, task: Array.from({length:4},()=>new Array(4).fill(-1)) });
+  // Set V[0][0..2] = LINE, V[0][3] = EMPTY, V[0][4] = UNKNOWN.
+  s._setEdge(s._vIdx(0, 0), 'V', 1);
+  s._setEdge(s._vIdx(0, 1), 'V', 1);
+  s._setEdge(s._vIdx(0, 2), 'V', 1);
+  s._setEdge(s._vIdx(0, 3), 'V', 2);
+  // V[0][4] still UNKNOWN. m=3 (odd) → force LINE.
+  assert.equal(s._propagateParity(() => {}), true);
+  assert.equal(s.V[s._vIdx(0, 4)], 1, 'V[0][4] should be forced LINE');
+});
+
+test('SlitherlinkSolver: parity forces last unknown to keep crossings even', () => {
+  // Horizontal scan at y=0.5: V[0][0..4]. 2 LINE + 2 EMPTY + 1 UNKNOWN.
+  // m=2 (even) → force UNKNOWN to EMPTY.
+  const s = new SlitherlinkSolver({ width: 4, height: 4, task: Array.from({length:4},()=>new Array(4).fill(-1)) });
+  s._setEdge(s._vIdx(0, 0), 'V', 1);
+  s._setEdge(s._vIdx(0, 1), 'V', 1);
+  s._setEdge(s._vIdx(0, 2), 'V', 2);
+  s._setEdge(s._vIdx(0, 3), 'V', 2);
+  // V[0][4] UNKNOWN. m=2 (even) → force EMPTY.
+  assert.equal(s._propagateParity(() => {}), true);
+  assert.equal(s.V[s._vIdx(0, 4)], 2, 'V[0][4] should be forced EMPTY');
+});
+
+test('SlitherlinkSolver: parity contradiction with no unknowns and odd count', () => {
+  // Horizontal scan at y=0.5: V[0][0..4] = LINE, EMPTY, EMPTY, EMPTY, EMPTY.
+  // m=1 (odd), n=0 → contradiction.
+  const s = new SlitherlinkSolver({ width: 4, height: 4, task: Array.from({length:4},()=>new Array(4).fill(-1)) });
+  s._setEdge(s._vIdx(0, 0), 'V', 1);
+  s._setEdge(s._vIdx(0, 1), 'V', 2);
+  s._setEdge(s._vIdx(0, 2), 'V', 2);
+  s._setEdge(s._vIdx(0, 3), 'V', 2);
+  s._setEdge(s._vIdx(0, 4), 'V', 2);
+  assert.equal(s._propagateParity(() => {}), false);
+});
