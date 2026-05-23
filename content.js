@@ -2800,9 +2800,17 @@ function makeWidget() {
   // anywhere we record a successful solve, including paths that aren't going
   // into "preview ready" mode (e.g., loopHandler's own intermediate solve).
   function recordSolveSuccess(result) {
-    puzzleData.solution = result.grid;
+    // Slitherlink's result is { solved, horizontal, vertical } — every other
+    // puzzle type returns { solved, grid }. Keep puzzleData.solution in the
+    // same shape readState returns, so downstream consumers (gsComplete,
+    // endComplete, mistake-diff) can compare directly without re-checking.
+    if (puzzleData?.type === 'slitherlink') {
+      puzzleData.solution = { horizontal: result.horizontal, vertical: result.vertical };
+    } else {
+      puzzleData.solution = result.grid;
+    }
     cacheGalaxiesSolution(puzzleData, result.grid);
-    cacheGridSolution(puzzleData, result.grid);
+    cacheGridSolution(puzzleData, puzzleData.solution);
     clearPartial(puzzleData);
     clearFailedGalaxiesPartials(puzzleData);
   }
@@ -2976,20 +2984,29 @@ function makeWidget() {
       if (end?.success) drawPreview(end.grid);
       let endComplete = false;
       if (end?.grid) {
-        if (puzzleData.type === 'slitherlink' && puzzleData.solution?.horizontal && puzzleData.solution?.vertical) {
-          const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
-          const bh = edgeState?.horizontal || [];
-          const bv = edgeState?.vertical || [];
-          endComplete = true;
-          for (let r = 0; endComplete && r < puzzleData.solution.horizontal.length; r++) {
-            for (let c = 0; c < (puzzleData.solution.horizontal[r]?.length || 0); c++) {
-              if (puzzleData.solution.horizontal[r][c] === 1 && bh[r]?.[c] !== 1) { endComplete = false; break; }
+        // Dispatch on type FIRST. For slitherlink, end.grid is
+        // { horizontal, vertical } (not a 2D array), so the cell-grid
+        // `.every` check below would TypeError. Even if solution is missing
+        // (auto-solve failed or still running), stay in the slitherlink arm
+        // and report not-complete instead of crashing.
+        if (puzzleData.type === 'slitherlink') {
+          if (puzzleData.solution?.horizontal && puzzleData.solution?.vertical) {
+            const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
+            const bh = edgeState?.horizontal || [];
+            const bv = edgeState?.vertical || [];
+            endComplete = true;
+            for (let r = 0; endComplete && r < puzzleData.solution.horizontal.length; r++) {
+              for (let c = 0; c < (puzzleData.solution.horizontal[r]?.length || 0); c++) {
+                if (puzzleData.solution.horizontal[r][c] === 1 && bh[r]?.[c] !== 1) { endComplete = false; break; }
+              }
             }
-          }
-          for (let r = 0; endComplete && r < puzzleData.solution.vertical.length; r++) {
-            for (let c = 0; c < (puzzleData.solution.vertical[r]?.length || 0); c++) {
-              if (puzzleData.solution.vertical[r][c] === 1 && bv[r]?.[c] !== 1) { endComplete = false; break; }
+            for (let r = 0; endComplete && r < puzzleData.solution.vertical.length; r++) {
+              for (let c = 0; c < (puzzleData.solution.vertical[r]?.length || 0); c++) {
+                if (puzzleData.solution.vertical[r][c] === 1 && bv[r]?.[c] !== 1) { endComplete = false; break; }
+              }
             }
+          } else {
+            endComplete = false;
           }
         } else {
           endComplete = puzzleData.type === 'shikaku'
