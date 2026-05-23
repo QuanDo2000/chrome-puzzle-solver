@@ -925,6 +925,13 @@ function solveExtraData() {
       task: data.task,
     };
   }
+  if (data.type === 'slitherlink') {
+    return {
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+    };
+  }
   if (data.type === 'aquarium') {
     return {
       rowCluesFlat: data.rowClues, colCluesFlat: data.colClues,
@@ -954,7 +961,7 @@ function solveExtraData() {
 //     localStorage quota (~5 MB per origin).
 const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SOLUTION_CACHE_MAX = 50;
-const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:'];
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:'];
 
 function isSolutionCacheKey(key) {
   return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
@@ -1129,23 +1136,47 @@ function yinYangCacheKey(data) {
   return 'yinyang-solution:' + (h >>> 0).toString(16);
 }
 
+function slitherlinkCacheKey(data) {
+  if (data?.type !== 'slitherlink') return null;
+  // FNV-1a over (nameplate, rows, cols, flattened task).
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x4C); // 'L' nameplate (Loop) so slitherlink keys don't collide
+  mix(data.rows | 0);
+  mix(data.cols | 0);
+  const t = data.task || [];
+  for (let r = 0; r < data.rows; r++) {
+    const row = t[r] || [];
+    for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
+  }
+  return 'slitherlink-solution:' + (h >>> 0).toString(16);
+}
+
 function getCachedGridSolution(data) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
     : data?.type === 'binairo' ? binairoCacheKey(data)
     : data?.type === 'shikaku' ? shikakuCacheKey(data)
     : data?.type === 'yinyang' ? yinYangCacheKey(data)
+    : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
     : null;
   if (!key) return null;
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed?.grid)) return null;
     if (!isFreshSolutionEntry(parsed)) {
       try { localStorage.removeItem(key); } catch { /* ignore */ }
       return null;
     }
+    if (data.type === 'slitherlink') {
+      if (!parsed?.horizontal || !parsed?.vertical) return null;
+      return {
+        horizontal: parsed.horizontal.map(row => row.slice()),
+        vertical: parsed.vertical.map(row => row.slice()),
+      };
+    }
+    if (!Array.isArray(parsed?.grid)) return null;
     return parsed.grid.map(row => row.slice());
   } catch {
     return null;
@@ -1158,10 +1189,19 @@ function cacheGridSolution(data, grid) {
     : data?.type === 'binairo' ? binairoCacheKey(data)
     : data?.type === 'shikaku' ? shikakuCacheKey(data)
     : data?.type === 'yinyang' ? yinYangCacheKey(data)
+    : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
     : null;
-  if (!key || !Array.isArray(grid)) return;
+  if (!key) return;
   try {
-    localStorage.setItem(key, JSON.stringify({ grid, savedAt: Date.now() }));
+    if (data?.type === 'slitherlink') {
+      if (!grid || !grid.horizontal || !grid.vertical) return;
+      localStorage.setItem(key, JSON.stringify({
+        horizontal: grid.horizontal, vertical: grid.vertical, savedAt: Date.now(),
+      }));
+    } else {
+      if (!Array.isArray(grid)) return;
+      localStorage.setItem(key, JSON.stringify({ grid, savedAt: Date.now() }));
+    }
     pruneSolutionCache();
   } catch { /* quota or unavailable */ }
 }
@@ -1504,6 +1544,7 @@ const SUPPORTED_PUZZLES = [
   { name: 'Binairo Plus', url: 'https://www.puzzles-mobile.com/binairo-plus/' },
   { name: 'Shikaku',      url: 'https://www.puzzles-mobile.com/shikaku/' },
   { name: 'Yin-Yang',     url: 'https://www.puzzles-mobile.com/yin-yang/' },
+  { name: 'Slitherlink',  url: 'https://www.puzzles-mobile.com/loop/' },
 ];
 
 // Reference set by makeWidget() so the top-level message listener (for the
