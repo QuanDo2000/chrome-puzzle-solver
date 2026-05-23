@@ -248,28 +248,70 @@ matcher still keys on `/loop/`.
 Page encoding (edge-based, same shape as Galaxies):
 - `window.Game.task` — 2D `int[H][W]`. `-1` = no clue; `0/1/2/3` = clue
   (count of loop edges around that cell).
-- `window.Game.currentState.cellHorizontalStatus` — `(H+1) × W`,
-  `0` = empty, `1` = line.
-- `window.Game.currentState.cellVerticalStatus` — `H × (W+1)`,
-  same encoding. (The page also uses `2` for player-placed × marks; the
-  extension ignores those — apply only ever writes `0` or `1`.)
+- `window.Game.currentState.cellHorizontalStatus` — `(H+1) × W`:
+  `0` = empty, `1` = line, **`2` = × (cross / "not a loop edge")**.
+- `window.Game.currentState.cellVerticalStatus` — `H × (W+1)`, same
+  encoding.
 
-Internal solver edge encoding: `0 = UNKNOWN`, `1 = LINE`, `2 = EMPTY`. The
-`1 = LINE` value was chosen so the solver→apply translation is a direct
-write of `1` where LINE, `0` otherwise. Trail-based undo packs
-`(kindBit << 24) | idx` into a single int per assign for flat-array
-rollback (kindBit 0=horizontal, 1=vertical; the old value is always 0 by
-construction — `_setEdge` rejects overwrites of non-UNKNOWN edges).
+Internal solver edge encoding: `0 = UNKNOWN`, `1 = LINE`, `2 = EMPTY`.
+The `1 = LINE` value was chosen so the solver→apply translation is a
+direct passthrough (`1` stays `1`, `2` stays `2`, `0` stays `0`). **× is
+fully supported end-to-end** — `readSlitherlinkState` extracts page `2`s
+as EMPTY, `_emit` outputs `2`s for known EMPTY, `applySlitherlinkState`
+writes `2`s back, and `drawPreview`'s slitherlink arm renders ×s in
+muted gray on top of the LINE layer. Don't reintroduce "ignore page `2`"
+behavior — the solver gets meaningful signal from user-drawn ×s, and
+writing back the deduced ×s shrinks the manual residue on hard boards.
 
-Solver shape: `propagate()` iterates two sound local rules — clue forcing
-(`_propagateClues`: `m > k` or `m + n < k` → contradiction; `m == k` →
-remaining UNKNOWN edges → EMPTY; `m + n == k` → remaining UNKNOWN → LINE)
-and vertex forcing (`_propagateVertices`: every dot's loop-degree ∈ {0, 2};
-`m == 2` → remaining UNKNOWN → EMPTY; `m == 1, n == 1` → the unique
-UNKNOWN → LINE; `m == 0, n == 1` → the unique UNKNOWN → EMPTY) — to a
-fixpoint. Per-dot `lineCount` / `unknownCount` counters are maintained
-incrementally on assign/rollback so the rules run in O(D + clued cells)
-per pass.
+Trail-based undo uses a **2-bit kind field** packed into each entry:
+`(kind << 24) | idx` for edges (`kind` 0=H, 1=V), or
+`(oldColor << 26) | (2 << 24) | idx` for cell-color writes (see below).
+`_rollback` dispatches on `(e >> 24) & 3` and restores the appropriate
+slot. Edge writes don't trail the old value (`_setEdge` rejects overwrite
+of non-UNKNOWN); color writes do (`_setColor` only writes UNKNOWN→known,
+but the old/new distinction matters because we need to know which color
+slot to restore).
+
+The propagation fixpoint runs five rules in order, cheapest first so
+expensive global rules only fire on a saturated local state:
+
+1. **`_propagateClues`** — clue forcing (`m > k` or `m + n < k` →
+   contradiction; `m == k` → remaining UNKNOWN edges → EMPTY; `m + n == k`
+   → remaining UNKNOWN → LINE).
+2. **`_propagateVertices`** — every dot's loop-degree ∈ {0, 2}; per-dot
+   `lineCount` / `unknownCount` counters (Int16Array) maintained
+   incrementally on assign/rollback.
+3. **`_propagateAdvanced`** — classic Slitherlink patterns: corner-3,
+   corner-1, adjacent 3-3 (horizontal + vertical), diagonal 3-3 (all 4
+   orientations). Each fires via a per-instance helper (`_applyCornerThree`,
+   `_applyAdjacentThreeH`, etc.) — the per-instance shape exists so
+   `_findNextHintDeduction` can dispatch the same helpers individually.
+4. **`_propagateColors`** — inside/outside cell coloring (`this.colors`
+   `Uint8Array(H*W)`, 0=UNKNOWN/1=INSIDE/2=OUTSIDE). Out-of-grid is
+   implicitly OUTSIDE. Three sub-rules: (a) known edge → relation between
+   adjacent cells' colors (LINE iff differ); (b) known colors → edge
+   state; (c) clue × own-color → forced opposite/same colors on the cell's
+   neighbours. Cell-color writes go through `_setColor` (trailed via the
+   2-bit-kind extension above).
+5. **`_propagateConnectivity`** — INSIDE/OUTSIDE region connectivity.
+   `_slApplyInsideReachability` BFS-floods from a known-INSIDE cell
+   through `{INSIDE ∪ UNKNOWN}` and forces unreachable cells to OUTSIDE;
+   `_slApplyOutsideReachability` does the same from a virtual exterior
+   root that all border cells connect to (a known-OUTSIDE cell trapped
+   inside an INSIDE wall is a contradiction). `_slApplyCut` runs an
+   iterative-Tarjan articulation-point analysis (recursion would blow JS
+   stack on 50×40 boards) **only for INSIDE** — the OUTSIDE-cut rule is
+   unsound because OUTSIDE cells can connect via the plane exterior even
+   when cell-graph-disconnected (the rectangle-loop counterexample
+   demonstrates this). All connectivity is guarded by `!_inLookahead` to
+   keep the inner probe cheap.
+6. **`_propagateParity`** *(also gated by no further guard, runs every
+   pass)* — every straight scan line through the puzzle crosses the
+   closed loop an even number of times. A horizontal scan at `y = R+0.5`
+   crosses **`V[R][.]`** edges (the vertical edges *in* row R — collinear
+   ones don't count); a vertical scan at `x = C+0.5` crosses **`H[.][C]`**
+   edges. For each scan: 0 unknowns + odd LINE count → contradiction;
+   1 unknown → forced to LINE or EMPTY to make even.
 
 Subloop prevention is via union-find over LINE-edge endpoints. The DSU
 is **rebuilt from scratch** at the two callsites that need it
@@ -283,35 +325,86 @@ remaining in degree-0 disconnected regions); the final check enforces
 that every clue is satisfied exactly, no UNKNOWN edges remain, every dot
 degree 0/2, and all LINE edges are in one connected component.
 
+After the local-rule fixpoint, `propagate()` runs **1-step lookahead**
+(`_applyLookahead`) at `_depth === 0` and with `!_inLookahead` — for each
+candidate UNKNOWN edge (and selected UNKNOWN cell), probe each value,
+run a lookahead-free inner propagate, force the surviving value on
+single-side contradictions. Candidate filter: edges adjacent to tight
+dots/clues only, to keep the lookahead cost bounded on large boards.
+
 Most-constrained variable pick at backtrack time: score each UNKNOWN edge
 as `10 * max(lineCount[u], lineCount[v]) - min(unknownCount[u], unknownCount[v])`
 (higher = more constrained). Initialize `bestScore = -Infinity` (scores
-on a blank board are negative). Branch LINE first, then EMPTY. Static
-`_solutionCache` keyed on FNV-1a of `(width, height, task)`, 50-entry LRU.
-Instance `maxMs` budget; the worker sets 30 s for large boards.
+on a blank board are negative). Branch LINE first, then EMPTY.
+
+**Partial results.** Hard boards (e.g. the 50×40 monthly) can't be fully
+solved within the worker's budget but propagation determines a useful
+chunk. `solve()` returns `{ solved: false, partial: true, horizontal,
+vertical, error: 'timed out' }` on either propagate-timeout or
+backtrack-timeout — the H/V arrays carry whatever the current trail
+state contains, which is the deducible portion. Two static caches sit
+side-by-side:
+- `_solutionCache` (50-entry LRU): complete solutions, keyed by FNV-1a
+  of `(width, height, task)`.
+- `_partialCache` (20-entry LRU): partial-on-timeout snapshots, same
+  key. `solve()` checks both at the start; a partial cache hit short-
+  circuits the full propagate (saves 3–7 s per Hint/Loop click on a
+  monthly-class board after the first timeout).
+
+`clearSolutionCache()` clears BOTH static caches — keep tests that mix
+hard/easy puzzles using it for determinism.
+
+Worker budget is **10 s** (`solver.worker.js`), not 30 s — propagate
+caps at ~6 s on a 50×40 with coloring + connectivity, leaving little
+backtracking headroom. The shorter budget means the partial-return path
+fires sooner on too-hard boards, so the user gets visible progress in
+~10 s instead of waiting 30 s for "timed out".
 
 `getHint(curH, curV)` constructs a probe solver seeded from the current
-edge state, runs `propagate()` only, and collects all newly-forced LINE
-edges as `[{orientation: 'h' | 'v', r, c}, ...]`. Falls back to `solve()`
-+ reveal-one-LINE-not-on-board when propagation deduces nothing. The
-probe explicitly sets `_startedAt = Date.now()` before calling
-`propagate()` so the inherited `maxMs` doesn't fire spuriously.
+edge state and runs `_findNextHintDeduction(minLines)` where
+`minLines = max(3, ceil(H * W / 30))` (scales the per-click batch with
+board area so Loop completes in ~10 s wall on any size; see
+[[hint-batch-scaling-for-loop]] memory). `_findNextHintDeduction` runs
+`propagate()` with `_depth = 1` (skips lookahead — too expensive per
+click), collects forced LINE edges from the trail until reaching
+`minLines`, and rolls back. If local rules find at least one LINE edge,
+returns those; otherwise falls back to a tight-budget `solve()` (capped
+at `min(this.maxMs, 5000)` ms) which may return a partial, and pulls up
+to `minLines` missing LINE edges from the partial. The probe explicitly
+sets `_startedAt = Date.now()` before propagate() so the inherited
+`maxMs` doesn't fire spuriously.
 
 MAIN-world: `readSlitherlinkData` / `readSlitherlinkState` /
 `applySlitherlinkState`, twins of the Galaxies functions but without the
 flood-fill region-build (we only care about the raw H/V arrays).
 `applySlitherlinkState` calls `saveState(true)` before writes, then falls
-through the `drawCurrentState → render → redraw → draw` ladder.
+through the `drawCurrentState → render → redraw → draw` ladder. Both
+read and apply preserve the `0/1/2` encoding (`2` is × — see top of
+this section).
 
 The diff is **edge-based** — `computePuzzleDiff('slitherlink', board,
 solution)` returns `[{orientation, r, c}, ...]` entries, not `{row, col}`
-entries. Both `drawPreview`'s mistake overlay (paints wrong edges in red)
-and `applyHintHandler` / `applyAndRunLoop` (read current edge state,
-overlay hint edges, apply) branch on `puzzleData.type === 'slitherlink'`
-to handle the edge shape. The Loop done-check is "every solution LINE
-edge is also on the board", because Slitherlink boards never get
-"all cells filled" — the empty-cell sentinel that other puzzles use to
-detect completion doesn't apply.
+entries. A mismatch is `board[r][c] !== 0 && board[r][c] !== solution[r][c]`,
+so the diff flags both wrong-LINEs AND wrong-×s (board says ×, solution
+says LINE, or vice versa). UNKNOWN board entries (`0`) are never flagged.
+Both `drawPreview`'s mistake overlay (paints wrong edges in red) and
+`applyHintHandler` / `applyAndRunLoop` branch on
+`puzzleData.type === 'slitherlink'` to handle the edge shape. The Loop
+done-check is "every solution LINE edge is also on the board", because
+Slitherlink boards never get "all cells filled" — the empty-cell
+sentinel that other puzzles use to detect completion doesn't apply.
+
+**Partial solutions in content.js.** When `solve()` returns
+`{ partial: true, ... }`, `solveHandler` routes to `applyPartialResult`
+instead of `applySolveResult`. The partial preview enters confirm mode
+with a status like `"Partial only: N edges deduced..."` and deliberately
+does NOT call `recordSolveSuccess` — caching a partial in
+`puzzleData.solution` would mis-trigger Loop's done-check (Loop would
+report "Solved!" when the partial's LINEs land, even though the real
+puzzle has more) and the mistake overlay (a missing LINE in the partial
+isn't actually wrong, just unknown). `previewGridFromResult(result)`
+hands the right shape to `drawPreview` for both slitherlink (`{horizontal,
+vertical}`) and other types (`result.grid`).
 
 `puzzleData.solution` for slitherlink is `{horizontal, vertical}` (not a
 2D `number[][]`), so `getCachedGridSolution` / `cacheGridSolution` carry
@@ -320,6 +413,13 @@ would lose the structure. The cache localStorage key prefix is
 `slitherlink-solution:`. The `gridDataSig` early-bail in `drawPreview`
 hashes the H+V arrays directly; `staticSig` gains a `|sl=` segment so
 the static layer rebuilds when the task changes.
+
+Hint (and `hintHandler` in content.js) **skips the `await pendingAutoSolve`
+gate** for slitherlink — `getHint` propagates from the live board state
+without needing the cached solution, so on a hard 30×30 daily where
+autoSolve takes 30 s, Hint still returns instantly (was 30 s before that
+fix). Other puzzle types still await because their hint heuristics
+consult the cached solution for mistake comparison.
 
 ### Backtracking validates duplicates at completion; triples validated inline
 
