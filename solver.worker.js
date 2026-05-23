@@ -68,7 +68,12 @@ self.onmessage = function (e) {
         task: extraData.task,
         initialState: extraData.initialGrid || null,
       });
-      s.maxMs = 30000;
+      // 10 s instead of 30 s: propagate + lookahead caps at ~3 s on a 50×40,
+      // and our backtracking past that point is rarely productive on hard
+      // boards. solve() now returns the propagation snapshot as a partial
+      // on timeout, so capping shorter just makes the wait reasonable —
+      // user gets the deducible portion sooner instead of waiting 30 s.
+      s.maxMs = 10000;
       result = s.solve();
     } else {
       const s = new NonogramSolver(rowClues, colClues);

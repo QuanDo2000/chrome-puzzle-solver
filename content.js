@@ -2737,6 +2737,13 @@ function makeWidget() {
       return;
     }
     if (!result || !result.solved) {
+      // Slitherlink-style partial: solver hit the budget during backtracking
+      // but propagation + lookahead determined a useful chunk of the loop.
+      // Show that as a preview rather than just reporting "timed out".
+      if (result?.partial && result.horizontal && result.vertical) {
+        applyPartialResult(result);
+        return;
+      }
       if (result?.partialGrid) {
         cachePartial(puzzleData, result.partialGrid, result.partialFilled);
       } else if (result?.error === 'partial state exhausted') {
@@ -2825,7 +2832,39 @@ function makeWidget() {
     solveBtn.textContent = 'Confirm';
     confirming = true;
     setStatus('Preview ready.', 'info');
-    drawPreview(result.grid);
+    drawPreview(previewGridFromResult(result));
+  }
+
+  // For slitherlink the worker result has { horizontal, vertical } instead of
+  // .grid; drawPreview expects the matching shape. Other puzzle types still
+  // pass result.grid through unchanged.
+  function previewGridFromResult(result) {
+    if (puzzleData?.type === 'slitherlink' && result?.horizontal && result?.vertical) {
+      return { horizontal: result.horizontal, vertical: result.vertical };
+    }
+    return result?.grid;
+  }
+
+  // Partial-solution preview for slitherlink: when solve() times out on a
+  // hard board (e.g. the 50×40 monthly), the solver returns what propagation
+  // + lookahead could deduce as a partial. We show that as a preview the
+  // user can apply, with a clear "partial — continue manually" status.
+  // We deliberately do NOT call recordSolveSuccess: the partial is a subset
+  // of the real solution, so caching it would mis-trigger Loop's done-check
+  // and the mistake overlay.
+  function applyPartialResult(result) {
+    loopConfirming = false;
+    clearPendingHint();
+    solveBtn.textContent = 'Confirm';
+    confirming = true;
+    let lines = 0;
+    for (const row of result.horizontal) for (const v of row) if (v === 1) lines++;
+    for (const row of result.vertical)   for (const v of row) if (v === 1) lines++;
+    setStatus(
+      `Partial only: ${lines} edges deduced (board too hard for full solve). Apply, then finish manually.`,
+      'info',
+    );
+    drawPreview({ horizontal: result.horizontal, vertical: result.vertical });
   }
 
   // The Loop button cycles through three states. loopHandler dispatches; the

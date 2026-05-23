@@ -5273,6 +5273,7 @@ class SlitherlinkSolver {
    *   horizontal: number[][] | null,
    *   vertical: number[][] | null,
    *   error?: string,
+   *   partial?: boolean,
    * }}
    */
   solve() {
@@ -5312,9 +5313,19 @@ class SlitherlinkSolver {
       this._storeInCache(key, out);
       return { solved: true, horizontal: out.horizontal, vertical: out.vertical };
     }
+    // Backtrack failed or timed out. Trail-rollback restored the state to
+    // the post-propagation snapshot (everything propagate() + lookahead
+    // could deduce). Return that as a partial so callers can show the
+    // user the deducible portion instead of nothing — meaningful on hard
+    // boards (e.g. the 50×40 monthly: ~38% of edges determined in ~3s
+    // before backtracking gives up).
+    const partial = this._emit();
     return {
-      solved: false, horizontal: null, vertical: null,
+      solved: false,
+      horizontal: partial.horizontal,
+      vertical: partial.vertical,
       error: this._timedOut ? 'timed out' : 'no solution found',
+      partial: true,
     };
   }
 
