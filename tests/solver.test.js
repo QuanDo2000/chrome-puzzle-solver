@@ -1546,12 +1546,11 @@ test('SlitherlinkSolver: getHint returns edges when given a nearly-complete boar
   SlitherlinkSolver.clearSolutionCache();
 });
 
-test('SlitherlinkSolver: getHint returns a single rule application (next-move scale)', () => {
+test('SlitherlinkSolver: getHint returns a bounded batch (next-move scale)', () => {
   SlitherlinkSolver.clearSolutionCache();
   // Adjacent 3-3 at top-left: cells (0,0) and (0,1) both have clue 3.
-  // The advanced adjacent-3-3 pattern fires and forces V[0][0], V[0][1],
-  // V[0][2] to LINE. Even if an earlier (vertex/clue) rule fires first, the
-  // result must be a small batch from a single rule application.
+  // minLines = max(3, ceil(9/30)) = 3. Accumulator gathers from corner-3 and
+  // adjacent-3-3 patterns. The result must be a small batch (well under ~10).
   const task = [
     [3, 3, -1],
     [-1, -1, -1],
@@ -1564,8 +1563,27 @@ test('SlitherlinkSolver: getHint returns a single rule application (next-move sc
   assert.ok(hint, 'expected a hint');
   assert.equal(hint.type, 'slitherlink');
   assert.ok(hint.edges.length >= 1);
-  // The hint must be a single deduction unit — never more than ~10 edges.
+  // The hint must be a bounded batch — never more than ~10 edges.
   assert.ok(hint.edges.length <= 10, `next-move hint should be small; got ${hint.edges.length}`);
+  SlitherlinkSolver.clearSolutionCache();
+});
+
+test('SlitherlinkSolver: getHint scales batch size with board area', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  // 10x10 board with a corner-3, adjacent 3-3 pairs, and diagonal 3-3 pairs so
+  // deductions fire. Target: minLines = max(3, ceil(100/30)) = max(3, 4) = 4.
+  const task = Array.from({ length: 10 }, () => new Array(10).fill(-1));
+  task[0][0] = 3;
+  task[0][3] = 3; task[0][4] = 3;
+  task[5][5] = 3; task[6][6] = 3;
+  const s = new SlitherlinkSolver({ width: 10, height: 10, task });
+  const blankH = Array.from({ length: 11 }, () => new Array(10).fill(0));
+  const blankV = Array.from({ length: 10 }, () => new Array(11).fill(0));
+  const hint = s.getHint(blankH, blankV);
+  assert.ok(hint, 'expected a hint on 10x10 board with pattern clues');
+  // ceil(10*10/30) = 4 -> minLines = max(3, 4) = 4.
+  // Accumulator gathers edges from successive rule applications until >= 4.
+  assert.ok(hint.edges.length >= 4, `expected >= 4 edges on 10x10, got ${hint.edges.length}`);
   SlitherlinkSolver.clearSolutionCache();
 });
 

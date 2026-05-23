@@ -5318,93 +5318,52 @@ class SlitherlinkSolver {
     };
   }
 
-  // Walk rule applications one at a time and return the LINE edges forced by
-  // the first single rule application that forces at least one LINE. Uses
-  // trail rollback so the probe state is left unchanged after each trial.
-  // NO lookahead — this is for next-move hints only.
+  // Run the local-rule fixpoint (clue + vertex + advanced patterns, NO
+  // lookahead) and collect the first `minLines` LINE edges that are forced.
+  // Uses propagate() with _depth=1 to skip the lookahead tier, so we get the
+  // full propagation chain without speculative branching — this is the same
+  // "next logical steps a solver would explain" but batched for Loop speed.
+  // A single rollback at the end leaves the probe state unchanged.
   // Returns an array of {orientation, r, c} entries, or null if no rule fires.
-  _findNextHintDeduction() {
-    const H = this.height, W = this.width;
+  _findNextHintDeduction(minLines = 1) {
+    const W = this.width;
+    const overallMark = this.trail.length;
 
-    // Collect new LINE edges added since `mark` (from the trail).
-    const captureNewLines = (mark) => {
-      const out = [];
-      for (let i = mark; i < this.trail.length; i++) {
-        const e = this.trail[i];
-        const idx = e & 0xFFFFFF;
-        const kindBit = (e >> 24) & 1;
-        const arr = kindBit === 0 ? this.H : this.V;
-        if (arr[idx] === 1) {
-          if (kindBit === 0) {
-            const r = (idx / W) | 0;
-            out.push({ orientation: 'h', r, c: idx - r * W });
-          } else {
-            const stride = W + 1;
-            const r = (idx / stride) | 0;
-            out.push({ orientation: 'v', r, c: idx - r * stride });
-          }
+    // Run local-rule propagation (no lookahead) from the current state.
+    // _depth=1 skips _applyLookahead in propagate(). _startedAt is already
+    // set by the getHint caller.
+    this._depth = 1;
+    const propOk = this.propagate();
+    this._depth = 0;
+
+    if (!propOk) {
+      // Contradiction: the current board state is already invalid.
+      this._rollback(overallMark);
+      return null;
+    }
+
+    // Collect LINE edges from the trail, up to minLines.
+    const allLines = [];
+    for (let i = overallMark; i < this.trail.length; i++) {
+      const e = this.trail[i];
+      const idx = e & 0xFFFFFF;
+      const kindBit = (e >> 24) & 1;
+      const arr = kindBit === 0 ? this.H : this.V;
+      if (arr[idx] === 1) {
+        if (kindBit === 0) {
+          const r = (idx / W) | 0;
+          allLines.push({ orientation: 'h', r, c: idx - r * W });
+        } else {
+          const stride = W + 1;
+          const r = (idx / stride) | 0;
+          allLines.push({ orientation: 'v', r, c: idx - r * stride });
         }
+        if (allLines.length >= minLines) break;
       }
-      return out;
-    };
+    }
 
-    // Try a single rule application: apply(), capture new LINEs, roll back.
-    // Returns the LINE edges if any were forced, otherwise null.
-    const tryOne = (apply) => {
-      const mark = this.trail.length;
-      const ok = apply();
-      if (!ok) { this._rollback(mark); return null; }
-      const lines = captureNewLines(mark);
-      this._rollback(mark);
-      return lines.length > 0 ? lines : null;
-    };
-
-    const noop = () => {};
-
-    // 1. Vertex rule per dot (row-major order).
-    for (let r = 0; r <= H; r++) {
-      for (let c = 0; c <= W; c++) {
-        const lines = tryOne(() => this._applyVertexRuleAt(r, c, noop));
-        if (lines) return lines;
-      }
-    }
-    // 2. Clue rule per cell (row-major order).
-    for (let r = 0; r < H; r++) {
-      for (let c = 0; c < W; c++) {
-        const lines = tryOne(() => this._applyClueRuleAt(r, c, noop));
-        if (lines) return lines;
-      }
-    }
-    // 3. Advanced patterns: corners, then adjacent 3-3, then diagonal 3-3.
-    for (const corner of ['TL', 'TR', 'BL', 'BR']) {
-      let lines = tryOne(() => this._applyCornerThree(corner, noop));
-      if (lines) return lines;
-      lines = tryOne(() => this._applyCornerOne(corner, noop));
-      if (lines) return lines;
-    }
-    for (let r = 0; r < H; r++) {
-      for (let c = 0; c < W - 1; c++) {
-        const lines = tryOne(() => this._applyAdjacentThreeH(r, c, noop));
-        if (lines) return lines;
-      }
-    }
-    for (let r = 0; r < H - 1; r++) {
-      for (let c = 0; c < W; c++) {
-        const lines = tryOne(() => this._applyAdjacentThreeV(r, c, noop));
-        if (lines) return lines;
-      }
-    }
-    for (const [dr, dc] of [[1, 1], [1, -1]]) {
-      for (let r = 0; r < H; r++) {
-        for (let c = 0; c < W; c++) {
-          const nr = r + dr, nc = c + dc;
-          if (nr < 0 || nr >= H || nc < 0 || nc >= W) continue;
-          const lines = tryOne(() => this._applyDiagonalThree(r, c, dr, dc, noop));
-          if (lines) return lines;
-        }
-      }
-    }
-    return null;
+    this._rollback(overallMark);
+    return allLines.length > 0 ? allLines : null;
   }
 
   /**
@@ -5412,10 +5371,12 @@ class SlitherlinkSolver {
    *   { type: 'slitherlink', edges: [{orientation:'h'|'v', r, c}, ...], count }
    * or null if no hint can be found.
    *
-   * Walks rule applications one at a time (vertex → clue → advanced patterns)
-   * and returns the LINE edges from the FIRST single rule application that
-   * forces at least one LINE. This is the "next logical step" a solver would
-   * explain — typically 1-5 edges. No lookahead is used in this path.
+   * Accumulates LINE edges from successive rule applications (vertex → clue →
+   * advanced patterns) until at least minLines = max(3, ceil(H×W/30)) edges
+   * are collected. Successive applications are not rolled back between them so
+   * later rules can chain off earlier deductions. This batch sizing keeps Loop
+   * under ~10s on 30×30 boards (target ≈30 iterations × 300ms inter-step).
+   * No lookahead is used in this path.
    *
    * Fallback: if no local rule fires, runs a full solve (with lookahead) and
    * reveals one missing LINE edge.
@@ -5431,34 +5392,59 @@ class SlitherlinkSolver {
     });
     probe._startedAt = Date.now();
 
-    // Next-move hint: stop at the first single rule application that forces
-    // at least one LINE edge. Returns 1-5 edges typically, matching the
-    // deduction unit a solver would explain step-by-step.
-    const next = probe._findNextHintDeduction();
-    if (next && next.length > 0) {
-      return { type: 'slitherlink', edges: next, count: next.length };
+    // Next-move hint: accumulate LINE edges across successive rule applications
+    // until minLines is reached, so Loop finishes a 30×30 in ~10s (target ~30
+    // Loop iterations × 300ms inter-step sleep).
+    const minLines = Math.max(3, Math.ceil(this.height * this.width / 30));
+    const next = probe._findNextHintDeduction(minLines);
+
+    // If local rules produced < minLines edges (or nothing), supplement with
+    // edges from the full solve so each click reveals a full batch.
+    const H = this.height, W = this.width;
+    if (!next || next.length < minLines) {
+      const full = this.solve();
+      if (!full.solved) {
+        // Solve failed — return whatever local rules found, or null.
+        if (next && next.length > 0) {
+          return { type: 'slitherlink', edges: next, count: next.length };
+        }
+        return null;
+      }
+
+      // Collect LINE edges missing from the current board, skipping any that
+      // local rules already deduced (to avoid duplicate hints).
+      const already = new Set(
+        (next || []).map(e => `${e.orientation},${e.r},${e.c}`),
+      );
+      const fallbackEdges = next ? next.slice() : [];
+      outer2: for (let r = 0; r <= H; r++) {
+        for (let c = 0; c < W; c++) {
+          if (full.horizontal[r][c] === 1 && (curH[r]?.[c] !== 1) &&
+              !already.has(`h,${r},${c}`)) {
+            fallbackEdges.push({ orientation: 'h', r, c });
+            if (fallbackEdges.length >= minLines) break outer2;
+          }
+        }
+      }
+      if (fallbackEdges.length < minLines) {
+        for (let r = 0; r < H; r++) {
+          for (let c = 0; c <= W; c++) {
+            if (full.vertical[r][c] === 1 && (curV[r]?.[c] !== 1) &&
+                !already.has(`v,${r},${c}`)) {
+              fallbackEdges.push({ orientation: 'v', r, c });
+              if (fallbackEdges.length >= minLines) break;
+            }
+          }
+          if (fallbackEdges.length >= minLines) break;
+        }
+      }
+      if (fallbackEdges.length > 0) {
+        return { type: 'slitherlink', edges: fallbackEdges, count: fallbackEdges.length };
+      }
+      return null;
     }
 
-    // Fallback: no local deduction forces a LINE. Run full solve (with
-    // lookahead) and reveal one missing LINE.
-    const H = this.height, W = this.width;
-    const full = this.solve();
-    if (!full.solved) return null;
-    for (let r = 0; r <= H; r++) {
-      for (let c = 0; c < W; c++) {
-        if (full.horizontal[r][c] === 1 && (curH[r]?.[c] !== 1)) {
-          return { type: 'slitherlink', edges: [{ orientation: 'h', r, c }], count: 1 };
-        }
-      }
-    }
-    for (let r = 0; r < H; r++) {
-      for (let c = 0; c <= W; c++) {
-        if (full.vertical[r][c] === 1 && (curV[r]?.[c] !== 1)) {
-          return { type: 'slitherlink', edges: [{ orientation: 'v', r, c }], count: 1 };
-        }
-      }
-    }
-    return null;
+    return { type: 'slitherlink', edges: next, count: next.length };
   }
 
   static _solutionCache = new Map();
