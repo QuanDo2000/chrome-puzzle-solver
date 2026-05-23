@@ -4789,6 +4789,186 @@ class SlitherlinkSolver {
     }
     return totalLines > 0;
   }
+
+  // Iterate clue + vertex rules to a fixpoint. After each pass that
+  // added a LINE edge, rebuild the DSU; if a cycle closed, only accept it
+  // when the whole puzzle is complete (otherwise it's a subloop).
+  propagate() {
+    let changed = true;
+    let anyLineAddedSinceRebuild = false;
+    while (changed) {
+      if (this._budgetExceeded()) return false;
+      changed = false;
+      // We don't know LINE vs EMPTY from the rule callback, so just rebuild
+      // after each fixpoint pass that ran any propagator. (Cheap: O(E α).)
+      const onAnyChange = () => { changed = true; anyLineAddedSinceRebuild = true; };
+      if (!this._propagateClues(onAnyChange)) return false;
+      if (!this._propagateVertices(onAnyChange)) return false;
+    }
+    if (anyLineAddedSinceRebuild) {
+      this._dsuRebuild();
+      if (this._cycleClosed) {
+        if (!this._checkSingleLoopComplete()) return false;
+      }
+    }
+    return true;
+  }
+
+  // Most-constrained UNKNOWN edge for branching. Returns { kind, idx } or null.
+  _pickEdge() {
+    let best = null, bestScore = -Infinity;
+    const H = this.height, W = this.width;
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        const idx = this._hIdx(r, c);
+        if (this.H[idx] !== 0) continue;
+        const [u, v] = this._edgeEndpoints('H', idx);
+        const score = Math.max(this.lineCount[u], this.lineCount[v]) * 10
+                    - Math.min(this.unknownCount[u], this.unknownCount[v]);
+        if (score > bestScore) { bestScore = score; best = { kind: 'H', idx }; }
+      }
+    }
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        const idx = this._vIdx(r, c);
+        if (this.V[idx] !== 0) continue;
+        const [u, v] = this._edgeEndpoints('V', idx);
+        const score = Math.max(this.lineCount[u], this.lineCount[v]) * 10
+                    - Math.min(this.unknownCount[u], this.unknownCount[v]);
+        if (score > bestScore) { bestScore = score; best = { kind: 'V', idx }; }
+      }
+    }
+    return best;
+  }
+
+  _allEdgesAssigned() {
+    for (let i = 0; i < this.H.length; i++) if (this.H[i] === 0) return false;
+    for (let i = 0; i < this.V.length; i++) if (this.V[i] === 0) return false;
+    return true;
+  }
+
+  _emit() {
+    const H = this.height, W = this.width;
+    const horizontal = [];
+    for (let r = 0; r <= H; r++) {
+      const row = new Array(W);
+      for (let c = 0; c < W; c++) row[c] = this.H[this._hIdx(r, c)] === 1 ? 1 : 0;
+      horizontal.push(row);
+    }
+    const vertical = [];
+    for (let r = 0; r < H; r++) {
+      const row = new Array(W + 1);
+      for (let c = 0; c <= W; c++) row[c] = this.V[this._vIdx(r, c)] === 1 ? 1 : 0;
+      vertical.push(row);
+    }
+    return { horizontal, vertical };
+  }
+
+  _backtrack() {
+    if (this._budgetExceeded()) return false;
+    if (this._allEdgesAssigned()) {
+      this._dsuRebuild();
+      return this._checkSingleLoopComplete();
+    }
+    const pick = this._pickEdge();
+    if (!pick) return false;
+    for (const val of [1, 2]) {
+      if (this._budgetExceeded()) return false;
+      const mark = this.trail.length;
+      if (!this._setEdge(pick.idx, pick.kind, val)) continue;
+      if (this.propagate()) {
+        if (this._allEdgesAssigned()) {
+          this._dsuRebuild();
+          if (this._checkSingleLoopComplete()) return true;
+        } else if (this._backtrack()) {
+          return true;
+        }
+      }
+      this._rollback(mark);
+      if (this._timedOut) return false;
+    }
+    return false;
+  }
+
+  /**
+   * @returns {{
+   *   solved: boolean,
+   *   horizontal: number[][] | null,
+   *   vertical: number[][] | null,
+   *   error?: string,
+   * }}
+   */
+  solve() {
+    const key = this._cacheKey();
+    const cached = SlitherlinkSolver._solutionCache.get(key);
+    if (cached) {
+      return {
+        solved: true,
+        horizontal: cached.horizontal.map(row => row.slice()),
+        vertical: cached.vertical.map(row => row.slice()),
+      };
+    }
+
+    this._startedAt = Date.now();
+    this._timedOut = false;
+
+    if (!this.propagate()) {
+      return {
+        solved: false, horizontal: null, vertical: null,
+        error: this._timedOut ? 'timed out' : 'contradiction on initial propagation',
+      };
+    }
+    if (this._allEdgesAssigned()) {
+      this._dsuRebuild();
+      if (this._checkSingleLoopComplete()) {
+        const out = this._emit();
+        this._storeInCache(key, out);
+        return { solved: true, horizontal: out.horizontal, vertical: out.vertical };
+      }
+      return {
+        solved: false, horizontal: null, vertical: null,
+        error: 'fully-assigned grid is not a valid single loop',
+      };
+    }
+    if (this._backtrack()) {
+      const out = this._emit();
+      this._storeInCache(key, out);
+      return { solved: true, horizontal: out.horizontal, vertical: out.vertical };
+    }
+    return {
+      solved: false, horizontal: null, vertical: null,
+      error: this._timedOut ? 'timed out' : 'no solution found',
+    };
+  }
+
+  static _solutionCache = new Map();
+  static _maxSolutionCache = 50;
+  static clearSolutionCache() { SlitherlinkSolver._solutionCache.clear(); }
+
+  _cacheKey() {
+    // FNV-1a over (width, height, flattened task).
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(0x4C); // 'L' nameplate so slitherlink keys don't collide
+    mix(this.width);
+    mix(this.height);
+    for (let r = 0; r < this.height; r++) {
+      const row = this.task[r] || [];
+      for (let c = 0; c < this.width; c++) mix((row[c] | 0) + 2);
+    }
+    return String(h >>> 0);
+  }
+
+  _storeInCache(key, out) {
+    const m = SlitherlinkSolver._solutionCache;
+    if (m.size >= SlitherlinkSolver._maxSolutionCache) {
+      m.delete(m.keys().next().value);
+    }
+    m.set(key, {
+      horizontal: out.horizontal.map(row => row.slice()),
+      vertical: out.vertical.map(row => row.slice()),
+    });
+  }
 }
 
 // Bounding box of every distinct owner value on a board (skipping `empty`).

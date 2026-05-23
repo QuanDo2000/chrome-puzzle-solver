@@ -1293,3 +1293,59 @@ test('SlitherlinkSolver: _checkSingleLoopComplete rejects two disjoint loops (ch
   // Check (d) must catch the two-component case.
   assert.equal(s._checkSingleLoopComplete(), false);
 });
+
+test('SlitherlinkSolver: solves the 5x5 fixture', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  const p = fixtures.slitherlink5x5;
+  const s = new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task });
+  s.maxMs = 5000;
+  const result = s.solve();
+  assert.equal(result.solved, true);
+  // Shape checks.
+  assert.equal(result.horizontal.length, p.rows + 1);
+  assert.equal(result.horizontal[0].length, p.cols);
+  assert.equal(result.vertical.length, p.rows);
+  assert.equal(result.vertical[0].length, p.cols + 1);
+  // Every entry 0 or 1.
+  for (const row of result.horizontal) for (const v of row) assert.ok(v === 0 || v === 1);
+  for (const row of result.vertical)   for (const v of row) assert.ok(v === 0 || v === 1);
+  // Every clue is satisfied exactly.
+  for (let r = 0; r < p.rows; r++) {
+    for (let c = 0; c < p.cols; c++) {
+      const clue = p.task[r][c];
+      if (clue < 0) continue;
+      const m = result.horizontal[r][c] + result.horizontal[r + 1][c]
+              + result.vertical[r][c] + result.vertical[r][c + 1];
+      assert.equal(m, clue, `clue at (${r},${c})=${clue} but got ${m}`);
+    }
+  }
+  SlitherlinkSolver.clearSolutionCache();
+});
+
+test('SlitherlinkSolver: caches the second call', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  const p = fixtures.slitherlink5x5;
+  let propCalls = 0;
+  const s1 = new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task });
+  s1.maxMs = 5000;
+  s1.solve();
+  // Second call should hit the cache before propagate() runs even once.
+  const s2 = new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task });
+  const orig = s2.propagate.bind(s2);
+  s2.propagate = function (...args) { propCalls++; return orig(...args); };
+  const r2 = s2.solve();
+  assert.equal(r2.solved, true);
+  assert.equal(propCalls, 0, 'cached solve should not call propagate()');
+  SlitherlinkSolver.clearSolutionCache();
+});
+
+test('SlitherlinkSolver: maxMs=1 bails within 500ms', () => {
+  const task = Array.from({ length: 10 }, () => new Array(10).fill(-1));
+  const s = new SlitherlinkSolver({ width: 10, height: 10, task });
+  s.maxMs = 1;
+  const t0 = Date.now();
+  const r = s.solve();
+  const dt = Date.now() - t0;
+  assert.ok(dt < 500, `solve must bail within 500ms; took ${dt}ms`);
+  if (!r.solved) assert.equal(r.error, 'timed out');
+});
