@@ -5398,53 +5398,41 @@ class SlitherlinkSolver {
     const minLines = Math.max(3, Math.ceil(this.height * this.width / 30));
     const next = probe._findNextHintDeduction(minLines);
 
-    // If local rules produced < minLines edges (or nothing), supplement with
-    // edges from the full solve so each click reveals a full batch.
-    const H = this.height, W = this.width;
-    if (!next || next.length < minLines) {
-      const full = this.solve();
-      if (!full.solved) {
-        // Solve failed — return whatever local rules found, or null.
-        if (next && next.length > 0) {
-          return { type: 'slitherlink', edges: next, count: next.length };
-        }
-        return null;
-      }
-
-      // Collect LINE edges missing from the current board, skipping any that
-      // local rules already deduced (to avoid duplicate hints).
-      const already = new Set(
-        (next || []).map(e => `${e.orientation},${e.r},${e.c}`),
-      );
-      const fallbackEdges = next ? next.slice() : [];
-      outer2: for (let r = 0; r <= H; r++) {
-        for (let c = 0; c < W; c++) {
-          if (full.horizontal[r][c] === 1 && (curH[r]?.[c] !== 1) &&
-              !already.has(`h,${r},${c}`)) {
-            fallbackEdges.push({ orientation: 'h', r, c });
-            if (fallbackEdges.length >= minLines) break outer2;
-          }
-        }
-      }
-      if (fallbackEdges.length < minLines) {
-        for (let r = 0; r < H; r++) {
-          for (let c = 0; c <= W; c++) {
-            if (full.vertical[r][c] === 1 && (curV[r]?.[c] !== 1) &&
-                !already.has(`v,${r},${c}`)) {
-              fallbackEdges.push({ orientation: 'v', r, c });
-              if (fallbackEdges.length >= minLines) break;
-            }
-          }
-          if (fallbackEdges.length >= minLines) break;
-        }
-      }
-      if (fallbackEdges.length > 0) {
-        return { type: 'slitherlink', edges: fallbackEdges, count: fallbackEdges.length };
-      }
-      return null;
+    if (next && next.length > 0) {
+      // Local rules produced something — return as-is, even if fewer than
+      // minLines. Supplementing from a full solve would burn the entire
+      // solve budget per click on puzzles our solver can't crack (e.g. the
+      // 50×40 monthly times out at 30 s every step). minLines is a soft
+      // target: hit it when local rules can, no more.
+      return { type: 'slitherlink', edges: next, count: next.length };
     }
 
-    return { type: 'slitherlink', edges: next, count: next.length };
+    // Local rules deduced nothing. Try a TIGHT-budget solve to reveal one
+    // missing LINE; cap at 1 s so a single Hint click never hangs Loop on
+    // hard boards where the parent maxMs may be 5-30 s.
+    const fallbackBudget = Math.min(this.maxMs > 0 ? this.maxMs : 1000, 1000);
+    const fallbackSolver = new SlitherlinkSolver({
+      width: this.width, height: this.height, task: this.task,
+      maxMs: fallbackBudget,
+    });
+    const full = fallbackSolver.solve();
+    if (!full.solved) return null;
+    const H = this.height, W = this.width;
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        if (full.horizontal[r][c] === 1 && (curH[r]?.[c] !== 1)) {
+          return { type: 'slitherlink', edges: [{ orientation: 'h', r, c }], count: 1 };
+        }
+      }
+    }
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        if (full.vertical[r][c] === 1 && (curV[r]?.[c] !== 1)) {
+          return { type: 'slitherlink', edges: [{ orientation: 'v', r, c }], count: 1 };
+        }
+      }
+    }
+    return null;
   }
 
   static _solutionCache = new Map();
