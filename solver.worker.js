@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -58,6 +58,15 @@ self.onmessage = function (e) {
         cols: extraData.cols,
         task: extraData.task,
         initialState: initialGrid || null,
+      });
+      s.maxMs = 30000;
+      result = s.solve();
+    } else if (type === 'slitherlink' && extraData) {
+      const s = new SlitherlinkSolver({
+        width: extraData.cols,
+        height: extraData.rows,
+        task: extraData.task,
+        initialState: extraData.initialGrid || null,
       });
       s.maxMs = 30000;
       result = s.solve();
