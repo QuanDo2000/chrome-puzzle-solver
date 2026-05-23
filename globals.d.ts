@@ -16,6 +16,7 @@ declare const GalaxiesSolver: any;
 declare const BinairoSolver: any;
 declare const ShikakuSolver: any;
 declare const YinYangSolver: any;
+declare const SlitherlinkSolver: any;
 
 // Helpers from handler.js.
 // MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in
@@ -37,6 +38,9 @@ type MainWorldFn =
   | 'readYinYangData'
   | 'readYinYangState'
   | 'applyYinYangState'
+  | 'readSlitherlinkData'
+  | 'readSlitherlinkState'
+  | 'applySlitherlinkState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';

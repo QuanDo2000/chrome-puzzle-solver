@@ -56,6 +56,7 @@ const solverClasses = {
   BinairoSolver: 'readonly',
   ShikakuSolver: 'readonly',
   YinYangSolver: 'readonly',
+  SlitherlinkSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js
