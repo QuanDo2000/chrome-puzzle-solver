@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 
 function solveNonogram(p) {
@@ -31,6 +31,10 @@ function solveYinYang(p) {
   YinYangSolver.clearSolutionCache();
   return new YinYangSolver({ rows: p.rows, cols: p.cols, task: p.task }).solve();
 }
+function solveSlitherlink(p) {
+  SlitherlinkSolver.clearSolutionCache();
+  return new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task }).solve();
+}
 
 const raw = {
   nonogramDiagonal5: solveNonogram(fixtures.nonogramDiagonal5),
@@ -43,11 +47,17 @@ const raw = {
   binairoPlus6x6:    solveBinairo(fixtures.binairoPlus6x6),
   shikaku5x5:        solveShikaku(fixtures.shikaku5x5),
   yinyang6x6:        solveYinYang(fixtures.yinyang6x6),
+  slitherlink5x5:    solveSlitherlink(fixtures.slitherlink5x5),
 };
 
 // Strip any non-deterministic fields (timing, internal counters) before writing.
 function clean(result) {
   if (!result || typeof result !== 'object') return result;
+  if ('horizontal' in result && 'vertical' in result) {
+    // Slitherlink shape.
+    const { solved, horizontal, vertical, error } = result;
+    return { solved, horizontal, vertical, error: error || null };
+  }
   const { solved, grid, error } = result;
   return { solved, grid, error: error || null };
 }

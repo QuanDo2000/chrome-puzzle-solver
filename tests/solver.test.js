@@ -1382,6 +1382,22 @@ test('SlitherlinkSolver: getHint returns edges forced by propagation', () => {
   SlitherlinkSolver.clearSolutionCache();
 });
 
+test('SlitherlinkSolver: 5x5 fixture matches golden', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  const p = fixtures.slitherlink5x5;
+  const result = new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task }).solve();
+  assert.deepEqual(
+    {
+      solved: result.solved,
+      horizontal: result.horizontal,
+      vertical: result.vertical,
+      error: result.error || null,
+    },
+    golden.slitherlink5x5,
+  );
+  SlitherlinkSolver.clearSolutionCache();
+});
+
 test('SlitherlinkSolver: getHint falls back to solve when propagation deduces nothing', () => {
   SlitherlinkSolver.clearSolutionCache();
   const p = fixtures.slitherlink5x5;
