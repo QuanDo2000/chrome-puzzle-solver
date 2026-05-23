@@ -302,6 +302,19 @@ module.exports = {
   // Shikaku 5x5 captured from puzzles-mobile.com/shikaku/random/5x5 on
   // 2026-05-19. Mirrors fixtures.shikaku5x5; this copy lives in
   // real-puzzles.js so bench-shikaku.js exercises the shikaku code path.
+  slitherlinkReal5x5_a: {
+    type: 'slitherlink',
+    rows: 5,
+    cols: 5,
+    task: [
+      [-1, -1, -1, -1,  3],
+      [-1,  2, -1, -1, -1],
+      [-1,  2, -1,  0,  3],
+      [-1,  1, -1, -1,  3],
+      [-1,  2,  3,  1, -1],
+    ],
+  },
+
   shikakuReal5x5_a: {
     type: 'shikaku',
     rows: 5,
