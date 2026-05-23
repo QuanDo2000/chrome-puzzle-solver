@@ -1,9 +1,9 @@
 # Project conventions for Claude Code
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
-Binairo Plus, Shikaku, and Yin-Yang puzzles on puzzles-mobile.com. Six solver
-classes in `solver.js`, a content-script widget in `content.js`, and a
-small service worker in `background.js`.
+Binairo Plus, Shikaku, Yin-Yang, and Slitherlink puzzles on puzzles-mobile.com.
+Seven solver classes in `solver.js`, a content-script widget in `content.js`,
+and a small service worker in `background.js`.
 
 ## Version control: use `jj`, never plain `git`
 
@@ -238,6 +238,89 @@ path (Yin-Yang is `0/1/2` cell-state encoding, like Binairo). The Loop
 done-check needs no special arm — `0` = empty, like the other cell-state
 puzzles.
 
+### Slitherlink encoding
+
+The `/loop/*` path is served by a dedicated `SlitherlinkSolver` +
+`slitherlinkHandler`. The puzzle is named "slitherlink" everywhere in code
+to avoid colliding with the existing Loop button feature; the URL path
+matcher still keys on `/loop/`.
+
+Page encoding (edge-based, same shape as Galaxies):
+- `window.Game.task` — 2D `int[H][W]`. `-1` = no clue; `0/1/2/3` = clue
+  (count of loop edges around that cell).
+- `window.Game.currentState.cellHorizontalStatus` — `(H+1) × W`,
+  `0` = empty, `1` = line.
+- `window.Game.currentState.cellVerticalStatus` — `H × (W+1)`,
+  same encoding. (The page also uses `2` for player-placed × marks; the
+  extension ignores those — apply only ever writes `0` or `1`.)
+
+Internal solver edge encoding: `0 = UNKNOWN`, `1 = LINE`, `2 = EMPTY`. The
+`1 = LINE` value was chosen so the solver→apply translation is a direct
+write of `1` where LINE, `0` otherwise. Trail-based undo packs
+`(kindBit << 24) | idx` into a single int per assign for flat-array
+rollback (kindBit 0=horizontal, 1=vertical; the old value is always 0 by
+construction — `_setEdge` rejects overwrites of non-UNKNOWN edges).
+
+Solver shape: `propagate()` iterates two sound local rules — clue forcing
+(`_propagateClues`: `m > k` or `m + n < k` → contradiction; `m == k` →
+remaining UNKNOWN edges → EMPTY; `m + n == k` → remaining UNKNOWN → LINE)
+and vertex forcing (`_propagateVertices`: every dot's loop-degree ∈ {0, 2};
+`m == 2` → remaining UNKNOWN → EMPTY; `m == 1, n == 1` → the unique
+UNKNOWN → LINE; `m == 0, n == 1` → the unique UNKNOWN → EMPTY) — to a
+fixpoint. Per-dot `lineCount` / `unknownCount` counters are maintained
+incrementally on assign/rollback so the rules run in O(D + clued cells)
+per pass.
+
+Subloop prevention is via union-find over LINE-edge endpoints. The DSU
+is **rebuilt from scratch** at the two callsites that need it
+(`propagate()` post-fixpoint, `_backtrack()` at completion) rather than
+maintained incrementally — keeping the trail+DSU invariants in sync under
+backtracking is fiddly, and rebuild cost is O(LINE_count) which is cheap
+relative to per-rule work. When a closed cycle is detected at propagation
+fixpoint, the multi-loop check is deferred to `_backtrack`'s final
+completion check (the propagation fixpoint may have legitimate unknowns
+remaining in degree-0 disconnected regions); the final check enforces
+that every clue is satisfied exactly, no UNKNOWN edges remain, every dot
+degree 0/2, and all LINE edges are in one connected component.
+
+Most-constrained variable pick at backtrack time: score each UNKNOWN edge
+as `10 * max(lineCount[u], lineCount[v]) - min(unknownCount[u], unknownCount[v])`
+(higher = more constrained). Initialize `bestScore = -Infinity` (scores
+on a blank board are negative). Branch LINE first, then EMPTY. Static
+`_solutionCache` keyed on FNV-1a of `(width, height, task)`, 50-entry LRU.
+Instance `maxMs` budget; the worker sets 30 s for large boards.
+
+`getHint(curH, curV)` constructs a probe solver seeded from the current
+edge state, runs `propagate()` only, and collects all newly-forced LINE
+edges as `[{orientation: 'h' | 'v', r, c}, ...]`. Falls back to `solve()`
++ reveal-one-LINE-not-on-board when propagation deduces nothing. The
+probe explicitly sets `_startedAt = Date.now()` before calling
+`propagate()` so the inherited `maxMs` doesn't fire spuriously.
+
+MAIN-world: `readSlitherlinkData` / `readSlitherlinkState` /
+`applySlitherlinkState`, twins of the Galaxies functions but without the
+flood-fill region-build (we only care about the raw H/V arrays).
+`applySlitherlinkState` calls `saveState(true)` before writes, then falls
+through the `drawCurrentState → render → redraw → draw` ladder.
+
+The diff is **edge-based** — `computePuzzleDiff('slitherlink', board,
+solution)` returns `[{orientation, r, c}, ...]` entries, not `{row, col}`
+entries. Both `drawPreview`'s mistake overlay (paints wrong edges in red)
+and `applyHintHandler` / `applyAndRunLoop` (read current edge state,
+overlay hint edges, apply) branch on `puzzleData.type === 'slitherlink'`
+to handle the edge shape. The Loop done-check is "every solution LINE
+edge is also on the board", because Slitherlink boards never get
+"all cells filled" — the empty-cell sentinel that other puzzles use to
+detect completion doesn't apply.
+
+`puzzleData.solution` for slitherlink is `{horizontal, vertical}` (not a
+2D `number[][]`), so `getCachedGridSolution` / `cacheGridSolution` carry
+a slitherlink-specific shape branch — straight 2D-grid serialization
+would lose the structure. The cache localStorage key prefix is
+`slitherlink-solution:`. The `gridDataSig` early-bail in `drawPreview`
+hashes the H+V arrays directly; `staticSig` gains a `|sl=` segment so
+the static layer rebuilds when the task changes.
+
 ### Backtracking validates duplicates at completion; triples validated inline
 
 `BinairoSolver._applyBalance` and `_applyUniqueness` now call
@@ -325,7 +408,7 @@ Click the widget's **📋 Dump** button on any puzzle page. It writes a JSON sni
 
 ## MV3 hardening contract
 
-- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (17 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
+- `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (20 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
 - `callMainWorld` has a 15s wall-clock timeout via `Promise.race` — if the SW dies mid-call, the caller resolves `null` instead of hanging.
 - `execMain` targets `sender.tab.id`, not the active tab — handles tab-switch mid-call.
 - `manifest.json` permissions list is minimal (`scripting` only). Don't add `activeTab` / `storage` back without a concrete need.
