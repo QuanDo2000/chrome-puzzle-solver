@@ -1546,6 +1546,29 @@ test('SlitherlinkSolver: getHint returns edges when given a nearly-complete boar
   SlitherlinkSolver.clearSolutionCache();
 });
 
+test('SlitherlinkSolver: getHint returns a single rule application (next-move scale)', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  // Adjacent 3-3 at top-left: cells (0,0) and (0,1) both have clue 3.
+  // The advanced adjacent-3-3 pattern fires and forces V[0][0], V[0][1],
+  // V[0][2] to LINE. Even if an earlier (vertex/clue) rule fires first, the
+  // result must be a small batch from a single rule application.
+  const task = [
+    [3, 3, -1],
+    [-1, -1, -1],
+    [-1, -1, -1],
+  ];
+  const s = new SlitherlinkSolver({ width: 3, height: 3, task });
+  const blankH = Array.from({ length: 4 }, () => new Array(3).fill(0));
+  const blankV = Array.from({ length: 3 }, () => new Array(4).fill(0));
+  const hint = s.getHint(blankH, blankV);
+  assert.ok(hint, 'expected a hint');
+  assert.equal(hint.type, 'slitherlink');
+  assert.ok(hint.edges.length >= 1);
+  // The hint must be a single deduction unit — never more than ~10 edges.
+  assert.ok(hint.edges.length <= 10, `next-move hint should be small; got ${hint.edges.length}`);
+  SlitherlinkSolver.clearSolutionCache();
+});
+
 // ── _applyLookahead tests ──────────────────────────────────────────────────────
 
 test('SlitherlinkSolver: _applyLookahead forces an edge when one value contradicts', () => {

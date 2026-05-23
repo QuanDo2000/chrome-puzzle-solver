@@ -4592,43 +4592,49 @@ class SlitherlinkSolver {
     ];
   }
 
+  // Per-cell clue forcing rule. Returns false on contradiction; calls onChange()
+  // whenever it forces an edge. Skips cells without a valid clue.
+  _applyClueRuleAt(r, c, onChange) {
+    const clue = (this.task[r] || [])[c];
+    if (clue === undefined || clue < 0 || clue > 4) return true;
+    const edges = this._cellEdges(r, c);
+    let m = 0, n = 0;
+    for (const e of edges) {
+      const v = (e.kind === 'H' ? this.H : this.V)[e.idx];
+      if (v === 1) m++;
+      else if (v === 0) n++;
+    }
+    if (m > clue) return false;
+    if (m + n < clue) return false;
+    if (m === clue && n > 0) {
+      // All UNKNOWN edges → EMPTY.
+      for (const e of edges) {
+        const arr = e.kind === 'H' ? this.H : this.V;
+        if (arr[e.idx] === 0) {
+          if (!this._setEdge(e.idx, e.kind, 2)) return false;
+          onChange();
+        }
+      }
+    } else if (m + n === clue && n > 0) {
+      // All UNKNOWN edges → LINE.
+      for (const e of edges) {
+        const arr = e.kind === 'H' ? this.H : this.V;
+        if (arr[e.idx] === 0) {
+          if (!this._setEdge(e.idx, e.kind, 1)) return false;
+          onChange();
+        }
+      }
+    }
+    return true;
+  }
+
   // Clue forcing rule. Returns false on contradiction; calls onChange()
   // whenever it forces an edge.
   _propagateClues(onChange) {
     const H = this.height, W = this.width;
     for (let r = 0; r < H; r++) {
-      const row = this.task[r] || [];
       for (let c = 0; c < W; c++) {
-        const clue = row[c];
-        if (clue === undefined || clue < 0 || clue > 4) continue;
-        const edges = this._cellEdges(r, c);
-        let m = 0, n = 0;
-        for (const e of edges) {
-          const v = (e.kind === 'H' ? this.H : this.V)[e.idx];
-          if (v === 1) m++;
-          else if (v === 0) n++;
-        }
-        if (m > clue) return false;
-        if (m + n < clue) return false;
-        if (m === clue && n > 0) {
-          // All UNKNOWN edges → EMPTY.
-          for (const e of edges) {
-            const arr = e.kind === 'H' ? this.H : this.V;
-            if (arr[e.idx] === 0) {
-              if (!this._setEdge(e.idx, e.kind, 2)) return false;
-              onChange();
-            }
-          }
-        } else if (m + n === clue && n > 0) {
-          // All UNKNOWN edges → LINE.
-          for (const e of edges) {
-            const arr = e.kind === 'H' ? this.H : this.V;
-            if (arr[e.idx] === 0) {
-              if (!this._setEdge(e.idx, e.kind, 1)) return false;
-              onChange();
-            }
-          }
-        }
+        if (!this._applyClueRuleAt(r, c, onChange)) return false;
       }
     }
     return true;
@@ -4645,44 +4651,51 @@ class SlitherlinkSolver {
     return out;
   }
 
+  // Per-dot vertex forcing rule. Returns false on contradiction; calls onChange()
+  // whenever it forces an edge.
+  _applyVertexRuleAt(r, c, onChange) {
+    const dotId = this._dotId(r, c);
+    const m = this.lineCount[dotId];
+    const n = this.unknownCount[dotId];
+    if (m > 2) return false;
+    if (m === 1 && n === 0) return false;
+    if (m === 2 && n > 0) {
+      for (const e of this._dotEdges(r, c)) {
+        const arr = e.kind === 'H' ? this.H : this.V;
+        if (arr[e.idx] === 0) {
+          if (!this._setEdge(e.idx, e.kind, 2)) return false;
+          onChange();
+        }
+      }
+    } else if (m === 1 && n === 1) {
+      for (const e of this._dotEdges(r, c)) {
+        const arr = e.kind === 'H' ? this.H : this.V;
+        if (arr[e.idx] === 0) {
+          if (!this._setEdge(e.idx, e.kind, 1)) return false;
+          onChange();
+          break;
+        }
+      }
+    } else if (m === 0 && n === 1) {
+      for (const e of this._dotEdges(r, c)) {
+        const arr = e.kind === 'H' ? this.H : this.V;
+        if (arr[e.idx] === 0) {
+          if (!this._setEdge(e.idx, e.kind, 2)) return false;
+          onChange();
+          break;
+        }
+      }
+    }
+    return true;
+  }
+
   // Vertex forcing rule. Returns false on contradiction; calls onChange()
   // whenever it forces an edge.
   _propagateVertices(onChange) {
     const H = this.height, W = this.width;
     for (let r = 0; r <= H; r++) {
       for (let c = 0; c <= W; c++) {
-        const dotId = this._dotId(r, c);
-        const m = this.lineCount[dotId];
-        const n = this.unknownCount[dotId];
-        if (m > 2) return false;
-        if (m === 1 && n === 0) return false;
-        if (m === 2 && n > 0) {
-          for (const e of this._dotEdges(r, c)) {
-            const arr = e.kind === 'H' ? this.H : this.V;
-            if (arr[e.idx] === 0) {
-              if (!this._setEdge(e.idx, e.kind, 2)) return false;
-              onChange();
-            }
-          }
-        } else if (m === 1 && n === 1) {
-          for (const e of this._dotEdges(r, c)) {
-            const arr = e.kind === 'H' ? this.H : this.V;
-            if (arr[e.idx] === 0) {
-              if (!this._setEdge(e.idx, e.kind, 1)) return false;
-              onChange();
-              break;
-            }
-          }
-        } else if (m === 0 && n === 1) {
-          for (const e of this._dotEdges(r, c)) {
-            const arr = e.kind === 'H' ? this.H : this.V;
-            if (arr[e.idx] === 0) {
-              if (!this._setEdge(e.idx, e.kind, 2)) return false;
-              onChange();
-              break;
-            }
-          }
-        }
+        if (!this._applyVertexRuleAt(r, c, onChange)) return false;
       }
     }
     return true;
@@ -4793,6 +4806,110 @@ class SlitherlinkSolver {
     return totalLines > 0;
   }
 
+  // Helper: returns the [cell-r, cell-c, H-r, H-c, V-r, V-c] tuple for a
+  // named corner. Used by _applyCornerThree and _applyCornerOne.
+  _cornerCoords(corner) {
+    const H = this.height, W = this.width;
+    switch (corner) {
+      case 'TL': return [0,   0,   0, 0,   0, 0  ];
+      case 'TR': return [0,   W-1, 0, W-1, 0, W  ];
+      case 'BL': return [H-1, 0,   H, 0,   H-1, 0];
+      case 'BR': return [H-1, W-1, H, W-1, H-1, W];
+      default: return null;
+    }
+  }
+
+  // Corner-3 pattern for one grid corner. Returns false on contradiction.
+  _applyCornerThree(corner, onChange) {
+    const coords = this._cornerCoords(corner);
+    if (!coords) return true;
+    const [cr, cc, hr, hc, vr, vc] = coords;
+    const k = (this.task[cr] || [])[cc];
+    if (k !== 3) return true;
+    const forceH = (this.H[this._hIdx(hr, hc)] === 1)
+      ? true
+      : this._setEdge(this._hIdx(hr, hc), 'H', 1) ? (onChange(), true) : false;
+    if (!forceH) return false;
+    const forceV = (this.V[this._vIdx(vr, vc)] === 1)
+      ? true
+      : this._setEdge(this._vIdx(vr, vc), 'V', 1) ? (onChange(), true) : false;
+    return forceV;
+  }
+
+  // Corner-1 pattern for one grid corner. Returns false on contradiction.
+  _applyCornerOne(corner, onChange) {
+    const coords = this._cornerCoords(corner);
+    if (!coords) return true;
+    const [cr, cc, hr, hc, vr, vc] = coords;
+    const k = (this.task[cr] || [])[cc];
+    if (k !== 1) return true;
+    const forceH = (this.H[this._hIdx(hr, hc)] === 2)
+      ? true
+      : this._setEdge(this._hIdx(hr, hc), 'H', 2) ? (onChange(), true) : false;
+    if (!forceH) return false;
+    const forceV = (this.V[this._vIdx(vr, vc)] === 2)
+      ? true
+      : this._setEdge(this._vIdx(vr, vc), 'V', 2) ? (onChange(), true) : false;
+    return forceV;
+  }
+
+  // Horizontal adjacent-3-3 pattern for cells (r,c) and (r,c+1). Returns
+  // false on contradiction; no-ops if either cell doesn't have clue 3.
+  _applyAdjacentThreeH(r, c, onChange) {
+    if ((this.task[r] || [])[c] !== 3 || (this.task[r] || [])[c + 1] !== 3) return true;
+    // Shared vertical V[r][c+1], outer verticals V[r][c] and V[r][c+2].
+    for (const [vr, vc] of [[r, c], [r, c + 1], [r, c + 2]]) {
+      const idx = this._vIdx(vr, vc);
+      if (this.V[idx] !== 1) {
+        if (!this._setEdge(idx, 'V', 1)) return false;
+        onChange();
+      }
+    }
+    return true;
+  }
+
+  // Vertical adjacent-3-3 pattern for cells (r,c) and (r+1,c). Returns
+  // false on contradiction; no-ops if either cell doesn't have clue 3.
+  _applyAdjacentThreeV(r, c, onChange) {
+    if ((this.task[r] || [])[c] !== 3 || (this.task[r + 1] || [])[c] !== 3) return true;
+    // Shared horizontal H[r+1][c], outer horizontals H[r][c] and H[r+2][c].
+    for (const [hr, hc] of [[r, c], [r + 1, c], [r + 2, c]]) {
+      const idx = this._hIdx(hr, hc);
+      if (this.H[idx] !== 1) {
+        if (!this._setEdge(idx, 'H', 1)) return false;
+        onChange();
+      }
+    }
+    return true;
+  }
+
+  // Diagonal-3-3 pattern for cell (r,c) and its diagonal neighbour (r+dr, c+dc).
+  // (dr,dc) must be (1,1) or (1,-1) — the two down-directions; up-directions
+  // are covered when the nested loop visits the other cell first.
+  // Returns false on contradiction; no-ops if clue condition not met.
+  _applyDiagonalThree(r, c, dr, dc, onChange) {
+    const nr = r + dr, nc = c + dc;
+    if ((this.task[r] || [])[c] !== 3 || (this.task[nr] || [])[nc] !== 3) return true;
+    // (r,c)'s far corner is opposite (dr,dc): far-H and far-V.
+    // down-right (dr=1,dc=1): far corner of (r,c) = top-left → H[r][c], V[r][c]
+    // down-left  (dr=1,dc=-1): far corner of (r,c) = top-right → H[r][c], V[r][c+1]
+    const hIdx1 = this._hIdx(r, c);
+    const vIdx1 = dc === 1 ? this._vIdx(r, c) : this._vIdx(r, c + 1);
+    // far corner of (nr,nc):
+    // down-right: bottom-right of (r+1,c+1) → H[r+2][c+1], V[r+1][c+2]
+    // down-left:  bottom-left of (r+1,c-1) → H[r+2][c-1], V[r+1][c-1]
+    const hIdx2 = this._hIdx(nr + 1, nc);
+    const vIdx2 = dc === 1 ? this._vIdx(nr, nc + 1) : this._vIdx(nr, nc);
+    for (const [arr, idx] of [[this.H, hIdx1], [this.V, vIdx1], [this.H, hIdx2], [this.V, vIdx2]]) {
+      if (arr[idx] !== 1) {
+        const kind = (arr === this.H) ? 'H' : 'V';
+        if (!this._setEdge(idx, kind, 1)) return false;
+        onChange();
+      }
+    }
+    return true;
+  }
+
   // Classic Slitherlink pattern deductions. Returns false on contradiction,
   // calls onChange() after every successful force.
   //
@@ -4838,102 +4955,39 @@ class SlitherlinkSolver {
   //      corner. Applies symmetrically to all 4 diagonal orientations.
   _propagateAdvanced(onChange) {
     const H = this.height, W = this.width;
-    const clue = (r, c) => (this.task[r] || [])[c];
 
-    // Helper: set edge to val, propagating contradiction.
-    const force = (kind, idx, val) => {
-      const arr = kind === 'H' ? this.H : this.V;
-      if (arr[idx] === val) return true;
-      if (!this._setEdge(idx, kind, val)) return false;
-      onChange();
-      return true;
-    };
-
-    // (a) + (b) Corner patterns. Grid corners:
-    //   TL=(0,0), TR=(0,W-1), BL=(H-1,0), BR=(H-1,W-1)
-    // For each corner cell, the "outer corner" dot is the grid corner itself.
-    // Its two incident edges are the outer edges of the cell.
-    const corners = [
-      // [cell-r, cell-c, top-H-r, top-H-c, left-V-r, left-V-c]
-      // TL: outer corner dot (0,0) — top=H[0][0], left=V[0][0]
-      [0,   0,   0, 0,   0, 0],
-      // TR: outer corner dot (0,W) — top=H[0][W-1], right=V[0][W]
-      [0,   W-1, 0, W-1, 0, W],
-      // BL: outer corner dot (H,0) — bottom=H[H][0], left=V[H-1][0]
-      [H-1, 0,   H, 0,   H-1, 0],
-      // BR: outer corner dot (H,W) — bottom=H[H][W-1], right=V[H-1][W]
-      [H-1, W-1, H, W-1, H-1, W],
-    ];
-    for (const [cr, cc, hr, hc, vr, vc] of corners) {
-      const k = clue(cr, cc);
-      if (k === 3) {
-        if (!force('H', this._hIdx(hr, hc), 1)) return false;
-        if (!force('V', this._vIdx(vr, vc), 1)) return false;
-      } else if (k === 1) {
-        if (!force('H', this._hIdx(hr, hc), 2)) return false;
-        if (!force('V', this._vIdx(vr, vc), 2)) return false;
-      }
+    // (a) + (b) Corner patterns.
+    for (const corner of ['TL', 'TR', 'BL', 'BR']) {
+      if (!this._applyCornerThree(corner, onChange)) return false;
+      if (!this._applyCornerOne(corner, onChange)) return false;
     }
 
     // (c) Horizontally-adjacent 3-3.
     for (let r = 0; r < H; r++) {
       for (let c = 0; c + 1 < W; c++) {
-        if (clue(r, c) === 3 && clue(r, c + 1) === 3) {
-          // Shared vertical V[r][c+1], outer verticals V[r][c] and V[r][c+2].
-          if (!force('V', this._vIdx(r, c), 1)) return false;
-          if (!force('V', this._vIdx(r, c + 1), 1)) return false;
-          if (!force('V', this._vIdx(r, c + 2), 1)) return false;
-        }
+        if (!this._applyAdjacentThreeH(r, c, onChange)) return false;
       }
     }
 
     // (d) Vertically-adjacent 3-3.
     for (let r = 0; r + 1 < H; r++) {
       for (let c = 0; c < W; c++) {
-        if (clue(r, c) === 3 && clue(r + 1, c) === 3) {
-          // Shared horizontal H[r+1][c], outer horizontals H[r][c] and H[r+2][c].
-          if (!force('H', this._hIdx(r, c), 1)) return false;
-          if (!force('H', this._hIdx(r + 1, c), 1)) return false;
-          if (!force('H', this._hIdx(r + 2, c), 1)) return false;
-        }
+        if (!this._applyAdjacentThreeV(r, c, onChange)) return false;
       }
     }
 
-    // (e) Diagonal 3-3 — all 4 orientations.
-    // For each orientation, the forced edges are the outer-corner pairs of
-    // each cell at the corner facing AWAY from the other cell.
-    //
-    // down-right: (r,c) and (r+1,c+1).
-    //   (r,c)'s far corner = top-left → H[r][c] and V[r][c].
-    //   (r+1,c+1)'s far corner = bottom-right → H[r+2][c+1] and V[r+1][c+2].
+    // (e) Diagonal 3-3 — down-right and down-left (up directions are
+    // covered when the inner cell visits the outer cell as its "first").
     for (let r = 0; r + 1 < H; r++) {
       for (let c = 0; c + 1 < W; c++) {
-        if (clue(r, c) === 3 && clue(r + 1, c + 1) === 3) {
-          if (!force('H', this._hIdx(r, c), 1)) return false;
-          if (!force('V', this._vIdx(r, c), 1)) return false;
-          if (!force('H', this._hIdx(r + 2, c + 1), 1)) return false;
-          if (!force('V', this._vIdx(r + 1, c + 2), 1)) return false;
-        }
+        if (!this._applyDiagonalThree(r, c, 1, 1, onChange)) return false;
       }
     }
-    // down-left: (r,c) and (r+1,c-1).
-    //   (r,c)'s far corner = top-right → H[r][c] and V[r][c+1].
-    //   (r+1,c-1)'s far corner = bottom-left → H[r+2][c-1] and V[r+1][c-1].
     for (let r = 0; r + 1 < H; r++) {
       for (let c = 1; c < W; c++) {
-        if (clue(r, c) === 3 && clue(r + 1, c - 1) === 3) {
-          if (!force('H', this._hIdx(r, c), 1)) return false;
-          if (!force('V', this._vIdx(r, c + 1), 1)) return false;
-          if (!force('H', this._hIdx(r + 2, c - 1), 1)) return false;
-          if (!force('V', this._vIdx(r + 1, c - 1), 1)) return false;
-        }
+        if (!this._applyDiagonalThree(r, c, 1, -1, onChange)) return false;
       }
     }
-    // up-right (= down-left mirrored): (r,c) and (r-1,c+1).
-    // This is already covered by down-left with (r-1,c+1) as first cell.
-    // up-left (= down-right mirrored): (r,c) and (r-1,c-1).
-    // Already covered by down-right with (r-1,c-1) as first cell.
-    // So we only need the two loops above.
 
     return true;
   }
@@ -5264,10 +5318,107 @@ class SlitherlinkSolver {
     };
   }
 
+  // Walk rule applications one at a time and return the LINE edges forced by
+  // the first single rule application that forces at least one LINE. Uses
+  // trail rollback so the probe state is left unchanged after each trial.
+  // NO lookahead — this is for next-move hints only.
+  // Returns an array of {orientation, r, c} entries, or null if no rule fires.
+  _findNextHintDeduction() {
+    const H = this.height, W = this.width;
+
+    // Collect new LINE edges added since `mark` (from the trail).
+    const captureNewLines = (mark) => {
+      const out = [];
+      for (let i = mark; i < this.trail.length; i++) {
+        const e = this.trail[i];
+        const idx = e & 0xFFFFFF;
+        const kindBit = (e >> 24) & 1;
+        const arr = kindBit === 0 ? this.H : this.V;
+        if (arr[idx] === 1) {
+          if (kindBit === 0) {
+            const r = (idx / W) | 0;
+            out.push({ orientation: 'h', r, c: idx - r * W });
+          } else {
+            const stride = W + 1;
+            const r = (idx / stride) | 0;
+            out.push({ orientation: 'v', r, c: idx - r * stride });
+          }
+        }
+      }
+      return out;
+    };
+
+    // Try a single rule application: apply(), capture new LINEs, roll back.
+    // Returns the LINE edges if any were forced, otherwise null.
+    const tryOne = (apply) => {
+      const mark = this.trail.length;
+      const ok = apply();
+      if (!ok) { this._rollback(mark); return null; }
+      const lines = captureNewLines(mark);
+      this._rollback(mark);
+      return lines.length > 0 ? lines : null;
+    };
+
+    const noop = () => {};
+
+    // 1. Vertex rule per dot (row-major order).
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c <= W; c++) {
+        const lines = tryOne(() => this._applyVertexRuleAt(r, c, noop));
+        if (lines) return lines;
+      }
+    }
+    // 2. Clue rule per cell (row-major order).
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c < W; c++) {
+        const lines = tryOne(() => this._applyClueRuleAt(r, c, noop));
+        if (lines) return lines;
+      }
+    }
+    // 3. Advanced patterns: corners, then adjacent 3-3, then diagonal 3-3.
+    for (const corner of ['TL', 'TR', 'BL', 'BR']) {
+      let lines = tryOne(() => this._applyCornerThree(corner, noop));
+      if (lines) return lines;
+      lines = tryOne(() => this._applyCornerOne(corner, noop));
+      if (lines) return lines;
+    }
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c < W - 1; c++) {
+        const lines = tryOne(() => this._applyAdjacentThreeH(r, c, noop));
+        if (lines) return lines;
+      }
+    }
+    for (let r = 0; r < H - 1; r++) {
+      for (let c = 0; c < W; c++) {
+        const lines = tryOne(() => this._applyAdjacentThreeV(r, c, noop));
+        if (lines) return lines;
+      }
+    }
+    for (const [dr, dc] of [[1, 1], [1, -1]]) {
+      for (let r = 0; r < H; r++) {
+        for (let c = 0; c < W; c++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= H || nc < 0 || nc >= W) continue;
+          const lines = tryOne(() => this._applyDiagonalThree(r, c, dr, dc, noop));
+          if (lines) return lines;
+        }
+      }
+    }
+    return null;
+  }
+
   /**
-   * Pure-deduction hint. Returns:
+   * Next-move hint. Returns:
    *   { type: 'slitherlink', edges: [{orientation:'h'|'v', r, c}, ...], count }
-   * or null if no LINE edges can be added and solve fails.
+   * or null if no hint can be found.
+   *
+   * Walks rule applications one at a time (vertex → clue → advanced patterns)
+   * and returns the LINE edges from the FIRST single rule application that
+   * forces at least one LINE. This is the "next logical step" a solver would
+   * explain — typically 1-5 edges. No lookahead is used in this path.
+   *
+   * Fallback: if no local rule fires, runs a full solve (with lookahead) and
+   * reveals one missing LINE edge.
    *
    * @param {number[][]} curH  (H+1)×W, 0/1
    * @param {number[][]} curV  H×(W+1), 0/1
@@ -5279,27 +5430,18 @@ class SlitherlinkSolver {
       maxMs: this.maxMs,
     });
     probe._startedAt = Date.now();
-    if (!probe.propagate()) return null;
 
-    const newEdges = [];
+    // Next-move hint: stop at the first single rule application that forces
+    // at least one LINE edge. Returns 1-5 edges typically, matching the
+    // deduction unit a solver would explain step-by-step.
+    const next = probe._findNextHintDeduction();
+    if (next && next.length > 0) {
+      return { type: 'slitherlink', edges: next, count: next.length };
+    }
+
+    // Fallback: no local deduction forces a LINE. Run full solve (with
+    // lookahead) and reveal one missing LINE.
     const H = this.height, W = this.width;
-    for (let r = 0; r <= H; r++) {
-      for (let c = 0; c < W; c++) {
-        const v = probe.H[probe._hIdx(r, c)];
-        if (v === 1 && (curH[r]?.[c] !== 1)) newEdges.push({ orientation: 'h', r, c });
-      }
-    }
-    for (let r = 0; r < H; r++) {
-      for (let c = 0; c <= W; c++) {
-        const v = probe.V[probe._vIdx(r, c)];
-        if (v === 1 && (curV[r]?.[c] !== 1)) newEdges.push({ orientation: 'v', r, c });
-      }
-    }
-    if (newEdges.length > 0) {
-      return { type: 'slitherlink', edges: newEdges, count: newEdges.length };
-    }
-
-    // Fallback: solve and reveal one LINE edge the board doesn't have.
     const full = this.solve();
     if (!full.solved) return null;
     for (let r = 0; r <= H; r++) {
