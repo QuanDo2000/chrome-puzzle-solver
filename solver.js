@@ -4941,6 +4941,61 @@ class SlitherlinkSolver {
     };
   }
 
+  /**
+   * Pure-deduction hint. Returns:
+   *   { type: 'slitherlink', edges: [{orientation:'h'|'v', r, c}, ...], count }
+   * or null if no LINE edges can be added and solve fails.
+   *
+   * @param {number[][]} curH  (H+1)×W, 0/1
+   * @param {number[][]} curV  H×(W+1), 0/1
+   */
+  getHint(curH, curV) {
+    const probe = new SlitherlinkSolver({
+      width: this.width, height: this.height, task: this.task,
+      initialState: { horizontal: curH, vertical: curV },
+      maxMs: this.maxMs,
+    });
+    probe._startedAt = Date.now();
+    if (!probe.propagate()) return null;
+
+    const newEdges = [];
+    const H = this.height, W = this.width;
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        const v = probe.H[probe._hIdx(r, c)];
+        if (v === 1 && (curH[r]?.[c] !== 1)) newEdges.push({ orientation: 'h', r, c });
+      }
+    }
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        const v = probe.V[probe._vIdx(r, c)];
+        if (v === 1 && (curV[r]?.[c] !== 1)) newEdges.push({ orientation: 'v', r, c });
+      }
+    }
+    if (newEdges.length > 0) {
+      return { type: 'slitherlink', edges: newEdges, count: newEdges.length };
+    }
+
+    // Fallback: solve and reveal one LINE edge the board doesn't have.
+    const full = this.solve();
+    if (!full.solved) return null;
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        if (full.horizontal[r][c] === 1 && (curH[r]?.[c] !== 1)) {
+          return { type: 'slitherlink', edges: [{ orientation: 'h', r, c }], count: 1 };
+        }
+      }
+    }
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        if (full.vertical[r][c] === 1 && (curV[r]?.[c] !== 1)) {
+          return { type: 'slitherlink', edges: [{ orientation: 'v', r, c }], count: 1 };
+        }
+      }
+    }
+    return null;
+  }
+
   static _solutionCache = new Map();
   static _maxSolutionCache = 50;
   static clearSolutionCache() { SlitherlinkSolver._solutionCache.clear(); }

@@ -1349,3 +1349,58 @@ test('SlitherlinkSolver: maxMs=1 bails within 500ms', () => {
   assert.ok(dt < 500, `solve must bail within 500ms; took ${dt}ms`);
   if (!r.solved) assert.equal(r.error, 'timed out');
 });
+
+test('SlitherlinkSolver: getHint returns edges forced by propagation', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  const p = fixtures.slitherlink5x5;
+  const full = new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task }).solve();
+  assert.equal(full.solved, true);
+
+  // Find a LINE edge to "hide" from the board.
+  let hideKind = null, hideR = -1, hideC = -1;
+  outer: for (let r = 0; r <= p.rows; r++) {
+    for (let c = 0; c < p.cols; c++) {
+      if (full.horizontal[r][c] === 1) { hideKind = 'h'; hideR = r; hideC = c; break outer; }
+    }
+  }
+  assert.notEqual(hideKind, null);
+  const curH = full.horizontal.map(row => row.slice());
+  const curV = full.vertical.map(row => row.slice());
+  curH[hideR][hideC] = 0;
+
+  const s = new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task });
+  const hint = s.getHint(curH, curV);
+  assert.ok(hint, 'expected a hint');
+  assert.equal(hint.type, 'slitherlink');
+  assert.ok(Array.isArray(hint.edges));
+  assert.ok(hint.edges.length >= 1);
+  const hidden = { orientation: 'h', r: hideR, c: hideC };
+  assert.ok(
+    hint.edges.some(e => e.orientation === hidden.orientation && e.r === hidden.r && e.c === hidden.c),
+    'expected hidden edge in hint set',
+  );
+  SlitherlinkSolver.clearSolutionCache();
+});
+
+test('SlitherlinkSolver: getHint falls back to solve when propagation deduces nothing', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  const p = fixtures.slitherlink5x5;
+  const rows = p.rows, cols = p.cols;
+  // Build a board at the propagation fixpoint so a fresh probe stalls immediately.
+  const primer = new SlitherlinkSolver({ width: cols, height: rows, task: p.task });
+  primer._startedAt = Date.now();
+  primer.propagate();
+  const curH = Array.from({ length: rows + 1 }, (_, r) =>
+    Array.from({ length: cols }, (__, c) => primer.H[primer._hIdx(r, c)] === 1 ? 1 : 0));
+  const curV = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols + 1 }, (__, c) => primer.V[primer._vIdx(r, c)] === 1 ? 1 : 0));
+  const s = new SlitherlinkSolver({ width: cols, height: rows, task: p.task });
+  s.maxMs = 5000;
+  const hint = s.getHint(curH, curV);
+  assert.ok(hint, 'expected a fallback hint');
+  assert.equal(hint.type, 'slitherlink');
+  assert.equal(hint.edges.length, 1, 'fallback emits a single edge');
+  const e = hint.edges[0];
+  assert.ok(e.orientation === 'h' || e.orientation === 'v');
+  SlitherlinkSolver.clearSolutionCache();
+});
