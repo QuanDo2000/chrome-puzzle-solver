@@ -1028,6 +1028,45 @@ test('computePuzzleDiff: returns empty when grids are missing', () => {
   assert.deepEqual(computePuzzleDiff('binairo', null, [[1]]), []);
 });
 
+test('computePuzzleDiff: slitherlink returns empty on a correct partial board', () => {
+  const board = {
+    horizontal: [[1, 0, 0], [0, 0, 0]],
+    vertical:   [[0, 0, 0, 0]],
+  };
+  const solution = {
+    horizontal: [[1, 1, 1], [1, 1, 1]],
+    vertical:   [[1, 0, 0, 1]],
+  };
+  const diff = computePuzzleDiff('slitherlink', board, solution);
+  assert.deepEqual(diff, []);
+});
+
+test('computePuzzleDiff: slitherlink flags a wrong horizontal LINE', () => {
+  const board = {
+    horizontal: [[1, 1, 0], [0, 0, 0]],
+    vertical:   [[0, 0, 0, 0]],
+  };
+  const solution = {
+    horizontal: [[1, 0, 1], [1, 1, 1]],
+    vertical:   [[1, 0, 0, 1]],
+  };
+  const diff = computePuzzleDiff('slitherlink', board, solution);
+  assert.deepEqual(diff, [{ orientation: 'h', r: 0, c: 1 }]);
+});
+
+test('computePuzzleDiff: slitherlink ignores empty-edge cells', () => {
+  const board = {
+    horizontal: [[0, 0, 0], [0, 0, 0]],
+    vertical:   [[0, 0, 0, 0]],
+  };
+  const solution = {
+    horizontal: [[1, 1, 1], [1, 1, 1]],
+    vertical:   [[1, 1, 1, 1]],
+  };
+  const diff = computePuzzleDiff('slitherlink', board, solution);
+  assert.deepEqual(diff, []);
+});
+
 test('SlitherlinkSolver: constructor builds H/V edge arrays of the right shape', () => {
   const task = [
     [-1, -1, -1, -1,  3],

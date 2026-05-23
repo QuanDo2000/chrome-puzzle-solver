@@ -5119,19 +5119,49 @@ function _galaxiesDiff(grid, solution, stars) {
   return out;
 }
 
+// Slitherlink diff: edge-based, not cell-based. A mistake is a committed
+// LINE edge (board value === 1) where the solution disagrees. UNKNOWN/empty
+// edges on the board are never flagged.
+function _slitherlinkDiff(board, solution) {
+  const out = [];
+  if (!board || !solution) return out;
+  const bh = board.horizontal || [];
+  const sh = solution.horizontal || [];
+  const rowsH = Math.min(bh.length, sh.length);
+  for (let r = 0; r < rowsH; r++) {
+    const br = bh[r] || [], sr = sh[r] || [];
+    const cols = Math.min(br.length, sr.length);
+    for (let c = 0; c < cols; c++) {
+      if (br[c] === 1 && sr[c] !== 1) out.push({ orientation: 'h', r, c });
+    }
+  }
+  const bv = board.vertical || [];
+  const sv = solution.vertical || [];
+  const rowsV = Math.min(bv.length, sv.length);
+  for (let r = 0; r < rowsV; r++) {
+    const br = bv[r] || [], sr = sv[r] || [];
+    const cols = Math.min(br.length, sr.length);
+    for (let c = 0; c < cols; c++) {
+      if (br[c] === 1 && sr[c] !== 1) out.push({ orientation: 'v', r, c });
+    }
+  }
+  return out;
+}
+
 /**
  * Compare a player's board to the puzzle's solution; return the cells the
  * player has PLACED incorrectly (empty cells are never flagged). Pure — no
  * DOM. Used by the widget preview to highlight mistakes.
  *
- * @param {string} type   'nonogram'|'aquarium'|'binairo'|'yinyang'|'galaxies'|'shikaku'
- * @param {number[][]} grid      the player's current board
- * @param {number[][]} solution  the solved board
+ * @param {string} type   'nonogram'|'aquarium'|'binairo'|'yinyang'|'galaxies'|'shikaku'|'slitherlink'
+ * @param {number[][]|{horizontal:number[][], vertical:number[][]}} grid      the player's current board
+ * @param {number[][]|{horizontal:number[][], vertical:number[][]}} solution  the solved board
  * @param {{row:number,col:number}[]} [stars]  galaxies stars (doubled coords); galaxies only
- * @returns {{row:number, col:number}[]}
+ * @returns {{row:number, col:number}[]|{orientation:string, r:number, c:number}[]}
  */
 function computePuzzleDiff(type, grid, solution, stars) {
   const out = [];
+  if (type === 'slitherlink') return _slitherlinkDiff(grid, solution);
   if (!Array.isArray(grid) || !Array.isArray(solution)) return out;
   if (type === 'shikaku') return _shikakuDiff(grid, solution);
   if (type === 'galaxies') return _galaxiesDiff(grid, solution, stars);

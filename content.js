@@ -2596,11 +2596,27 @@ function makeWidget() {
         ctx.save();
         ctx.strokeStyle = '#e63946';
         ctx.lineWidth = Math.max(2, Math.floor(cellSize / 8));
-        for (const m of mistakes) {
-          const mx = m.col * cellSize, my = m.row * cellSize;
-          ctx.fillStyle = 'rgba(230, 57, 70, 0.22)';
-          ctx.fillRect(mx, my, cellSize, cellSize);
-          ctx.strokeRect(mx + 1, my + 1, cellSize - 2, cellSize - 2);
+        if (puzzleData.type === 'slitherlink') {
+          ctx.lineCap = 'round';
+          ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
+          for (const em of /** @type {any[]} */ (mistakes)) {
+            ctx.beginPath();
+            if (em.orientation === 'h') {
+              ctx.moveTo(em.c * cellSize, em.r * cellSize);
+              ctx.lineTo((em.c + 1) * cellSize, em.r * cellSize);
+            } else {
+              ctx.moveTo(em.c * cellSize, em.r * cellSize);
+              ctx.lineTo(em.c * cellSize, (em.r + 1) * cellSize);
+            }
+            ctx.stroke();
+          }
+        } else {
+          for (const m of /** @type {any[]} */ (mistakes)) {
+            const mx = m.col * cellSize, my = m.row * cellSize;
+            ctx.fillStyle = 'rgba(230, 57, 70, 0.22)';
+            ctx.fillRect(mx, my, cellSize, cellSize);
+            ctx.strokeRect(mx + 1, my + 1, cellSize - 2, cellSize - 2);
+          }
         }
         ctx.restore();
       }
