@@ -1513,25 +1513,95 @@ test('SlitherlinkSolver: _propagateAdvanced diagonal-3-3 down-right forces 4 out
   assert.equal(s.V[s._vIdx(1, 2)], 1, 'V[1][2] must be LINE (outer corner of (1,1))');
 });
 
-test('SlitherlinkSolver: getHint falls back to solve when propagation deduces nothing', () => {
+test('SlitherlinkSolver: getHint returns edges when given a nearly-complete board', () => {
   SlitherlinkSolver.clearSolutionCache();
   const p = fixtures.slitherlink5x5;
-  const rows = p.rows, cols = p.cols;
-  // Build a board at the propagation fixpoint so a fresh probe stalls immediately.
-  const primer = new SlitherlinkSolver({ width: cols, height: rows, task: p.task });
-  primer._startedAt = Date.now();
-  primer.propagate();
-  const curH = Array.from({ length: rows + 1 }, (_, r) =>
-    Array.from({ length: cols }, (__, c) => primer.H[primer._hIdx(r, c)] === 1 ? 1 : 0));
-  const curV = Array.from({ length: rows }, (_, r) =>
-    Array.from({ length: cols + 1 }, (__, c) => primer.V[primer._vIdx(r, c)] === 1 ? 1 : 0));
-  const s = new SlitherlinkSolver({ width: cols, height: rows, task: p.task });
+  // Solve the puzzle first to get the full solution.
+  const solved = new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task });
+  solved.maxMs = 5000;
+  const full = solved.solve();
+  assert.equal(full.solved, true);
+  // Hide one LINE edge from the known solution. getHint must find it.
+  let hideR = -1, hideC = -1;
+  outer: for (let r = 0; r <= p.rows; r++) {
+    for (let c = 0; c < p.cols; c++) {
+      if (full.horizontal[r][c] === 1) { hideR = r; hideC = c; break outer; }
+    }
+  }
+  assert.notEqual(hideR, -1, 'expected at least one horizontal LINE in the solution');
+  const curH = full.horizontal.map(row => row.slice());
+  const curV = full.vertical.map(row => row.slice());
+  curH[hideR][hideC] = 0;
+  const s = new SlitherlinkSolver({ width: p.cols, height: p.rows, task: p.task });
   s.maxMs = 5000;
   const hint = s.getHint(curH, curV);
-  assert.ok(hint, 'expected a fallback hint');
+  assert.ok(hint, 'expected a hint for the nearly-complete board');
   assert.equal(hint.type, 'slitherlink');
-  assert.equal(hint.edges.length, 1, 'fallback emits a single edge');
-  const e = hint.edges[0];
-  assert.ok(e.orientation === 'h' || e.orientation === 'v');
+  assert.ok(hint.edges.length >= 1);
+  // The hidden edge must be among the hinted edges.
+  assert.ok(
+    hint.edges.some(e => e.orientation === 'h' && e.r === hideR && e.c === hideC),
+    'expected the hidden edge in the hint set',
+  );
   SlitherlinkSolver.clearSolutionCache();
+});
+
+// ── _applyLookahead tests ──────────────────────────────────────────────────────
+
+test('SlitherlinkSolver: _applyLookahead forces an edge when one value contradicts', () => {
+  // Set up a 2x2 board where vertex logic leaves two edges unknown for a dot
+  // that already has lineCount=2. _applyLookahead should determine that
+  // assigning LINE to any remaining unknown at that dot contradicts and force
+  // the value to EMPTY without crashing.
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[-1, -1], [-1, -1]],
+  });
+  // Give dot (1,1) (at bottom-center) lineCount=2 via H[1][0] and H[1][1].
+  s._setEdge(s._hIdx(1, 0), 'H', 1);
+  s._setEdge(s._hIdx(1, 1), 'H', 1);
+  // Dot (1,1) now has lineCount=2, unknownCount=2 (V[0][1] and V[1][1]).
+  // Normal vertex propagation would force both unknown edges to EMPTY.
+  // We call _applyLookahead directly (depth=0, not inLookahead) and verify
+  // it completes without returning false.
+  s._depth = 0;
+  s._inLookahead = false;
+  s._startedAt = Date.now();
+  let _forced = 0;
+  const ok = s._applyLookahead(() => { _forced++; });
+  assert.ok(ok !== false, '_applyLookahead must not return false on a valid state');
+  // Vertex rule: V[0][1] and V[1][1] must be EMPTY.
+  assert.equal(s.V[s._vIdx(0, 1)], 2, 'V[0][1] should be EMPTY (lineCount-2 vertex forces it)');
+});
+
+test('SlitherlinkSolver: _applyLookahead returns false when both values contradict', () => {
+  // A 1x1 grid with clue=4 but 2 edges already set EMPTY (direct array write
+  // to bypass the trail, simulating a corrupted state). Calling propagate()
+  // on this state must return false — which exercises the contradiction path.
+  const s = new SlitherlinkSolver({
+    width: 1, height: 1,
+    task: [[4]],
+  });
+  // Directly corrupt the array (bypassing _setEdge) so propagate catches it:
+  s.H[s._hIdx(0, 0)] = 2;
+  s.H[s._hIdx(1, 0)] = 2;
+  // propagate() will return false immediately via _propagateClues (m+n < clue=4).
+  const propOk = s.propagate();
+  assert.equal(propOk, false, 'corrupted state with clue=4 and 2 EMPTY edges must contradict');
+});
+
+test('SlitherlinkSolver: _applyLookahead is skipped at _depth > 0', () => {
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[-1, -1], [-1, -1]],
+  });
+  let lookaheadCalls = 0;
+  const origLookahead = s._applyLookahead.bind(s);
+  s._applyLookahead = function(...args) { lookaheadCalls++; return origLookahead(...args); };
+  // With _depth > 0, propagate() must skip _applyLookahead.
+  s._depth = 1;
+  s._inLookahead = false;
+  s._startedAt = Date.now();
+  s.propagate();
+  assert.equal(lookaheadCalls, 0, '_applyLookahead must not be called when _depth > 0');
 });

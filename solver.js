@@ -4455,6 +4455,9 @@ class SlitherlinkSolver {
     this.maxMs = maxMs | 0;
     this._startedAt = 0;
     this._timedOut = false;
+    // Lookahead / backtracking depth control.
+    this._depth = 0;
+    this._inLookahead = false;
 
     const W = width, H = height;
     // (H+1) * W horizontal edge slots; H * (W+1) vertical edge slots.
@@ -4935,6 +4938,144 @@ class SlitherlinkSolver {
     return true;
   }
 
+  // 1-step lookahead. For each "constrained" UNKNOWN edge, probe both values
+  // (LINE and EMPTY). If one probe propagates to a contradiction, force the
+  // other. If both propagate to contradictions, return false.
+  //
+  // Called from propagate() only when _depth === 0 and !_inLookahead so the
+  // inner propagate() calls skip re-entering lookahead (controlled by the
+  // _inLookahead flag).
+  //
+  // Candidate edges (performance heuristic — without filtering a 30×30 board
+  // starts with ~1521 unknowns → >3000 probes at ~3ms each ≈ 9s per pass):
+  //   - At least one endpoint dot has lineCount[u] + unknownCount[u] ≤ 3
+  //     (tight dot — close to being forced).
+  //   - OR the edge borders a clued cell (r,c) where (current LINE count m)
+  //     + (current UNKNOWN count n) ≤ 3 (tight cell — most edges already set).
+  // This cuts the candidate set 5-10× in practice.
+  _applyLookahead(onChange) {
+    const H = this.height, W = this.width;
+
+    // Collect candidate edges (kind, idx, arr) filtering by tightness.
+    const candidates = [];
+
+    // Helper: check if an edge (kind, idx) is a candidate.
+    const isTight = (kind, idx) => {
+      // 1. Endpoint dot tightness.
+      const [u, v] = this._edgeEndpoints(kind, idx);
+      if (this.lineCount[u] + this.unknownCount[u] <= 3) return true;
+      if (this.lineCount[v] + this.unknownCount[v] <= 3) return true;
+      // 2. Adjacent cell tightness.
+      if (kind === 'H') {
+        const c = idx % W;
+        const r = (idx / W) | 0;
+        // Cell above: (r-1, c).
+        if (r > 0) {
+          const row = this.task[r - 1] || [];
+          const cl = row[c];
+          if (cl >= 0 && cl <= 4) {
+            const edges = this._cellEdges(r - 1, c);
+            let m = 0, n = 0;
+            for (const e of edges) { const v2 = (e.kind === 'H' ? this.H : this.V)[e.idx]; if (v2 === 1) m++; else if (v2 === 0) n++; }
+            if (m + n <= 3) return true;
+          }
+        }
+        // Cell below: (r, c).
+        if (r < H) {
+          const row = this.task[r] || [];
+          const cl = row[c];
+          if (cl >= 0 && cl <= 4) {
+            const edges = this._cellEdges(r, c);
+            let m = 0, n = 0;
+            for (const e of edges) { const v2 = (e.kind === 'H' ? this.H : this.V)[e.idx]; if (v2 === 1) m++; else if (v2 === 0) n++; }
+            if (m + n <= 3) return true;
+          }
+        }
+      } else {
+        // V[r][c]: r = idx / (W+1), c = idx % (W+1).
+        const stride = W + 1;
+        const r = (idx / stride) | 0;
+        const c = idx - r * stride;
+        // Cell to the left: (r, c-1).
+        if (c > 0) {
+          const row = this.task[r] || [];
+          const cl = row[c - 1];
+          if (cl >= 0 && cl <= 4) {
+            const edges = this._cellEdges(r, c - 1);
+            let m = 0, n = 0;
+            for (const e of edges) { const v2 = (e.kind === 'H' ? this.H : this.V)[e.idx]; if (v2 === 1) m++; else if (v2 === 0) n++; }
+            if (m + n <= 3) return true;
+          }
+        }
+        // Cell to the right: (r, c).
+        if (c < W) {
+          const row = this.task[r] || [];
+          const cl = row[c];
+          if (cl >= 0 && cl <= 4) {
+            const edges = this._cellEdges(r, c);
+            let m = 0, n = 0;
+            for (const e of edges) { const v2 = (e.kind === 'H' ? this.H : this.V)[e.idx]; if (v2 === 1) m++; else if (v2 === 0) n++; }
+            if (m + n <= 3) return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        const idx = this._hIdx(r, c);
+        if (this.H[idx] !== 0) continue;
+        if (isTight('H', idx)) candidates.push({ kind: 'H', idx });
+      }
+    }
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        const idx = this._vIdx(r, c);
+        if (this.V[idx] !== 0) continue;
+        if (isTight('V', idx)) candidates.push({ kind: 'V', idx });
+      }
+    }
+
+    this._inLookahead = true;
+    for (const { kind, idx } of candidates) {
+      if (this._budgetExceeded()) { this._inLookahead = false; return false; }
+      const arr = kind === 'H' ? this.H : this.V;
+      if (arr[idx] !== 0) continue;  // already assigned during this lookahead pass
+
+      let lineFails = false, emptyFails = false;
+
+      for (const probeVal of [1, 2]) {
+        const mark = this.trail.length;
+        if (!this._setEdge(idx, kind, probeVal)) {
+          // Can't even set it: means it was already set to the other value.
+          if (probeVal === 1) lineFails = true; else emptyFails = true;
+          this._rollback(mark);
+          continue;
+        }
+        const ok = this.propagate();
+        this._rollback(mark);
+        if (!ok) {
+          if (probeVal === 1) lineFails = true; else emptyFails = true;
+        }
+      }
+
+      if (lineFails && emptyFails) {
+        this._inLookahead = false;
+        return false;
+      }
+      if (lineFails) {
+        if (!this._setEdge(idx, kind, 2)) { this._inLookahead = false; return false; }
+        onChange();
+      } else if (emptyFails) {
+        if (!this._setEdge(idx, kind, 1)) { this._inLookahead = false; return false; }
+        onChange();
+      }
+    }
+    this._inLookahead = false;
+    return true;
+  }
+
   // Iterate clue + vertex rules to a fixpoint. After each pass that
   // added a LINE edge, rebuild the DSU; if a cycle closed, check for
   // subloop: a real subloop means some LINE-endpoint dot has degree 1
@@ -4942,35 +5083,54 @@ class SlitherlinkSolver {
   // LINE dot has degree 2, the cycle is consistent — the remaining unknowns
   // are in degree-0 regions and will be forced EMPTY or explored later.
   propagate() {
-    let changed = true;
+    // Outer loop: alternate between the local-rule fixpoint and the 1-step
+    // lookahead (top-level only). Each lookahead pass may force new edges,
+    // which re-enters the local-rule fixpoint, and so on.
     let anyLineAddedSinceRebuild = false;
-    while (changed) {
-      if (this._budgetExceeded()) return false;
-      changed = false;
-      // We don't know LINE vs EMPTY from the rule callback, so just rebuild
-      // after each fixpoint pass that ran any propagator. (Cheap: O(E α).)
-      const onAnyChange = () => { changed = true; anyLineAddedSinceRebuild = true; };
-      if (!this._propagateClues(onAnyChange)) return false;
-      if (!this._propagateVertices(onAnyChange)) return false;
-      if (!this._propagateAdvanced(onAnyChange)) return false;
-    }
-    if (anyLineAddedSinceRebuild) {
-      this._dsuRebuild();
-      if (this._cycleClosed) {
-        if (this._allEdgesAssigned()) {
-          // Complete assignment: validate single loop.
-          if (!this._checkSingleLoopComplete()) return false;
-        } else {
-          // Unknowns remain. A real subloop contradiction exists iff some
-          // LINE-endpoint dot has degree 1 — the line cannot continue.
-          for (let i = 0; i < this.lineCount.length; i++) {
-            if (this.lineCount[i] === 1) return false;
+
+    for (;;) {
+      // ── Local-rule fixpoint ──────────────────────────────────────────────
+      let changed = true;
+      while (changed) {
+        if (this._budgetExceeded()) return false;
+        changed = false;
+        // We don't know LINE vs EMPTY from the rule callback, so just rebuild
+        // after each fixpoint pass that ran any propagator. (Cheap: O(E α).)
+        const onLocalChange = () => { changed = true; anyLineAddedSinceRebuild = true; };
+        if (!this._propagateClues(onLocalChange)) return false;
+        if (!this._propagateVertices(onLocalChange)) return false;
+        // _propagateAdvanced forces edges based purely on clue structure; those
+        // forces are already applied before lookahead starts. Skipping it in
+        // inner probe propagations avoids redundant O(H×W) work — the forced
+        // edges are either already set (no-op _setEdge) or not reachable from
+        // the probe edge alone. This halves inner-probe propagation time.
+        if (!this._inLookahead && !this._propagateAdvanced(onLocalChange)) return false;
+      }
+
+      // ── Subloop check ────────────────────────────────────────────────────
+      if (anyLineAddedSinceRebuild) {
+        this._dsuRebuild();
+        anyLineAddedSinceRebuild = false;
+        if (this._cycleClosed) {
+          if (this._allEdgesAssigned()) {
+            if (!this._checkSingleLoopComplete()) return false;
+          } else {
+            for (let i = 0; i < this.lineCount.length; i++) {
+              if (this.lineCount[i] === 1) return false;
+            }
           }
-          // All LINE dots have degree 0 or 2 — no contradiction yet; the
-          // solver will handle the remaining unknowns via backtracking.
         }
       }
+
+      // ── 1-step lookahead (top-level only) ───────────────────────────────
+      if (this._depth !== 0 || this._inLookahead) break;
+      let lookaheadForced = false;
+      const onLookaheadChange = () => { lookaheadForced = true; anyLineAddedSinceRebuild = true; };
+      if (!this._applyLookahead(onLookaheadChange)) return false;
+      if (!lookaheadForced) break;  // fixpoint reached
+      // Lookahead forced edges → re-run local rules.
     }
+
     return true;
   }
 
@@ -5036,7 +5196,10 @@ class SlitherlinkSolver {
       if (this._budgetExceeded()) return false;
       const mark = this.trail.length;
       if (!this._setEdge(pick.idx, pick.kind, val)) continue;
-      if (this.propagate()) {
+      this._depth++;
+      const propOk = this.propagate();
+      this._depth--;
+      if (propOk) {
         if (this._allEdgesAssigned()) {
           this._dsuRebuild();
           if (this._checkSingleLoopComplete()) return true;
