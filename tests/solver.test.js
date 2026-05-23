@@ -1345,16 +1345,18 @@ test('SlitherlinkSolver: solves the 5x5 fixture', () => {
   assert.equal(result.horizontal[0].length, p.cols);
   assert.equal(result.vertical.length, p.rows);
   assert.equal(result.vertical[0].length, p.cols + 1);
-  // Every entry 0 or 1.
-  for (const row of result.horizontal) for (const v of row) assert.ok(v === 0 || v === 1);
-  for (const row of result.vertical)   for (const v of row) assert.ok(v === 0 || v === 1);
-  // Every clue is satisfied exactly.
+  // Every entry 0, 1, or 2 (UNKNOWN=0, LINE=1, EMPTY=2).
+  for (const row of result.horizontal) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2);
+  for (const row of result.vertical)   for (const v of row) assert.ok(v === 0 || v === 1 || v === 2);
+  // Every clue is satisfied exactly (count only LINE=1 edges).
   for (let r = 0; r < p.rows; r++) {
     for (let c = 0; c < p.cols; c++) {
       const clue = p.task[r][c];
       if (clue < 0) continue;
-      const m = result.horizontal[r][c] + result.horizontal[r + 1][c]
-              + result.vertical[r][c] + result.vertical[r][c + 1];
+      const m = (result.horizontal[r][c] === 1 ? 1 : 0)
+              + (result.horizontal[r + 1][c] === 1 ? 1 : 0)
+              + (result.vertical[r][c] === 1 ? 1 : 0)
+              + (result.vertical[r][c + 1] === 1 ? 1 : 0);
       assert.equal(m, clue, `clue at (${r},${c})=${clue} but got ${m}`);
     }
   }
@@ -1807,4 +1809,40 @@ test('SlitherlinkSolver: parity contradiction with no unknowns and odd count', (
   s._setEdge(s._vIdx(0, 3), 'V', 2);
   s._setEdge(s._vIdx(0, 4), 'V', 2);
   assert.equal(s._propagateParity(() => {}), false);
+});
+
+test('SlitherlinkSolver: _emit outputs 2 for known EMPTY edges', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  s._setEdge(s._hIdx(0, 0), 'H', 1);
+  s._setEdge(s._hIdx(1, 0), 'H', 2);
+  const out = s._emit();
+  assert.equal(out.horizontal[0][0], 1);
+  assert.equal(out.horizontal[1][0], 2);
+  assert.equal(out.horizontal[2][0], 0); // UNKNOWN
+});
+
+test('SlitherlinkSolver: constructor seeds EMPTY edges from initialState', () => {
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[-1,-1],[-1,-1]],
+    initialState: {
+      horizontal: [[1, 0], [2, 0], [0, 0]],
+      vertical:   [[0, 0, 0], [0, 0, 0]],
+    },
+  });
+  assert.equal(s.H[s._hIdx(0, 0)], 1, 'H[0][0] = LINE');
+  assert.equal(s.H[s._hIdx(1, 0)], 2, 'H[1][0] = EMPTY');
+});
+
+test('computePuzzleDiff: slitherlink flags wrong × (board=2 but solution=1)', () => {
+  const board = {
+    horizontal: [[2, 0, 0], [0, 0, 0]],
+    vertical:   [[0, 0, 0, 0]],
+  };
+  const solution = {
+    horizontal: [[1, 0, 0], [0, 0, 0]],
+    vertical:   [[0, 0, 0, 0]],
+  };
+  const diff = computePuzzleDiff('slitherlink', board, solution);
+  assert.deepEqual(diff, [{ orientation: 'h', r: 0, c: 0 }]);
 });

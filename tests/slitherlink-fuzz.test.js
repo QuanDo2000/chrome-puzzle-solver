@@ -20,13 +20,13 @@ function validateSlitherlinkSolution(task, result) {
   if (horizontal.length !== H + 1) return { ok: false, reason: 'wrong horizontal rows' };
   if (vertical.length !== H) return { ok: false, reason: 'wrong vertical rows' };
 
-  // 1. clues satisfied exactly.
+  // 1. clues satisfied exactly (count only LINE=1 edges; EMPTY=2, UNKNOWN=0).
   for (let r = 0; r < H; r++) {
     for (let c = 0; c < W; c++) {
       const k = task[r][c];
       if (k < 0) continue;
-      const m = horizontal[r][c] + horizontal[r + 1][c]
-              + vertical[r][c] + vertical[r][c + 1];
+      const m = (horizontal[r][c] === 1 ? 1 : 0) + (horizontal[r + 1][c] === 1 ? 1 : 0)
+              + (vertical[r][c] === 1 ? 1 : 0)   + (vertical[r][c + 1] === 1 ? 1 : 0);
       if (m !== k) return { ok: false, reason: `clue ${k} at (${r},${c}) got ${m}` };
     }
   }
@@ -185,6 +185,9 @@ test('SlitherlinkSolver fuzz: 4x4 brute-force completeness sanity', () => {
   assert.equal(r.solved, true);
   const v = validateSlitherlinkSolution(task, r);
   assert.equal(v.ok, true, v.reason);
-  assert.deepEqual(r.horizontal, sol.horizontal);
-  assert.deepEqual(r.vertical,   sol.vertical);
+  // _emit now outputs 1=LINE or 2=EMPTY; sol uses 1=LINE or 0=EMPTY.
+  // Normalise both to 1=LINE, 0=not-LINE for the structural comparison.
+  const normalise = grid => grid.map(row => row.map(v => v === 1 ? 1 : 0));
+  assert.deepEqual(normalise(r.horizontal), sol.horizontal);
+  assert.deepEqual(normalise(r.vertical),   sol.vertical);
 });

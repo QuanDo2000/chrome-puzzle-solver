@@ -4513,12 +4513,14 @@ class SlitherlinkSolver {
         const row = ih[r] || [];
         for (let c = 0; c < W; c++) {
           if (row[c] === 1) this._setEdge(this._hIdx(r, c), 'H', 1);
+          else if (row[c] === 2) this._setEdge(this._hIdx(r, c), 'H', 2);
         }
       }
       for (let r = 0; r < H; r++) {
         const row = iv[r] || [];
         for (let c = 0; c <= W; c++) {
           if (row[c] === 1) this._setEdge(this._vIdx(r, c), 'V', 1);
+          else if (row[c] === 2) this._setEdge(this._vIdx(r, c), 'V', 2);
         }
       }
       this.trail.length = 0;  // baseline — never roll back through it
@@ -5733,13 +5735,19 @@ class SlitherlinkSolver {
     const horizontal = [];
     for (let r = 0; r <= H; r++) {
       const row = new Array(W);
-      for (let c = 0; c < W; c++) row[c] = this.H[this._hIdx(r, c)] === 1 ? 1 : 0;
+      for (let c = 0; c < W; c++) {
+        const v = this.H[this._hIdx(r, c)];
+        row[c] = v === 1 ? 1 : v === 2 ? 2 : 0;
+      }
       horizontal.push(row);
     }
     const vertical = [];
     for (let r = 0; r < H; r++) {
       const row = new Array(W + 1);
-      for (let c = 0; c <= W; c++) row[c] = this.V[this._vIdx(r, c)] === 1 ? 1 : 0;
+      for (let c = 0; c <= W; c++) {
+        const v = this.V[this._vIdx(r, c)];
+        row[c] = v === 1 ? 1 : v === 2 ? 2 : 0;
+      }
       vertical.push(row);
     }
     return { horizontal, vertical };
@@ -6150,7 +6158,8 @@ function _slitherlinkDiff(board, solution) {
     const br = bh[r] || [], sr = sh[r] || [];
     const cols = Math.min(br.length, sr.length);
     for (let c = 0; c < cols; c++) {
-      if (br[c] === 1 && sr[c] !== 1) out.push({ orientation: 'h', r, c });
+      if (br[c] === 0) continue;             // UNKNOWN never flagged
+      if (br[c] !== sr[c]) out.push({ orientation: 'h', r, c });
     }
   }
   const bv = board.vertical || [];
@@ -6160,7 +6169,8 @@ function _slitherlinkDiff(board, solution) {
     const br = bv[r] || [], sr = sv[r] || [];
     const cols = Math.min(br.length, sr.length);
     for (let c = 0; c < cols; c++) {
-      if (br[c] === 1 && sr[c] !== 1) out.push({ orientation: 'v', r, c });
+      if (br[c] === 0) continue;
+      if (br[c] !== sr[c]) out.push({ orientation: 'v', r, c });
     }
   }
   return out;

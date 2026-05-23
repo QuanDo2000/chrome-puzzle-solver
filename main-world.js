@@ -695,7 +695,7 @@ function readSlitherlinkState(rows, cols) {
       var row = hs[hr] || [];
       horizontal[hr] = [];
       for (var hc = 0; hc < cols; hc++) {
-        horizontal[hr][hc] = row[hc] === 1 ? 1 : 0;
+        horizontal[hr][hc] = row[hc] === 1 ? 1 : row[hc] === 2 ? 2 : 0;
       }
     }
     var vertical = [];
@@ -703,7 +703,7 @@ function readSlitherlinkState(rows, cols) {
       var vrow = vs[vr] || [];
       vertical[vr] = [];
       for (var vc = 0; vc <= cols; vc++) {
-        vertical[vr][vc] = vrow[vc] === 1 ? 1 : 0;
+        vertical[vr][vc] = vrow[vc] === 1 ? 1 : vrow[vc] === 2 ? 2 : 0;
       }
     }
     return { horizontal: horizontal, vertical: vertical };
@@ -730,14 +730,14 @@ function applySlitherlinkState(lines) {
       var dst = hs[r], src = lines.horizontal[r] || [];
       if (!Array.isArray(dst)) continue;
       for (var c = 0; c < dst.length && c < src.length; c++) {
-        dst[c] = src[c] === 1 ? 1 : 0;
+        dst[c] = src[c] === 1 ? 1 : src[c] === 2 ? 2 : 0;
       }
     }
     for (var r2 = 0; r2 < vs.length && r2 < lines.vertical.length; r2++) {
       var dst2 = vs[r2], src2 = lines.vertical[r2] || [];
       if (!Array.isArray(dst2)) continue;
       for (var c2 = 0; c2 < dst2.length && c2 < src2.length; c2++) {
-        dst2[c2] = src2[c2] === 1 ? 1 : 0;
+        dst2[c2] = src2[c2] === 1 ? 1 : src2[c2] === 2 ? 2 : 0;
       }
     }
     window.Game.currentState.solved = false;

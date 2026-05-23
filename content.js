@@ -2355,6 +2355,40 @@ function makeWidget() {
           }
         }
       }
+      // × marks for EMPTY (=2) edges. Half the LINE thickness, in a muted gray
+      // so they're visually subordinate to the loop itself.
+      ctx.strokeStyle = '#9aa0a6';
+      ctx.lineWidth = Math.max(1, Math.floor(cellSize / 12));
+      ctx.lineCap = 'round';
+      const xMarkSize = Math.max(3, Math.floor(cellSize / 5));
+      for (let r = 0; r <= rows; r++) {
+        const row = (hg)[r] || [];
+        for (let c = 0; c < cols; c++) {
+          if (row[c] !== 2) continue;
+          const midX = (c + 0.5) * cellSize;
+          const midY = r * cellSize;
+          ctx.beginPath();
+          ctx.moveTo(midX - xMarkSize / 2, midY - xMarkSize / 2);
+          ctx.lineTo(midX + xMarkSize / 2, midY + xMarkSize / 2);
+          ctx.moveTo(midX + xMarkSize / 2, midY - xMarkSize / 2);
+          ctx.lineTo(midX - xMarkSize / 2, midY + xMarkSize / 2);
+          ctx.stroke();
+        }
+      }
+      for (let r = 0; r < rows; r++) {
+        const row = (vg)[r] || [];
+        for (let c = 0; c <= cols; c++) {
+          if (row[c] !== 2) continue;
+          const midX = c * cellSize;
+          const midY = (r + 0.5) * cellSize;
+          ctx.beginPath();
+          ctx.moveTo(midX - xMarkSize / 2, midY - xMarkSize / 2);
+          ctx.lineTo(midX + xMarkSize / 2, midY + xMarkSize / 2);
+          ctx.moveTo(midX + xMarkSize / 2, midY - xMarkSize / 2);
+          ctx.lineTo(midX - xMarkSize / 2, midY + xMarkSize / 2);
+          ctx.stroke();
+        }
+      }
       ctx.restore();
     } else {
       let xMarkPath = null;
