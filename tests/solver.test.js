@@ -1437,6 +1437,82 @@ test('SlitherlinkSolver: 5x5 fixture matches golden', () => {
   SlitherlinkSolver.clearSolutionCache();
 });
 
+// ── _propagateAdvanced tests ──────────────────────────────────────────────────
+
+test('SlitherlinkSolver: _propagateAdvanced corner-3 forces outer corner edges to LINE', () => {
+  // Clue 3 at top-left corner (0,0). Corner dot has 2 incident edges
+  // (H[0][0] and V[0][0]). With clue=3, at least one outer corner edge must
+  // be LINE → vertex rule forces both.
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[3, -1, -1], [-1, -1, -1], [-1, -1, -1]],
+  });
+  const onChange = () => {};
+  assert.equal(s._propagateAdvanced(onChange), true);
+  assert.equal(s.H[s._hIdx(0, 0)], 1, 'top edge of corner-3 cell must be LINE');
+  assert.equal(s.V[s._vIdx(0, 0)], 1, 'left edge of corner-3 cell must be LINE');
+});
+
+test('SlitherlinkSolver: _propagateAdvanced corner-1 forces outer corner edges to EMPTY', () => {
+  // Clue 1 at top-left corner (0,0). If either outer corner edge were LINE,
+  // the vertex rule on the corner dot forces the other LINE too → 2 LINEs on
+  // a clue-1 cell → contradiction. So both outer edges must be EMPTY.
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[1, -1, -1], [-1, -1, -1], [-1, -1, -1]],
+  });
+  const onChange = () => {};
+  assert.equal(s._propagateAdvanced(onChange), true);
+  assert.equal(s.H[s._hIdx(0, 0)], 2, 'top edge of corner-1 cell must be EMPTY');
+  assert.equal(s.V[s._vIdx(0, 0)], 2, 'left edge of corner-1 cell must be EMPTY');
+});
+
+test('SlitherlinkSolver: _propagateAdvanced adjacent-3-3 horizontal forces 3 vertical edges to LINE', () => {
+  // Two horizontally-adjacent 3-clue cells at (0,0) and (0,1). The shared
+  // vertical edge V[0][1] and the outer verticals V[0][0] and V[0][2] must
+  // all be LINE (standard adjacent-3-3 pattern).
+  const s = new SlitherlinkSolver({
+    width: 3, height: 2,
+    task: [[3, 3, -1], [-1, -1, -1]],
+  });
+  const onChange = () => {};
+  assert.equal(s._propagateAdvanced(onChange), true);
+  assert.equal(s.V[s._vIdx(0, 0)], 1, 'left outer vertical must be LINE');
+  assert.equal(s.V[s._vIdx(0, 1)], 1, 'shared vertical must be LINE');
+  assert.equal(s.V[s._vIdx(0, 2)], 1, 'right outer vertical must be LINE');
+});
+
+test('SlitherlinkSolver: _propagateAdvanced adjacent-3-3 vertical forces 3 horizontal edges to LINE', () => {
+  // Two vertically-adjacent 3-clue cells at (0,0) and (1,0). The shared
+  // horizontal edge H[1][0] and the outer horizontals H[0][0] and H[2][0]
+  // must all be LINE (standard adjacent-3-3 pattern).
+  const s = new SlitherlinkSolver({
+    width: 2, height: 3,
+    task: [[3, -1], [3, -1], [-1, -1]],
+  });
+  const onChange = () => {};
+  assert.equal(s._propagateAdvanced(onChange), true);
+  assert.equal(s.H[s._hIdx(0, 0)], 1, 'top outer horizontal must be LINE');
+  assert.equal(s.H[s._hIdx(1, 0)], 1, 'shared horizontal must be LINE');
+  assert.equal(s.H[s._hIdx(2, 0)], 1, 'bottom outer horizontal must be LINE');
+});
+
+test('SlitherlinkSolver: _propagateAdvanced diagonal-3-3 down-right forces 4 outer corner edges to LINE', () => {
+  // 3-clue cells at (0,0) and (1,1) (down-right diagonal). The outer corners
+  // facing AWAY from each other: for (0,0) that's H[0][0] and V[0][0]; for
+  // (1,1) that's H[2][1] and V[1][2].
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[3, -1, -1], [-1, 3, -1], [-1, -1, -1]],
+  });
+  const onChange = () => {};
+  assert.equal(s._propagateAdvanced(onChange), true);
+  assert.equal(s.H[s._hIdx(0, 0)], 1, 'H[0][0] must be LINE (outer corner of (0,0))');
+  assert.equal(s.V[s._vIdx(0, 0)], 1, 'V[0][0] must be LINE (outer corner of (0,0))');
+  assert.equal(s.H[s._hIdx(2, 1)], 1, 'H[2][1] must be LINE (outer corner of (1,1))');
+  assert.equal(s.V[s._vIdx(1, 2)], 1, 'V[1][2] must be LINE (outer corner of (1,1))');
+});
+
 test('SlitherlinkSolver: getHint falls back to solve when propagation deduces nothing', () => {
   SlitherlinkSolver.clearSolutionCache();
   const p = fixtures.slitherlink5x5;

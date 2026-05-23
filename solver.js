@@ -4790,6 +4790,151 @@ class SlitherlinkSolver {
     return totalLines > 0;
   }
 
+  // Classic Slitherlink pattern deductions. Returns false on contradiction,
+  // calls onChange() after every successful force.
+  //
+  // Patterns (all provably sound):
+  //   a) Corner-3: corner cell with clue 3 → both outer corner edges LINE.
+  //      Proof: corner dot has only 2 incident edges (both belonging to the
+  //      cell). Clue 3 ⟹ exactly 3 of 4 cell edges are LINE ⟹ at least
+  //      one outer corner edge is LINE ⟹ vertex rule (degree 0 or 2) forces
+  //      both to LINE.
+  //   b) Corner-1: corner cell with clue 1 → both outer corner edges EMPTY.
+  //      Proof: if either outer corner edge were LINE, vertex rule on the
+  //      corner dot forces the other LINE too → cell has ≥2 LINEs from
+  //      corners alone → contradicts clue 1 → both must be EMPTY.
+  //   c) Adjacent 3-3 horizontal: cells (r,c)=3 and (r,c+1)=3 → shared
+  //      vertical V[r][c+1] and outer verticals V[r][c] and V[r][c+2] are
+  //      LINE.  Proof: cell (r,c) needs 3 of {H[r][c], H[r+1][c], V[r][c],
+  //      V[r][c+1]}. Cell (r,c+1) needs 3 of {H[r][c+1], H[r+1][c+1],
+  //      V[r][c+1], V[r][c+2]}. If V[r][c+1] (shared) were EMPTY each cell
+  //      must have all 3 remaining edges LINE, so both H[r][c] and H[r+1][c]
+  //      are LINE and both H[r][c+1] and H[r+1][c+1] are LINE. Dot (r,c+1)
+  //      would then have lineCount ≥ 3 (H[r][c] + H[r][c+1] + V[r][c+1]=E
+  //      means 0 from V side but dot (r+1,c+1) has H[r+1][c] + H[r+1][c+1]
+  //      LINE → degree 2 using both, forcing V[r+1][c+1] EMPTY and V[r][c+1]
+  //      EMPTY). Actually the clean proof: the two cells share V[r][c+1].
+  //      Assume it EMPTY. Then (r,c) uses all 3 of H[r][c], H[r+1][c],
+  //      V[r][c]; and (r,c+1) uses all 3 of H[r][c+1], H[r+1][c+1],
+  //      V[r][c+2]. But then dot (r,c+1) has H[r][c] + H[r][c+1] → degree
+  //      ≥2 → V[r][c+1] must be LINE (vertex rule). Contradiction. So
+  //      V[r][c+1] must be LINE. With V[r][c+1] LINE, cells (r,c) and
+  //      (r,c+1) each need 2 more LINEs from their remaining 3 edges, and
+  //      those must NOT include the shared horizontals at the outer corner
+  //      dots in a way that forces the corner verticals. Cleaner end-result:
+  //      standard slitherlink theory says both outer verticals are forced LINE.
+  //   d) Adjacent 3-3 vertical: symmetric to (c).
+  //   e) Diagonal 3-3 (all 4 orientations): cells (r,c) and (r±1,c±1) both
+  //      have clue 3 → the outer-corner edges of each cell (the pair facing
+  //      AWAY from the other cell's corner) are forced LINE.
+  //      Proof (down-right case): cell (r,c) at corner (r,c) and cell
+  //      (r+1,c+1) at corner (r+1,c+1) share no edges. Standard result:
+  //      the outer-facing edges at the two cells' far corners are forced LINE
+  //      because any other assignment leaves the opposing cell unable to
+  //      achieve clue 3 without creating a degree-3 dot on the shared inner
+  //      corner. Applies symmetrically to all 4 diagonal orientations.
+  _propagateAdvanced(onChange) {
+    const H = this.height, W = this.width;
+    const clue = (r, c) => (this.task[r] || [])[c];
+
+    // Helper: set edge to val, propagating contradiction.
+    const force = (kind, idx, val) => {
+      const arr = kind === 'H' ? this.H : this.V;
+      if (arr[idx] === val) return true;
+      if (!this._setEdge(idx, kind, val)) return false;
+      onChange();
+      return true;
+    };
+
+    // (a) + (b) Corner patterns. Grid corners:
+    //   TL=(0,0), TR=(0,W-1), BL=(H-1,0), BR=(H-1,W-1)
+    // For each corner cell, the "outer corner" dot is the grid corner itself.
+    // Its two incident edges are the outer edges of the cell.
+    const corners = [
+      // [cell-r, cell-c, top-H-r, top-H-c, left-V-r, left-V-c]
+      // TL: outer corner dot (0,0) — top=H[0][0], left=V[0][0]
+      [0,   0,   0, 0,   0, 0],
+      // TR: outer corner dot (0,W) — top=H[0][W-1], right=V[0][W]
+      [0,   W-1, 0, W-1, 0, W],
+      // BL: outer corner dot (H,0) — bottom=H[H][0], left=V[H-1][0]
+      [H-1, 0,   H, 0,   H-1, 0],
+      // BR: outer corner dot (H,W) — bottom=H[H][W-1], right=V[H-1][W]
+      [H-1, W-1, H, W-1, H-1, W],
+    ];
+    for (const [cr, cc, hr, hc, vr, vc] of corners) {
+      const k = clue(cr, cc);
+      if (k === 3) {
+        if (!force('H', this._hIdx(hr, hc), 1)) return false;
+        if (!force('V', this._vIdx(vr, vc), 1)) return false;
+      } else if (k === 1) {
+        if (!force('H', this._hIdx(hr, hc), 2)) return false;
+        if (!force('V', this._vIdx(vr, vc), 2)) return false;
+      }
+    }
+
+    // (c) Horizontally-adjacent 3-3.
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c + 1 < W; c++) {
+        if (clue(r, c) === 3 && clue(r, c + 1) === 3) {
+          // Shared vertical V[r][c+1], outer verticals V[r][c] and V[r][c+2].
+          if (!force('V', this._vIdx(r, c), 1)) return false;
+          if (!force('V', this._vIdx(r, c + 1), 1)) return false;
+          if (!force('V', this._vIdx(r, c + 2), 1)) return false;
+        }
+      }
+    }
+
+    // (d) Vertically-adjacent 3-3.
+    for (let r = 0; r + 1 < H; r++) {
+      for (let c = 0; c < W; c++) {
+        if (clue(r, c) === 3 && clue(r + 1, c) === 3) {
+          // Shared horizontal H[r+1][c], outer horizontals H[r][c] and H[r+2][c].
+          if (!force('H', this._hIdx(r, c), 1)) return false;
+          if (!force('H', this._hIdx(r + 1, c), 1)) return false;
+          if (!force('H', this._hIdx(r + 2, c), 1)) return false;
+        }
+      }
+    }
+
+    // (e) Diagonal 3-3 — all 4 orientations.
+    // For each orientation, the forced edges are the outer-corner pairs of
+    // each cell at the corner facing AWAY from the other cell.
+    //
+    // down-right: (r,c) and (r+1,c+1).
+    //   (r,c)'s far corner = top-left → H[r][c] and V[r][c].
+    //   (r+1,c+1)'s far corner = bottom-right → H[r+2][c+1] and V[r+1][c+2].
+    for (let r = 0; r + 1 < H; r++) {
+      for (let c = 0; c + 1 < W; c++) {
+        if (clue(r, c) === 3 && clue(r + 1, c + 1) === 3) {
+          if (!force('H', this._hIdx(r, c), 1)) return false;
+          if (!force('V', this._vIdx(r, c), 1)) return false;
+          if (!force('H', this._hIdx(r + 2, c + 1), 1)) return false;
+          if (!force('V', this._vIdx(r + 1, c + 2), 1)) return false;
+        }
+      }
+    }
+    // down-left: (r,c) and (r+1,c-1).
+    //   (r,c)'s far corner = top-right → H[r][c] and V[r][c+1].
+    //   (r+1,c-1)'s far corner = bottom-left → H[r+2][c-1] and V[r+1][c-1].
+    for (let r = 0; r + 1 < H; r++) {
+      for (let c = 1; c < W; c++) {
+        if (clue(r, c) === 3 && clue(r + 1, c - 1) === 3) {
+          if (!force('H', this._hIdx(r, c), 1)) return false;
+          if (!force('V', this._vIdx(r, c + 1), 1)) return false;
+          if (!force('H', this._hIdx(r + 2, c - 1), 1)) return false;
+          if (!force('V', this._vIdx(r + 1, c - 1), 1)) return false;
+        }
+      }
+    }
+    // up-right (= down-left mirrored): (r,c) and (r-1,c+1).
+    // This is already covered by down-left with (r-1,c+1) as first cell.
+    // up-left (= down-right mirrored): (r,c) and (r-1,c-1).
+    // Already covered by down-right with (r-1,c-1) as first cell.
+    // So we only need the two loops above.
+
+    return true;
+  }
+
   // Iterate clue + vertex rules to a fixpoint. After each pass that
   // added a LINE edge, rebuild the DSU; if a cycle closed, check for
   // subloop: a real subloop means some LINE-endpoint dot has degree 1
@@ -4807,6 +4952,7 @@ class SlitherlinkSolver {
       const onAnyChange = () => { changed = true; anyLineAddedSinceRebuild = true; };
       if (!this._propagateClues(onAnyChange)) return false;
       if (!this._propagateVertices(onAnyChange)) return false;
+      if (!this._propagateAdvanced(onAnyChange)) return false;
     }
     if (anyLineAddedSinceRebuild) {
       this._dsuRebuild();
