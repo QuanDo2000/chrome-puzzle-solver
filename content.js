@@ -1320,6 +1320,14 @@ function applyHintToGrid(grid, hint) {
     grid.galaxies = hint.lines;
     return;
   }
+  if (hint?.type === 'slitherlink') {
+    // grid is { horizontal, vertical } from slitherlinkHandler.readState.
+    for (const e of (hint.edges || [])) {
+      if (e.orientation === 'h' && grid.horizontal?.[e.r]) grid.horizontal[e.r][e.c] = 1;
+      else if (e.orientation === 'v' && grid.vertical?.[e.r]) grid.vertical[e.r][e.c] = 1;
+    }
+    return;
+  }
   for (const cell of hintAbsoluteCells(hint)) {
     if (grid[cell.row] !== undefined) grid[cell.row][cell.col] = cell.value;
   }
@@ -1452,6 +1460,28 @@ async function getHint(request = {}) {
       if (!hint) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
+    } else if (detectedGrid.type === 'slitherlink') {
+      // Re-read edge state. The grid we have is the cell-flood-fill grid
+      // produced by readGridState for displays, but slitherlink's solver
+      // needs the raw H/V edge arrays.
+      const edgeState = await callMainWorld('readSlitherlinkState', [rows, cols]);
+      const curH = edgeState?.horizontal
+        || Array.from({ length: rows + 1 }, () => new Array(cols).fill(0));
+      const curV = edgeState?.vertical
+        || Array.from({ length: rows },     () => new Array(cols + 1).fill(0));
+      const solver = new SlitherlinkSolver({
+        width: cols, height: rows, task: detectedGrid.task,
+        initialState: { horizontal: curH, vertical: curV },
+      });
+      solver.maxMs = 5000;
+      hint = solver.getHint(curH, curV);
+      if (!hint) {
+        return { success: false, error: 'No more edges can be deduced from the current state. Click Solve to finish.' };
+      }
+      // Carry the current edge state along so applyHintHandler / loop can
+      // overlay onto it without re-reading.
+      hint._curH = curH;
+      hint._curV = curV;
     } else if (detectedGrid.type === 'shikaku') {
       const solver = new ShikakuSolver({
         rows, cols, clues: detectedGrid.clues, initialState: grid,
@@ -1739,6 +1769,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...shikakuHintStatusNodes(h));
     } else if (puzzleData?.type === 'yinyang') {
       setStatusNodes('info', prefix, ...yinYangHintStatusNodes(h));
+    } else if (puzzleData?.type === 'slitherlink') {
+      setStatusNodes('info', prefix, ...slitherlinkHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -1788,6 +1820,19 @@ function makeWidget() {
       ];
     }
     return [bold(String(total)), ' cells can be deduced'];
+  }
+
+  function slitherlinkHintStatusNodes(h) {
+    const total = h?.edges?.length || 0;
+    if (total === 0) return ['No hint available'];
+    if (total === 1) {
+      const e = h.edges[0];
+      const desc = e.orientation === 'h'
+        ? `the top of cell (row ${e.r + 1}, col ${e.c + 1}) / bottom of (row ${e.r}, col ${e.c + 1})`
+        : `the left of cell (row ${e.r + 1}, col ${e.c + 1}) / right of (row ${e.r + 1}, col ${e.c})`;
+      return ['Draw a line along ', bold(desc), '.'];
+    }
+    return [bold(String(total)), ' edges can be deduced'];
   }
 
   // Status + preview after a freshly computed hint. Used by hintHandler,
@@ -2702,6 +2747,17 @@ function makeWidget() {
         const grid = cur || Array.from({ length: puzzleData.rows }, () => new Array(puzzleData.cols).fill(-1));
         for (const cell of hintCells) grid[cell.row][cell.col] = cell.value;
         ok = !!(await callMainWorld('applyShikakuState', [grid, puzzleData.clues]));
+      } else if (puzzleData.type === 'slitherlink') {
+        const cur = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
+        const horizontal = (cur?.horizontal || Array.from({ length: puzzleData.rows + 1 },
+          () => new Array(puzzleData.cols).fill(0))).map(row => row.slice());
+        const vertical   = (cur?.vertical   || Array.from({ length: puzzleData.rows },
+          () => new Array(puzzleData.cols + 1).fill(0))).map(row => row.slice());
+        for (const e of (puzzleData.pendingHint.edges || [])) {
+          if (e.orientation === 'h' && horizontal[e.r]) horizontal[e.r][e.c] = 1;
+          else if (e.orientation === 'v' && vertical[e.r]) vertical[e.r][e.c] = 1;
+        }
+        ok = !!(await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]));
       } else {
         const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
         ok = !!(await callMainWorld('applyHintCells', [hintCells]));
@@ -2731,14 +2787,39 @@ function makeWidget() {
       if (stopLooping) break;
       const gs = await readGridState();
       if (!gs?.success) break;
-      const gsComplete = puzzleData.type === 'shikaku'
-        ? gs.grid.every(row => row.every(c => c !== -1))
-        : gs.grid.every(row => row.every(c => c !== 0));
+      let gsComplete;
+      if (puzzleData.type === 'slitherlink') {
+        const sol = puzzleData.solution;
+        if (sol?.horizontal && sol?.vertical) {
+          const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
+          const bh = edgeState?.horizontal || [];
+          const bv = edgeState?.vertical || [];
+          gsComplete = true;
+          outer: for (let r = 0; r < sol.horizontal.length; r++) {
+            for (let c = 0; c < (sol.horizontal[r]?.length || 0); c++) {
+              if (sol.horizontal[r][c] === 1 && bh[r]?.[c] !== 1) { gsComplete = false; break outer; }
+            }
+          }
+          if (gsComplete) {
+            outer2: for (let r = 0; r < sol.vertical.length; r++) {
+              for (let c = 0; c < (sol.vertical[r]?.length || 0); c++) {
+                if (sol.vertical[r][c] === 1 && bv[r]?.[c] !== 1) { gsComplete = false; break outer2; }
+              }
+            }
+          }
+        } else {
+          gsComplete = false;
+        }
+      } else if (puzzleData.type === 'shikaku') {
+        gsComplete = gs.grid.every(row => row.every(c => c !== -1));
+      } else {
+        gsComplete = gs.grid.every(row => row.every(c => c !== 0));
+      }
       if (puzzleData.type !== 'galaxies' && gsComplete) break;
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && !hr.hint?.cells?.length) break;
+      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // getHint may lazily solve as a fallback (galaxies + aquarium);
@@ -2772,11 +2853,29 @@ function makeWidget() {
     } else {
       const end = await readGridState();
       if (end?.success) drawPreview(end.grid);
-      const endComplete = end?.grid
-        ? (puzzleData.type === 'shikaku'
+      let endComplete = false;
+      if (end?.grid) {
+        if (puzzleData.type === 'slitherlink' && puzzleData.solution?.horizontal && puzzleData.solution?.vertical) {
+          const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
+          const bh = edgeState?.horizontal || [];
+          const bv = edgeState?.vertical || [];
+          endComplete = true;
+          for (let r = 0; endComplete && r < puzzleData.solution.horizontal.length; r++) {
+            for (let c = 0; c < (puzzleData.solution.horizontal[r]?.length || 0); c++) {
+              if (puzzleData.solution.horizontal[r][c] === 1 && bh[r]?.[c] !== 1) { endComplete = false; break; }
+            }
+          }
+          for (let r = 0; endComplete && r < puzzleData.solution.vertical.length; r++) {
+            for (let c = 0; c < (puzzleData.solution.vertical[r]?.length || 0); c++) {
+              if (puzzleData.solution.vertical[r][c] === 1 && bv[r]?.[c] !== 1) { endComplete = false; break; }
+            }
+          }
+        } else {
+          endComplete = puzzleData.type === 'shikaku'
             ? end.grid.every(row => row.every(c => c !== -1))
-            : end.grid.every(row => row.every(c => c !== 0)))
-        : false;
+            : end.grid.every(row => row.every(c => c !== 0));
+        }
+      }
       const done = end?.grid && puzzleData.type !== 'galaxies' && endComplete;
       setStatus(done ? 'Solved!' : 'No more hints available.', done ? 'success' : 'info');
     }
@@ -2882,6 +2981,19 @@ function makeWidget() {
       for (const cell of hintCells) grid[cell.row][cell.col] = cell.value;
       const ok = await callMainWorld('applyShikakuState', [grid, puzzleData.clues]);
       result = ok ? { success: true } : { success: false, error: 'Shikaku hint apply failed' };
+    } else if (puzzleData.type === 'slitherlink') {
+      // Read the current edge state, overlay the hint's LINE edges, apply.
+      const cur = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
+      const horizontal = (cur?.horizontal || Array.from({ length: puzzleData.rows + 1 },
+        () => new Array(puzzleData.cols).fill(0))).map(row => row.slice());
+      const vertical   = (cur?.vertical   || Array.from({ length: puzzleData.rows },
+        () => new Array(puzzleData.cols + 1).fill(0))).map(row => row.slice());
+      for (const e of (puzzleData.pendingHint.edges || [])) {
+        if (e.orientation === 'h' && horizontal[e.r]) horizontal[e.r][e.c] = 1;
+        else if (e.orientation === 'v' && vertical[e.r]) vertical[e.r][e.c] = 1;
+      }
+      const ok = await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]);
+      result = ok ? { success: true } : { success: false, error: 'Slitherlink hint apply failed' };
     } else {
       const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
       const ok = await callMainWorld('applyHintCells', [hintCells]);
