@@ -4464,10 +4464,17 @@ class SlitherlinkSolver {
     this.H = new Uint8Array((H + 1) * W);
     this.V = new Uint8Array(H * (W + 1));
 
-    // Trail entries: pack `(kindBit << 24) | idx` where kindBit 0 = horizontal,
-    // 1 = vertical, idx fits in 24 bits (more than enough for the puzzle sizes
-    // we target). The "old" value is always 0 (UNKNOWN) because _setEdge
-    // guards against overwriting a non-zero edge — so we don't trail it.
+    // Cell colors: 0 = UNKNOWN, 1 = INSIDE, 2 = OUTSIDE.
+    // The loop divides the plane into inside/outside; adjacent cells sharing an
+    // edge differ in color iff that edge is LINE.
+    this.colors = new Uint8Array(H * W);
+
+    // Trail entries encoding (2-bit kind in bits 24-25):
+    //   kind=0 (H edge): (0 << 24) | idx
+    //   kind=1 (V edge): (1 << 24) | idx
+    //   kind=2 (color):  (oldColor << 26) | (2 << 24) | idx
+    // oldColor ∈ {1=INSIDE, 2=OUTSIDE} (UNKNOWN=0 is never trailed).
+    // Edge entries: old value is always 0 (UNKNOWN) so we don't trail it.
     this.trail = [];
 
     // Per-dot incidence counters. Maintained incrementally so propagation
@@ -4557,17 +4564,23 @@ class SlitherlinkSolver {
     while (this.trail.length > mark) {
       const e = this.trail.pop();
       const idx = e & 0xFFFFFF;
-      const kindBit = (e >> 24) & 1;
-      const kind = kindBit === 0 ? 'H' : 'V';
-      const arr = kind === 'H' ? this.H : this.V;
-      const cur = arr[idx];
-      arr[idx] = 0;
-      const [u, v] = this._edgeEndpoints(kind, idx);
-      this.unknownCount[u]++;
-      this.unknownCount[v]++;
-      if (cur === 1) {
-        this.lineCount[u]--;
-        this.lineCount[v]--;
+      const kind = (e >> 24) & 3;  // 2-bit kind: 0=H, 1=V, 2=color
+      if (kind === 2) {
+        // Color entry: restore old color from bits 26-27.
+        this.colors[idx] = (e >> 26) & 3;
+      } else {
+        // Edge entry (kind 0=H, 1=V).
+        const arr = kind === 0 ? this.H : this.V;
+        const edgeKind = kind === 0 ? 'H' : 'V';
+        const cur = arr[idx];
+        arr[idx] = 0;
+        const [u, v] = this._edgeEndpoints(edgeKind, idx);
+        this.unknownCount[u]++;
+        this.unknownCount[v]++;
+        if (cur === 1) {
+          this.lineCount[u]--;
+          this.lineCount[v]--;
+        }
       }
     }
   }
@@ -4579,6 +4592,190 @@ class SlitherlinkSolver {
       return true;
     }
     return false;
+  }
+
+  // Trailed write for cell colors. Returns false on conflict (cell already
+  // known to a different color). UNKNOWN→same is a no-op that returns true.
+  _setColor(idx, color) {
+    const old = this.colors[idx];
+    if (old === color) return true;
+    if (old !== 0) return false;  // conflict
+    this.trail.push((old << 26) | (2 << 24) | idx);
+    this.colors[idx] = color;
+    return true;
+  }
+
+  // Returns the color of cell (r,c): 1=INSIDE, 2=OUTSIDE, 0=UNKNOWN.
+  // Out-of-grid coordinates are implicitly OUTSIDE (2).
+  _colorOf(r, c) {
+    if (r < 0 || r >= this.height || c < 0 || c >= this.width) return 2;
+    return this.colors[r * this.width + c];
+  }
+
+  // Cell inside/outside coloring rule. Couples edge state and color in both
+  // directions: LINE iff adjacent cells differ in color. Also uses known cell
+  // colors to restrict neighbors of clued cells.
+  //
+  // Returns false on contradiction; calls onChange() for every forced edge
+  // or color assignment.
+  //
+  // Three sub-rules:
+  //   A — known edge → color: if E is LINE/EMPTY between cells A and B,
+  //       the colors of A and B must differ/be equal. Force the unknown one.
+  //   B — known colors → edge: if A and B both have known colors, the shared
+  //       edge must be LINE (different) or EMPTY (same). Force it.
+  //   C — clue × own-color: for clued cell (r,c) with known color myColor,
+  //       count opposite-color (m) and unknown (u) neighbors. Apply forcing
+  //       when m==k or m+u==k.
+  _propagateColors(onChange) {
+    const H = this.height, W = this.width;
+
+    // ── Rule A: known edge → color relation ──────────────────────────────
+    // Horizontal edges H[r][c]: separates cell (r-1,c) above and cell (r,c)
+    // below. Row r of H is between row r-1 and row r of cells.
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        const e = this.H[this._hIdx(r, c)];
+        if (e === 0) continue;  // unknown edge
+        // Cell above: (r-1, c); cell below: (r, c).
+        const colorAbove = this._colorOf(r - 1, c);
+        const colorBelow = this._colorOf(r, c);
+        const idxAbove = (r - 1) >= 0 ? (r - 1) * W + c : -1;
+        const idxBelow = r < H ? r * W + c : -1;
+        if (e === 1) {
+          // LINE → colors must differ.
+          if (colorAbove !== 0 && colorBelow !== 0 && colorAbove === colorBelow) return false;
+          if (colorAbove !== 0 && colorBelow === 0) {
+            // Force below to opposite.
+            const forced = colorAbove === 1 ? 2 : 1;
+            if (idxBelow >= 0) { if (!this._setColor(idxBelow, forced)) return false; onChange(); }
+            else if (forced !== 2) return false;  // out-of-grid must be OUTSIDE
+          } else if (colorBelow !== 0 && colorAbove === 0) {
+            const forced = colorBelow === 1 ? 2 : 1;
+            if (idxAbove >= 0) { if (!this._setColor(idxAbove, forced)) return false; onChange(); }
+            else if (forced !== 2) return false;
+          }
+        } else {
+          // EMPTY → colors must be same.
+          if (colorAbove !== 0 && colorBelow !== 0 && colorAbove !== colorBelow) return false;
+          if (colorAbove !== 0 && colorBelow === 0) {
+            if (idxBelow >= 0) { if (!this._setColor(idxBelow, colorAbove)) return false; onChange(); }
+            else if (colorAbove !== 2) return false;
+          } else if (colorBelow !== 0 && colorAbove === 0) {
+            if (idxAbove >= 0) { if (!this._setColor(idxAbove, colorBelow)) return false; onChange(); }
+            else if (colorBelow !== 2) return false;
+          }
+        }
+      }
+    }
+
+    // Vertical edges V[r][c]: separates cell (r,c-1) to the left and cell
+    // (r,c) to the right.
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        const e = this.V[this._vIdx(r, c)];
+        if (e === 0) continue;
+        const colorLeft = this._colorOf(r, c - 1);
+        const colorRight = this._colorOf(r, c);
+        const idxLeft = (c - 1) >= 0 ? r * W + (c - 1) : -1;
+        const idxRight = c < W ? r * W + c : -1;
+        if (e === 1) {
+          if (colorLeft !== 0 && colorRight !== 0 && colorLeft === colorRight) return false;
+          if (colorLeft !== 0 && colorRight === 0) {
+            const forced = colorLeft === 1 ? 2 : 1;
+            if (idxRight >= 0) { if (!this._setColor(idxRight, forced)) return false; onChange(); }
+            else if (forced !== 2) return false;
+          } else if (colorRight !== 0 && colorLeft === 0) {
+            const forced = colorRight === 1 ? 2 : 1;
+            if (idxLeft >= 0) { if (!this._setColor(idxLeft, forced)) return false; onChange(); }
+            else if (forced !== 2) return false;
+          }
+        } else {
+          if (colorLeft !== 0 && colorRight !== 0 && colorLeft !== colorRight) return false;
+          if (colorLeft !== 0 && colorRight === 0) {
+            if (idxRight >= 0) { if (!this._setColor(idxRight, colorLeft)) return false; onChange(); }
+            else if (colorLeft !== 2) return false;
+          } else if (colorRight !== 0 && colorLeft === 0) {
+            if (idxLeft >= 0) { if (!this._setColor(idxLeft, colorRight)) return false; onChange(); }
+            else if (colorRight !== 2) return false;
+          }
+        }
+      }
+    }
+
+    // ── Rule B: known colors → edge state ────────────────────────────────
+    // Horizontal edges: cell (r-1,c) above and cell (r,c) below.
+    for (let r = 0; r <= H; r++) {
+      for (let c = 0; c < W; c++) {
+        const eIdx = this._hIdx(r, c);
+        if (this.H[eIdx] !== 0) continue;
+        const colorAbove = this._colorOf(r - 1, c);
+        const colorBelow = this._colorOf(r, c);
+        if (colorAbove === 0 || colorBelow === 0) continue;
+        const expectedEdge = colorAbove !== colorBelow ? 1 : 2;
+        if (!this._setEdge(eIdx, 'H', expectedEdge)) return false;
+        onChange();
+      }
+    }
+    // Vertical edges: cell (r,c-1) to the left and cell (r,c) to the right.
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c <= W; c++) {
+        const eIdx = this._vIdx(r, c);
+        if (this.V[eIdx] !== 0) continue;
+        const colorLeft = this._colorOf(r, c - 1);
+        const colorRight = this._colorOf(r, c);
+        if (colorLeft === 0 || colorRight === 0) continue;
+        const expectedEdge = colorLeft !== colorRight ? 1 : 2;
+        if (!this._setEdge(eIdx, 'V', expectedEdge)) return false;
+        onChange();
+      }
+    }
+
+    // ── Rule C: clue × own-color ──────────────────────────────────────────
+    // Neighbors in order: above (r-1,c), below (r+1,c), left (r,c-1),
+    // right (r,c+1). Out-of-grid treated as OUTSIDE (2).
+    for (let r = 0; r < H; r++) {
+      const taskRow = this.task[r] || [];
+      for (let c = 0; c < W; c++) {
+        const clue = taskRow[c];
+        if (clue === undefined || clue < 0 || clue > 4) continue;
+        const myColor = this._colorOf(r, c);
+        if (myColor === 0) continue;
+        const opposite = myColor === 1 ? 2 : 1;
+        const nbrs = [[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+        let m = 0, u = 0;
+        for (const [nr, nc] of nbrs) {
+          const nc2 = this._colorOf(nr, nc);
+          if (nc2 === opposite) m++;
+          else if (nc2 === 0) u++;
+        }
+        if (m > clue) return false;
+        if (m + u < clue) return false;
+        if (m === clue && u > 0) {
+          // Force all unknown neighbors to same color as myColor.
+          for (const [nr, nc] of nbrs) {
+            if (nr < 0 || nr >= H || nc < 0 || nc >= W) continue;
+            const ni = nr * W + nc;
+            if (this.colors[ni] === 0) {
+              if (!this._setColor(ni, myColor)) return false;
+              onChange();
+            }
+          }
+        } else if (m + u === clue && u > 0) {
+          // Force all unknown neighbors to opposite color.
+          for (const [nr, nc] of nbrs) {
+            if (nr < 0 || nr >= H || nc < 0 || nc >= W) continue;
+            const ni = nr * W + nc;
+            if (this.colors[ni] === 0) {
+              if (!this._setColor(ni, opposite)) return false;
+              onChange();
+            }
+          }
+        }
+      }
+    }
+
+    return true;
   }
 
   // Return an array of 4 {kind, idx} entries describing cell (r,c)'s edges
@@ -5159,6 +5356,7 @@ class SlitherlinkSolver {
         // edges are either already set (no-op _setEdge) or not reachable from
         // the probe edge alone. This halves inner-probe propagation time.
         if (!this._inLookahead && !this._propagateAdvanced(onLocalChange)) return false;
+        if (!this._propagateColors(onLocalChange)) return false;
       }
 
       // ── Subloop check ────────────────────────────────────────────────────
@@ -5354,14 +5552,16 @@ class SlitherlinkSolver {
     }
 
     // Collect LINE edges from the trail, up to minLines.
+    // Trail entries with kind=2 are color writes — skip them; we only want edges.
     const allLines = [];
     for (let i = overallMark; i < this.trail.length; i++) {
       const e = this.trail[i];
+      const kind = (e >> 24) & 3;
+      if (kind === 2) continue;  // color write — not an edge
       const idx = e & 0xFFFFFF;
-      const kindBit = (e >> 24) & 1;
-      const arr = kindBit === 0 ? this.H : this.V;
+      const arr = kind === 0 ? this.H : this.V;
       if (arr[idx] === 1) {
-        if (kindBit === 0) {
+        if (kind === 0) {
           const r = (idx / W) | 0;
           allLines.push({ orientation: 'h', r, c: idx - r * W });
         } else {

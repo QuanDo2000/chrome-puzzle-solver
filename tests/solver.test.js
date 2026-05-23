@@ -1646,3 +1646,72 @@ test('SlitherlinkSolver: _applyLookahead is skipped at _depth > 0', () => {
   s.propagate();
   assert.equal(lookaheadCalls, 0, '_applyLookahead must not be called when _depth > 0');
 });
+
+// ── _propagateColors tests ─────────────────────────────────────────────────────
+
+test('SlitherlinkSolver: _propagateColors — boundary LINE edge forces inside', () => {
+  // 2x2 grid. Set H[0][0]=LINE (top edge of cell (0,0)). Then cell (0,0)
+  // borders OUTSIDE on top via a LINE → cell (0,0) is INSIDE.
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  s._setEdge(s._hIdx(0, 0), 'H', 1);
+  assert.equal(s._propagateColors(() => {}), true);
+  assert.equal(s.colors[0 * 2 + 0], 1); // INSIDE
+});
+
+test('SlitherlinkSolver: _propagateColors — boundary EMPTY edge forces outside', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  s._setEdge(s._hIdx(0, 0), 'H', 2);
+  assert.equal(s._propagateColors(() => {}), true);
+  assert.equal(s.colors[0 * 2 + 0], 2); // OUTSIDE
+});
+
+test('SlitherlinkSolver: _propagateColors — adjacent same colors force EMPTY edge', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  // Seed: both cell (0,0) and (1,0) as INSIDE.
+  s._setColor(0 * 2 + 0, 1);
+  s._setColor(1 * 2 + 0, 1);
+  assert.equal(s._propagateColors(() => {}), true);
+  // Edge between them (H[1][0]) must be EMPTY.
+  assert.equal(s.H[s._hIdx(1, 0)], 2);
+});
+
+test('SlitherlinkSolver: _propagateColors — adjacent different colors force LINE edge', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  s._setColor(0 * 2 + 0, 1); // inside
+  s._setColor(1 * 2 + 0, 2); // outside
+  assert.equal(s._propagateColors(() => {}), true);
+  assert.equal(s.H[s._hIdx(1, 0)], 1); // LINE
+});
+
+test('SlitherlinkSolver: _propagateColors — clue×color: m==k forces remaining same', () => {
+  // 3x3 grid, cell (1,1) clue 1, own color INSIDE. Its 4 neighbors. Suppose
+  // (0,1) is already OUTSIDE — that's 1 opposite. clue=1, m=1. So remaining
+  // 3 neighbors must be INSIDE (same as the cell).
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,1,-1],[-1,-1,-1]],
+  });
+  s._setColor(1 * 3 + 1, 1);  // (1,1) INSIDE
+  s._setColor(0 * 3 + 1, 2);  // (0,1) OUTSIDE → m=1
+  assert.equal(s._propagateColors(() => {}), true);
+  assert.equal(s.colors[2 * 3 + 1], 1); // (2,1) INSIDE
+  assert.equal(s.colors[1 * 3 + 0], 1); // (1,0) INSIDE
+  assert.equal(s.colors[1 * 3 + 2], 1); // (1,2) INSIDE
+});
+
+test('SlitherlinkSolver: _propagateColors — contradiction on conflicting edge/color', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  s._setColor(0 * 2 + 0, 1);
+  s._setColor(1 * 2 + 0, 1);
+  s._setEdge(s._hIdx(1, 0), 'H', 1); // LINE but cells are same color
+  assert.equal(s._propagateColors(() => {}), false);
+});
+
+test('SlitherlinkSolver: trail rolls back color writes', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  const mark = s.trail.length;
+  assert.equal(s._setColor(0, 1), true);
+  assert.equal(s.colors[0], 1);
+  s._rollback(mark);
+  assert.equal(s.colors[0], 0);
+});
