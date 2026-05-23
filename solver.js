@@ -5485,13 +5485,44 @@ class SlitherlinkSolver {
       };
     }
 
+    // Partial cache hit: a prior solve attempt for this exact task timed
+    // out and stored what propagation could deduce. Return it instead of
+    // re-running the full propagate (saves ~2-6 s per Hint/Loop click on
+    // hard boards where solve doesn't fit in the budget).
+    const partialCached = SlitherlinkSolver._partialCache.get(key);
+    if (partialCached) {
+      return {
+        solved: false,
+        horizontal: partialCached.horizontal.map(row => row.slice()),
+        vertical: partialCached.vertical.map(row => row.slice()),
+        error: 'timed out',
+        partial: true,
+      };
+    }
+
     this._startedAt = Date.now();
     this._timedOut = false;
 
     if (!this.propagate()) {
+      // Distinguish timeout from contradiction. A timeout means propagation
+      // didn't finish but the state in this.H/this.V is the partial fixpoint
+      // up to that point — usable as a partial for callers (e.g. getHint's
+      // fallback path). Contradiction means the state is inconsistent and
+      // we shouldn't expose it.
+      if (this._timedOut) {
+        const partial = this._emit();
+        SlitherlinkSolver._storeInPartialCache(key, partial);
+        return {
+          solved: false,
+          horizontal: partial.horizontal,
+          vertical: partial.vertical,
+          error: 'timed out',
+          partial: true,
+        };
+      }
       return {
         solved: false, horizontal: null, vertical: null,
-        error: this._timedOut ? 'timed out' : 'contradiction on initial propagation',
+        error: 'contradiction on initial propagation',
       };
     }
     if (this._allEdgesAssigned()) {
@@ -5516,8 +5547,10 @@ class SlitherlinkSolver {
     // could deduce). Return that as a partial so callers can show the
     // user the deducible portion instead of nothing — meaningful on hard
     // boards (e.g. the 50×40 monthly: ~38% of edges determined in ~3s
-    // before backtracking gives up).
+    // before backtracking gives up). Cache so repeated Hint/Loop clicks
+    // don't re-burn the budget.
     const partial = this._emit();
+    if (this._timedOut) SlitherlinkSolver._storeInPartialCache(key, partial);
     return {
       solved: false,
       horizontal: partial.horizontal,
@@ -5525,6 +5558,17 @@ class SlitherlinkSolver {
       error: this._timedOut ? 'timed out' : 'no solution found',
       partial: true,
     };
+  }
+
+  static _storeInPartialCache(key, out) {
+    const m = SlitherlinkSolver._partialCache;
+    if (m.size >= SlitherlinkSolver._maxPartialCache) {
+      m.delete(m.keys().next().value);
+    }
+    m.set(key, {
+      horizontal: out.horizontal.map(row => row.slice()),
+      vertical: out.vertical.map(row => row.slice()),
+    });
   }
 
   // Run the local-rule fixpoint (clue + vertex + advanced patterns, NO
@@ -5618,37 +5662,52 @@ class SlitherlinkSolver {
       return { type: 'slitherlink', edges: next, count: next.length };
     }
 
-    // Local rules deduced nothing. Try a TIGHT-budget solve to reveal one
-    // missing LINE; cap at 1 s so a single Hint click never hangs Loop on
-    // hard boards where the parent maxMs may be 5-30 s.
-    const fallbackBudget = Math.min(this.maxMs > 0 ? this.maxMs : 1000, 1000);
+    // Local rules deduced nothing. Try a tight-budget solve and pull up to
+    // minLines missing LINE edges from the result. We accept partial solves
+    // (solve() returns `{ solved:false, partial:true, horizontal, vertical }`
+    // on timeout): the partial is the deducible portion from
+    // propagate+lookahead, exactly the LINE set we want to draw hints from.
+    // Result is cached in _partialCache so this 5 s cost is paid at most
+    // once per puzzle — subsequent Hint/Loop clicks hit the cache instantly.
+    const fallbackBudget = Math.min(this.maxMs > 0 ? this.maxMs : 5000, 5000);
     const fallbackSolver = new SlitherlinkSolver({
       width: this.width, height: this.height, task: this.task,
       maxMs: fallbackBudget,
     });
     const full = fallbackSolver.solve();
-    if (!full.solved) return null;
+    if (!full || !full.horizontal || !full.vertical) return null;
     const H = this.height, W = this.width;
-    for (let r = 0; r <= H; r++) {
-      for (let c = 0; c < W; c++) {
+    const out = [];
+    for (let r = 0; r <= H && out.length < minLines; r++) {
+      for (let c = 0; c < W && out.length < minLines; c++) {
         if (full.horizontal[r][c] === 1 && (curH[r]?.[c] !== 1)) {
-          return { type: 'slitherlink', edges: [{ orientation: 'h', r, c }], count: 1 };
+          out.push({ orientation: 'h', r, c });
         }
       }
     }
-    for (let r = 0; r < H; r++) {
-      for (let c = 0; c <= W; c++) {
+    for (let r = 0; r < H && out.length < minLines; r++) {
+      for (let c = 0; c <= W && out.length < minLines; c++) {
         if (full.vertical[r][c] === 1 && (curV[r]?.[c] !== 1)) {
-          return { type: 'slitherlink', edges: [{ orientation: 'v', r, c }], count: 1 };
+          out.push({ orientation: 'v', r, c });
         }
       }
     }
-    return null;
+    if (out.length === 0) return null;
+    return { type: 'slitherlink', edges: out, count: out.length };
   }
 
   static _solutionCache = new Map();
   static _maxSolutionCache = 50;
-  static clearSolutionCache() { SlitherlinkSolver._solutionCache.clear(); }
+  // Separate partial-result cache so Hint/Loop fallback solves don't
+  // re-burn the full budget each click on puzzles our solver can't crack
+  // (e.g. the 50×40 monthly: ~615 LINE edges determined in 2 s, then 14
+  // more Loop clicks would each re-spend that 2 s without this cache).
+  static _partialCache = new Map();
+  static _maxPartialCache = 20;
+  static clearSolutionCache() {
+    SlitherlinkSolver._solutionCache.clear();
+    SlitherlinkSolver._partialCache.clear();
+  }
 
   _cacheKey() {
     // FNV-1a over (width, height, flattened task).
