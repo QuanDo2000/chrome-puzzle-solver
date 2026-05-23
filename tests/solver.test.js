@@ -1715,3 +1715,54 @@ test('SlitherlinkSolver: trail rolls back color writes', () => {
   s._rollback(mark);
   assert.equal(s.colors[0], 0);
 });
+
+// ── _propagateConnectivity tests ──────────────────────────────────────────────
+
+test('SlitherlinkSolver: connectivity forces unreachable cells to the other color', () => {
+  // 3x3 grid. Set cell (0,0) INSIDE, surround it with OUTSIDE.
+  // Then cell (2,2) — which is far away — can only be reached from (0,0)
+  // through OUTSIDE cells, so (2,2) must be OUTSIDE.
+  const s = new SlitherlinkSolver({ width: 3, height: 3, task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]] });
+  s._setColor(0, 1);             // (0,0) INSIDE
+  s._setColor(1, 2);             // (0,1) OUTSIDE
+  s._setColor(3, 2);             // (1,0) OUTSIDE
+  // Now (0,0) is the only INSIDE cell, isolated by OUTSIDE neighbors.
+  // Any remaining UNKNOWN cell can't reach (0,0) without crossing OUTSIDE.
+  // So all remaining UNKNOWN cells must be OUTSIDE.
+  assert.equal(s._propagateConnectivity(() => {}), true);
+  // (2,2) at index 2*3+2 = 8 should now be OUTSIDE.
+  assert.equal(s.colors[8], 2, 'cell (2,2) should be forced OUTSIDE');
+});
+
+test('SlitherlinkSolver: connectivity articulation forces a bridging cell', () => {
+  // 3x3 grid. INSIDE cells at (0,0) and (0,2). Row 1 is all OUTSIDE,
+  // and (1,1) is OUTSIDE, so the only path between (0,0) and (0,2) through
+  // {INSIDE ∪ UNKNOWN} is via (0,1). So (0,1) must be forced INSIDE.
+  const s = new SlitherlinkSolver({ width: 3, height: 3, task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]] });
+  s._setColor(0, 1);             // (0,0) INSIDE
+  s._setColor(2, 1);             // (0,2) INSIDE
+  // Block all paths except through (0,1).
+  s._setColor(3, 2);             // (1,0) OUTSIDE
+  s._setColor(4, 2);             // (1,1) OUTSIDE
+  s._setColor(5, 2);             // (1,2) OUTSIDE
+  // Now (0,1) = idx 1 is the only connection between (0,0) and (0,2).
+  // Removing (0,1) disconnects (0,0) from (0,2) → (0,1) must be INSIDE.
+  assert.equal(s._propagateConnectivity(() => {}), true);
+  assert.equal(s.colors[1], 1, 'cell (0,1) should be forced INSIDE');
+});
+
+test('SlitherlinkSolver: connectivity detects contradiction when known cells are isolated', () => {
+  // 3x3 grid. Two known-INSIDE cells with no path between them via INSIDE/UNKNOWN.
+  // (0,0) and (0,2) INSIDE, but (0,1) is OUTSIDE (no path between them).
+  const s = new SlitherlinkSolver({ width: 3, height: 3, task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]] });
+  s._setColor(0, 1);             // (0,0) INSIDE
+  s._setColor(2, 1);             // (0,2) INSIDE
+  // Block the only direct path between them.
+  s._setColor(1, 2);             // (0,1) OUTSIDE — the only direct bridge
+  // Block all other possible paths via row 1.
+  s._setColor(3, 2);             // (1,0) OUTSIDE
+  s._setColor(4, 2);             // (1,1) OUTSIDE
+  s._setColor(5, 2);             // (1,2) OUTSIDE
+  // No path from (0,0) to (0,2) through {INSIDE ∪ UNKNOWN} → contradiction.
+  assert.equal(s._propagateConnectivity(() => {}), false);
+});

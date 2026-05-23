@@ -4477,6 +4477,14 @@ class SlitherlinkSolver {
     // Edge entries: old value is always 0 (UNKNOWN) so we don't trail it.
     this.trail = [];
 
+    // Scratch arrays for connectivity propagation (_propagateConnectivity).
+    const N = H * W;
+    this._slSeen = new Uint8Array(N);
+    this._slSeen2 = new Uint8Array(N);
+    this._slApDisc = new Int32Array(N);
+    this._slApLow = new Int32Array(N);
+    this._slApIsAP = new Uint8Array(N);
+
     // Per-dot incidence counters. Maintained incrementally so propagation
     // never has to recount.
     const D = (H + 1) * (W + 1);
@@ -5189,6 +5197,246 @@ class SlitherlinkSolver {
     return true;
   }
 
+  // INSIDE reachability deduction. BFS from a single known-INSIDE cell through
+  // the {INSIDE ∪ UNKNOWN} graph. Returns false if not all known-INSIDE cells
+  // are reachable (they're disconnected → contradiction). Any UNKNOWN cell not
+  // reachable is forced OUTSIDE. Calls onChange() for each forced cell.
+  _slApplyInsideReachability(onChange) {
+    const H = this.height, W = this.width, N = H * W;
+    let start = -1, placedCount = 0;
+    for (let i = 0; i < N; i++) {
+      if (this.colors[i] === 1) {
+        placedCount++;
+        if (start === -1) start = i;
+      }
+    }
+    if (placedCount === 0) return true;  // no known-INSIDE cells: nothing to do
+
+    const seen = this._slSeen;
+    seen.fill(0);
+    const queue = [start];
+    seen[start] = 1;
+    let reachedPlaced = 1;
+    let qi = 0;
+    while (qi < queue.length) {
+      const cur = queue[qi++];
+      const r = (cur / W) | 0, c = cur % W;
+      if (r > 0)     { const nb = cur - W; if (!seen[nb] && this.colors[nb] !== 2) { seen[nb] = 1; if (this.colors[nb] === 1) reachedPlaced++; queue.push(nb); } }
+      if (r + 1 < H) { const nb = cur + W; if (!seen[nb] && this.colors[nb] !== 2) { seen[nb] = 1; if (this.colors[nb] === 1) reachedPlaced++; queue.push(nb); } }
+      if (c > 0)     { const nb = cur - 1; if (!seen[nb] && this.colors[nb] !== 2) { seen[nb] = 1; if (this.colors[nb] === 1) reachedPlaced++; queue.push(nb); } }
+      if (c + 1 < W) { const nb = cur + 1; if (!seen[nb] && this.colors[nb] !== 2) { seen[nb] = 1; if (this.colors[nb] === 1) reachedPlaced++; queue.push(nb); } }
+    }
+
+    if (reachedPlaced !== placedCount) return false;  // known-INSIDE cells are disconnected
+
+    // Any UNKNOWN cell not in BFS can never be INSIDE (can't reach INSIDE cells).
+    for (let i = 0; i < N; i++) {
+      if (this.colors[i] === 0 && !seen[i]) {
+        if (!this._setColor(i, 2)) return false;
+        onChange();
+      }
+    }
+    return true;
+  }
+
+  // OUTSIDE reachability deduction. BFS from all non-INSIDE border cells
+  // (representing connectivity to the virtual exterior of the grid). Returns
+  // false if any known-OUTSIDE cell is not reachable from the grid exterior
+  // through the {OUTSIDE ∪ UNKNOWN} graph (contradiction). Any UNKNOWN cell
+  // not reachable from the exterior can never be OUTSIDE, so it is forced
+  // INSIDE. Calls onChange() for each forced cell.
+  _slApplyOutsideReachability(onChange) {
+    const H = this.height, W = this.width, N = H * W;
+    const seen = this._slSeen;
+    seen.fill(0);
+    const queue = [];
+
+    // Seed from all border cells that are not known-INSIDE.
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c < W; c++) {
+        if (r !== 0 && r !== H - 1 && c !== 0 && c !== W - 1) continue;  // not border
+        const idx = r * W + c;
+        if (this.colors[idx] === 1) continue;  // known INSIDE: not a border root
+        if (!seen[idx]) { seen[idx] = 1; queue.push(idx); }
+      }
+    }
+
+    // BFS through {OUTSIDE ∪ UNKNOWN}.
+    let reachedOutside = 0;
+    let qi = 0;
+    while (qi < queue.length) {
+      const cur = queue[qi++];
+      const r = (cur / W) | 0, c = cur % W;
+      if (this.colors[cur] === 2) reachedOutside++;
+      if (r > 0)     { const nb = cur - W; if (!seen[nb] && this.colors[nb] !== 1) { seen[nb] = 1; queue.push(nb); } }
+      if (r + 1 < H) { const nb = cur + W; if (!seen[nb] && this.colors[nb] !== 1) { seen[nb] = 1; queue.push(nb); } }
+      if (c > 0)     { const nb = cur - 1; if (!seen[nb] && this.colors[nb] !== 1) { seen[nb] = 1; queue.push(nb); } }
+      if (c + 1 < W) { const nb = cur + 1; if (!seen[nb] && this.colors[nb] !== 1) { seen[nb] = 1; queue.push(nb); } }
+    }
+
+    // All known-OUTSIDE cells must be reachable from the exterior.
+    let totalOutside = 0;
+    for (let i = 0; i < N; i++) if (this.colors[i] === 2) totalOutside++;
+    if (reachedOutside !== totalOutside) return false;  // some OUTSIDE cell is interior-trapped
+
+    // Any UNKNOWN cell not reachable from the exterior can never be OUTSIDE.
+    for (let i = 0; i < N; i++) {
+      if (this.colors[i] === 0 && !seen[i]) {
+        if (!this._setColor(i, 1)) return false;
+        onChange();
+      }
+    }
+    return true;
+  }
+
+  // Articulation points of the {color ∪ UNKNOWN} cell graph (4-adjacency).
+  // UNKNOWN cells act as "wildcard" for both colors. Returns a Uint8Array of
+  // length H*W where entry i is 1 if cell i is an articulation point.
+  // Standard iterative Tarjan DFS (avoids JS stack-overflow on large boards).
+  _slArticulationPoints(color) {
+    const H = this.height, W = this.width, N = H * W;
+    const disc = this._slApDisc; disc.fill(-1);
+    const low = this._slApLow;
+    const isAP = this._slApIsAP; isAP.fill(0);
+    let timer = 0;
+
+    // Iterative DFS using an explicit stack of [node, parentNode, neighborIndex].
+    for (let startNode = 0; startNode < N; startNode++) {
+      const cv = this.colors[startNode];
+      if (cv !== color && cv !== 0) continue;  // not in {color ∪ UNKNOWN}
+      if (disc[startNode] !== -1) continue;    // already visited
+
+      // Stack entry: [node, parent, childrenCount, neighborIndex]
+      const dfsStack = [[startNode, -1, 0, 0]];
+      disc[startNode] = low[startNode] = timer++;
+
+      while (dfsStack.length) {
+        const frame = dfsStack[dfsStack.length - 1];
+        const [u, parent] = frame;
+        const r = (u / W) | 0, cu = u % W;
+        // Enumerate neighbors lazily via frame[3] (neighborIndex).
+        let pushed = false;
+        while (frame[3] < 4) {
+          const d = frame[3]++;
+          let v = -1;
+          if (d === 0) { if (r > 0) v = u - W; }
+          else if (d === 1) { if (r + 1 < H) v = u + W; }
+          else if (d === 2) { if (cu > 0) v = u - 1; }
+          else { if (cu + 1 < W) v = u + 1; }
+          if (v < 0) continue;
+          const vc = this.colors[v];
+          if (vc !== color && vc !== 0) continue;  // not in subgraph
+          if (disc[v] === -1) {
+            // Tree edge: push child onto stack.
+            frame[2]++;  // children count of u
+            disc[v] = low[v] = timer++;
+            dfsStack.push([v, u, 0, 0]);
+            pushed = true;
+            break;
+          } else if (v !== parent) {
+            // Back edge: update low.
+            if (disc[v] < low[u]) low[u] = disc[v];
+          }
+        }
+        if (!pushed) {
+          // Done with this node: propagate low to parent, check AP condition.
+          dfsStack.pop();
+          if (dfsStack.length > 0) {
+            const parentFrame = dfsStack[dfsStack.length - 1];
+            const p = parentFrame[0];
+            if (low[u] < low[p]) low[p] = low[u];
+            if (parent !== -1 && low[u] >= disc[p]) isAP[p] = 1;
+          } else {
+            // Root of DFS tree.
+            if (frame[2] > 1) isAP[u] = 1;
+          }
+        }
+      }
+    }
+    return isAP;
+  }
+
+  // Cut deduction for one color. For each UNKNOWN articulation point of the
+  // {color ∪ UNKNOWN} graph whose removal would disconnect the known-color
+  // cells, force it to `color`. Calls onChange() for each forced cell.
+  _slApplyCut(color, onChange) {
+    const N = this.height * this.width;
+    const isAP = this._slArticulationPoints(color);
+    for (let ap = 0; ap < N; ap++) {
+      if (!isAP[ap]) continue;
+      if (this.colors[ap] !== 0) continue;  // not UNKNOWN
+      // Check if removing this cell disconnects the known-color cells.
+      if (!this._slColorConnected(color, ap)) {
+        if (!this._setColor(ap, color)) return false;
+        onChange();
+      }
+    }
+    return true;
+  }
+
+  // Helper: BFS to check whether all known-color cells (excluding `blockIdx`)
+  // remain connected through the {color ∪ UNKNOWN} graph when `blockIdx` is
+  // removed. Returns true if connected (or ≤1 known-color cell remains).
+  _slColorConnected(color, blockIdx) {
+    const H = this.height, W = this.width, N = H * W;
+    let start = -1, placedCount = 0;
+    for (let i = 0; i < N; i++) {
+      if (i === blockIdx) continue;
+      if (this.colors[i] === color) {
+        placedCount++;
+        if (start === -1) start = i;
+      }
+    }
+    if (placedCount <= 1) return true;
+    const seen = this._slSeen2;
+    seen.fill(0);
+    const stack = [start];
+    seen[start] = 1;
+    let reached = 1;
+    while (stack.length) {
+      const cur = stack.pop();
+      const r = (cur / W) | 0, c = cur % W;
+      const neighbors = [];
+      if (r > 0) neighbors.push(cur - W);
+      if (r + 1 < H) neighbors.push(cur + W);
+      if (c > 0) neighbors.push(cur - 1);
+      if (c + 1 < W) neighbors.push(cur + 1);
+      for (const nb of neighbors) {
+        if (seen[nb] || nb === blockIdx) continue;
+        const vc = this.colors[nb];
+        if (vc === color || vc === 0) {
+          seen[nb] = 1;
+          if (vc === color) reached++;
+          stack.push(nb);
+        }
+      }
+    }
+    return reached === placedCount;
+  }
+
+  // Connectivity propagation (cell color graph). Runs:
+  //   (a) INSIDE reachability: UNKNOWN cells that can't reach any known-INSIDE
+  //       cell through the {INSIDE ∪ UNKNOWN} graph are forced OUTSIDE. Also
+  //       detects contradiction if known-INSIDE cells are disconnected.
+  //   (b) OUTSIDE reachability: UNKNOWN cells that can't reach the virtual grid
+  //       exterior through the {OUTSIDE ∪ UNKNOWN} graph are forced INSIDE.
+  //   (c) INSIDE articulation cut: UNKNOWN articulation points of the
+  //       {INSIDE ∪ UNKNOWN} graph whose removal disconnects known-INSIDE cells
+  //       are forced INSIDE.
+  //
+  // Note: OUTSIDE articulation cut is intentionally omitted. The OUTSIDE region
+  // in a valid Slitherlink solution is connected via the plane exterior — two
+  // known-OUTSIDE cells may be disconnected within the cell graph (e.g., one
+  // above and one below the loop) yet still be in the same topological region.
+  //
+  // Returns false on contradiction; calls onChange() for each forced color.
+  _propagateConnectivity(onChange) {
+    if (!this._slApplyInsideReachability(onChange)) return false;
+    if (!this._slApplyOutsideReachability(onChange)) return false;
+    if (!this._slApplyCut(1, onChange)) return false;
+    return true;
+  }
+
   // 1-step lookahead. For each "constrained" UNKNOWN edge, probe both values
   // (LINE and EMPTY). If one probe propagates to a contradiction, force the
   // other. If both propagate to contradictions, return false.
@@ -5357,6 +5605,7 @@ class SlitherlinkSolver {
         // the probe edge alone. This halves inner-probe propagation time.
         if (!this._inLookahead && !this._propagateAdvanced(onLocalChange)) return false;
         if (!this._propagateColors(onLocalChange)) return false;
+        if (!this._inLookahead && !this._propagateConnectivity(onLocalChange)) return false;
       }
 
       // ── Subloop check ────────────────────────────────────────────────────
