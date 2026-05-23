@@ -1998,7 +1998,33 @@ function makeWidget() {
     return (h >>> 0).toString(36);
   }
 
+  function slitherlinkCluesSig(task) {
+    if (!Array.isArray(task)) return '';
+    let h = 0x811c9dc5;
+    for (let r = 0; r < task.length; r++) {
+      const row = task[r] || [];
+      for (let c = 0; c < row.length; c++) {
+        h ^= (row[c] | 0) + 2;
+        h = Math.imul(h, 0x01000193) >>> 0;
+      }
+    }
+    return (h >>> 0).toString(16);
+  }
+
   function gridDataSig(grid) {
+    if (grid && grid.horizontal && grid.vertical) {
+      let h = 0x811c9dc5;
+      const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+      for (const row of grid.horizontal) for (const v of row) mix(v | 0);
+      mix(0xFF);
+      for (const row of grid.vertical) for (const v of row) mix(v | 0);
+      if (grid.galaxies) {
+        mix(0xEE);
+        for (const row of grid.galaxies.horizontal || []) for (const v of row) mix(v | 0);
+        for (const row of grid.galaxies.vertical   || []) for (const v of row) mix(v | 0);
+      }
+      return (h >>> 0).toString(16);
+    }
     let h = FNV_OFFSET;
     for (let r = 0; r < grid.length; r++) {
       const row = grid[r];
@@ -2078,6 +2104,32 @@ function makeWidget() {
     }
     if (pd?.type === 'shikaku' && Array.isArray(pd.clues)) {
       drawShikakuCluesOn(ctx, cellSize, pd.clues);
+    }
+    if (pd?.type === 'slitherlink') {
+      const dotR = Math.max(1.5, cellSize / 14);
+      ctx.fillStyle = '#1f2937';
+      for (let r = 0; r <= rows; r++) {
+        for (let c = 0; c <= cols; c++) {
+          ctx.beginPath();
+          ctx.arc(c * cellSize, r * cellSize, dotR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      const fontPx = Math.max(8, Math.floor(cellSize * 0.55));
+      ctx.font = `bold ${fontPx}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#1f2937';
+      const task = pd.task || [];
+      for (let r = 0; r < rows; r++) {
+        const row = task[r] || [];
+        for (let c = 0; c < cols; c++) {
+          const v = row[c];
+          if (v === 0 || v === 1 || v === 2 || v === 3) {
+            ctx.fillText(String(v), c * cellSize + cellSize / 2, r * cellSize + cellSize / 2);
+          }
+        }
+      }
     }
     return c;
   }
@@ -2185,7 +2237,7 @@ function makeWidget() {
   }
 
   function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang') return;
+    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink') return;
     ctx.save();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -2220,8 +2272,9 @@ function makeWidget() {
   }
 
   function drawPreview(grid, hint) {
-    const rows = grid.length;
-    const cols = grid[0].length;
+    const isSlitherlink = puzzleData?.type === 'slitherlink';
+    const rows = isSlitherlink ? (puzzleData?.rows || (grid.horizontal ? grid.horizontal.length - 1 : 0)) : grid.length;
+    const cols = isSlitherlink ? (puzzleData?.cols || (grid.horizontal ? (grid.horizontal[0] || []).length : 0)) : grid[0].length;
     const bodyWidth = q('.ns-body').clientWidth || 300;
     const cellSize = Math.min(Math.floor((bodyWidth - 4) / cols), Math.floor(350 / rows), 24);
     const w = cols * cellSize, h = rows * cellSize;
@@ -2247,7 +2300,8 @@ function makeWidget() {
                       '|rm=' + regionMapSig(pd?.regionMap) +
                       '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
                       '|cc=' + comparisonCluesSig(pd?.comparisonClues) +
-                      '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null);
+                      '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
+                      '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
       staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
@@ -2268,83 +2322,115 @@ function makeWidget() {
     // strokeStyle/lineWidth set up only once.
     const galaxiesColors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
     const xPad = Math.max(1, Math.floor(cellSize / 5));
-    let xMarkPath = null;
     const isShikaku = puzzleData?.type === 'shikaku';
     const isBinairo = puzzleData?.type === 'binairo';
     const isYinYang = puzzleData?.type === 'yinyang';
     const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
-    ctx.fillStyle = '#1f2937';
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const v = grid[r][c];
-        if (v === 0 && !isShikaku) continue;
-        if (v === -1 && isShikaku) continue;
-        const x = c * cellSize, y = r * cellSize;
-        if (isShikaku) {
-          if (v >= 0) {
-            ctx.fillStyle = galaxiesColors[v % galaxiesColors.length];
-            ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
-          }
-        } else if (isBinairo) {
-          // cellStatus encoding: 1 = "one" cells (page shows as light/outlined),
-          // 2 = "zero" cells (page shows as dark/filled). Match that polarity.
-          const cx = x + cellSize / 2, cy = y + cellSize / 2;
-          if (v === 1) {
-            ctx.fillStyle = '#fff';
-            ctx.strokeStyle = '#1f2937';
-            ctx.lineWidth = Math.max(1.5, cellSize / 14);
+    if (isSlitherlink) {
+      ctx.save();
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize / 6));
+      ctx.lineCap = 'round';
+      const hg = grid.horizontal || [];
+      for (let r = 0; r <= rows; r++) {
+        const row = hg[r] || [];
+        for (let c = 0; c < cols; c++) {
+          if (row[c] === 1) {
             ctx.beginPath();
-            ctx.arc(cx, cy, discR, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(c * cellSize, r * cellSize);
+            ctx.lineTo((c + 1) * cellSize, r * cellSize);
             ctx.stroke();
-          } else if (v === 2) {
-            ctx.fillStyle = '#1f2937';
-            ctx.beginPath();
-            ctx.arc(cx, cy, discR, 0, Math.PI * 2);
-            ctx.fill();
           }
-        } else if (isYinYang) {
-          // cellStatus 1 renders light, 2 renders dark — matching the game
-          // (Yin-Yang shares Binairo's cell encoding/polarity).
-          const yyInset = Math.max(1, Math.floor(cellSize * 0.15));
-          const yySide = cellSize - 2 * yyInset;
-          const sx = x + yyInset, sy = y + yyInset;
-          if (v === 1) {
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(sx, sy, yySide, yySide);
-            ctx.strokeStyle = '#1f2937';
-            ctx.lineWidth = Math.max(1.5, cellSize / 14);
-            ctx.strokeRect(sx, sy, yySide, yySide);
-          } else if (v === 2) {
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(sx, sy, yySide, yySide);
-          }
-          // Given cells get a small contrasting centre square.
-          const given = puzzleData?.task?.[r]?.[c];
-          if (given === 0 || given === 1) {
-            const dotSide = Math.max(2, Math.floor(cellSize * 0.2));
-            ctx.fillStyle = v === 1 ? '#1f2937' : '#fff';
-            ctx.fillRect(x + (cellSize - dotSide) / 2, y + (cellSize - dotSide) / 2, dotSide, dotSide);
-          }
-        } else if (puzzleData?.type === 'galaxies' && v > 0) {
-          ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
-          ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
-        } else if (v === 1) {
-          ctx.fillStyle = '#1f2937';
-          ctx.fillRect(x, y, cellSize, cellSize);
-        } else if (v === -1) {
-          if (!xMarkPath) xMarkPath = new Path2D();
-          xMarkPath.moveTo(x + xPad, y + xPad);
-          xMarkPath.lineTo(x + cellSize - xPad, y + cellSize - xPad);
-          xMarkPath.moveTo(x + cellSize - xPad, y + xPad);
-          xMarkPath.lineTo(x + xPad, y + cellSize - xPad);
         }
       }
-    }
-    if (xMarkPath) {
-      ctx.strokeStyle = '#999';
-      ctx.lineWidth = 1;
-      ctx.stroke(xMarkPath);
+      const vg = grid.vertical || [];
+      for (let r = 0; r < rows; r++) {
+        const row = vg[r] || [];
+        for (let c = 0; c <= cols; c++) {
+          if (row[c] === 1) {
+            ctx.beginPath();
+            ctx.moveTo(c * cellSize, r * cellSize);
+            ctx.lineTo(c * cellSize, (r + 1) * cellSize);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.restore();
+    } else {
+      let xMarkPath = null;
+      ctx.fillStyle = '#1f2937';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const v = grid[r][c];
+          if (v === 0 && !isShikaku) continue;
+          if (v === -1 && isShikaku) continue;
+          const x = c * cellSize, y = r * cellSize;
+          if (isShikaku) {
+            if (v >= 0) {
+              ctx.fillStyle = galaxiesColors[v % galaxiesColors.length];
+              ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+            }
+          } else if (isBinairo) {
+            // cellStatus encoding: 1 = "one" cells (page shows as light/outlined),
+            // 2 = "zero" cells (page shows as dark/filled). Match that polarity.
+            const cx = x + cellSize / 2, cy = y + cellSize / 2;
+            if (v === 1) {
+              ctx.fillStyle = '#fff';
+              ctx.strokeStyle = '#1f2937';
+              ctx.lineWidth = Math.max(1.5, cellSize / 14);
+              ctx.beginPath();
+              ctx.arc(cx, cy, discR, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            } else if (v === 2) {
+              ctx.fillStyle = '#1f2937';
+              ctx.beginPath();
+              ctx.arc(cx, cy, discR, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          } else if (isYinYang) {
+            // cellStatus 1 renders light, 2 renders dark — matching the game
+            // (Yin-Yang shares Binairo's cell encoding/polarity).
+            const yyInset = Math.max(1, Math.floor(cellSize * 0.15));
+            const yySide = cellSize - 2 * yyInset;
+            const sx = x + yyInset, sy = y + yyInset;
+            if (v === 1) {
+              ctx.fillStyle = '#fff';
+              ctx.fillRect(sx, sy, yySide, yySide);
+              ctx.strokeStyle = '#1f2937';
+              ctx.lineWidth = Math.max(1.5, cellSize / 14);
+              ctx.strokeRect(sx, sy, yySide, yySide);
+            } else if (v === 2) {
+              ctx.fillStyle = '#1f2937';
+              ctx.fillRect(sx, sy, yySide, yySide);
+            }
+            // Given cells get a small contrasting centre square.
+            const given = puzzleData?.task?.[r]?.[c];
+            if (given === 0 || given === 1) {
+              const dotSide = Math.max(2, Math.floor(cellSize * 0.2));
+              ctx.fillStyle = v === 1 ? '#1f2937' : '#fff';
+              ctx.fillRect(x + (cellSize - dotSide) / 2, y + (cellSize - dotSide) / 2, dotSide, dotSide);
+            }
+          } else if (puzzleData?.type === 'galaxies' && v > 0) {
+            ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
+            ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+          } else if (v === 1) {
+            ctx.fillStyle = '#1f2937';
+            ctx.fillRect(x, y, cellSize, cellSize);
+          } else if (v === -1) {
+            if (!xMarkPath) xMarkPath = new Path2D();
+            xMarkPath.moveTo(x + xPad, y + xPad);
+            xMarkPath.lineTo(x + cellSize - xPad, y + cellSize - xPad);
+            xMarkPath.moveTo(x + cellSize - xPad, y + xPad);
+            xMarkPath.lineTo(x + xPad, y + cellSize - xPad);
+          }
+        }
+      }
+      if (xMarkPath) {
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.stroke(xMarkPath);
+      }
     }
 
     if (puzzleData?.type === 'galaxies') {
@@ -2386,7 +2472,26 @@ function makeWidget() {
       ctx.restore();
     }
 
-    if (hint) {
+    if (isSlitherlink && hint && Array.isArray(hint.edges)) {
+      ctx.save();
+      ctx.strokeStyle = '#2e86de';
+      ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
+      ctx.lineCap = 'round';
+      for (const e of hint.edges) {
+        if (e.orientation === 'h') {
+          ctx.beginPath();
+          ctx.moveTo(e.c * cellSize, e.r * cellSize);
+          ctx.lineTo((e.c + 1) * cellSize, e.r * cellSize);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(e.c * cellSize, e.r * cellSize);
+          ctx.lineTo(e.c * cellSize, (e.r + 1) * cellSize);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else if (hint) {
       const highlightColor = 'rgba(46, 134, 222, 0.25)';
       const fillColor = 'rgba(46, 134, 222, 0.45)';
       const crossColor = 'rgba(230, 57, 70, 0.45)';
