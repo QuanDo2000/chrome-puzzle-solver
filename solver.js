@@ -4791,8 +4791,11 @@ class SlitherlinkSolver {
   }
 
   // Iterate clue + vertex rules to a fixpoint. After each pass that
-  // added a LINE edge, rebuild the DSU; if a cycle closed, only accept it
-  // when the whole puzzle is complete (otherwise it's a subloop).
+  // added a LINE edge, rebuild the DSU; if a cycle closed, check for
+  // subloop: a real subloop means some LINE-endpoint dot has degree 1
+  // (the line can't extend because the cycle is already closed). If every
+  // LINE dot has degree 2, the cycle is consistent — the remaining unknowns
+  // are in degree-0 regions and will be forced EMPTY or explored later.
   propagate() {
     let changed = true;
     let anyLineAddedSinceRebuild = false;
@@ -4808,7 +4811,18 @@ class SlitherlinkSolver {
     if (anyLineAddedSinceRebuild) {
       this._dsuRebuild();
       if (this._cycleClosed) {
-        if (!this._checkSingleLoopComplete()) return false;
+        if (this._allEdgesAssigned()) {
+          // Complete assignment: validate single loop.
+          if (!this._checkSingleLoopComplete()) return false;
+        } else {
+          // Unknowns remain. A real subloop contradiction exists iff some
+          // LINE-endpoint dot has degree 1 — the line cannot continue.
+          for (let i = 0; i < this.lineCount.length; i++) {
+            if (this.lineCount[i] === 1) return false;
+          }
+          // All LINE dots have degree 0 or 2 — no contradiction yet; the
+          // solver will handle the remaining unknowns via backtracking.
+        }
       }
     }
     return true;
