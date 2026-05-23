@@ -642,6 +642,123 @@ function applyYinYangState(solution) {
   }
 }
 
+function readSlitherlinkData() {
+  var maxAttempts = 20;
+  var pollMs = 250;
+
+  function deepCopy2D(g) {
+    if (!Array.isArray(g)) return null;
+    var out = [];
+    for (var r = 0; r < g.length; r++) {
+      if (!Array.isArray(g[r])) return null;
+      out[r] = g[r].slice();
+    }
+    return out;
+  }
+
+  function doRead() {
+    try {
+      if (!window.Game || window.Game.loaded === false) return null;
+      if (!Array.isArray(window.Game.task)) return null;
+      var width = window.Game.puzzleWidth;
+      var height = window.Game.puzzleHeight;
+      if (!width || !height) return null;
+      var task = deepCopy2D(window.Game.task);
+      if (!task) return null;
+      return { task: task, width: width, height: height };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  return new Promise(function (resolve) {
+    function poll() {
+      var r = doRead();
+      if (r) { resolve(r); return; }
+      maxAttempts--;
+      if (maxAttempts <= 0) { resolve(null); return; }
+      setTimeout(poll, pollMs);
+    }
+    poll();
+    setTimeout(function () { resolve(null); }, 10000);
+  });
+}
+
+function readSlitherlinkState(rows, cols) {
+  try {
+    if (!window.Game || !window.Game.currentState) return null;
+    var hs = window.Game.currentState.cellHorizontalStatus;
+    var vs = window.Game.currentState.cellVerticalStatus;
+    if (!Array.isArray(hs) || !Array.isArray(vs)) return null;
+    var horizontal = [];
+    for (var hr = 0; hr <= rows; hr++) {
+      var row = hs[hr] || [];
+      horizontal[hr] = [];
+      for (var hc = 0; hc < cols; hc++) {
+        horizontal[hr][hc] = row[hc] === 1 ? 1 : 0;
+      }
+    }
+    var vertical = [];
+    for (var vr = 0; vr < rows; vr++) {
+      var vrow = vs[vr] || [];
+      vertical[vr] = [];
+      for (var vc = 0; vc <= cols; vc++) {
+        vertical[vr][vc] = vrow[vc] === 1 ? 1 : 0;
+      }
+    }
+    return { horizontal: horizontal, vertical: vertical };
+  } catch (e) {
+    return null;
+  }
+}
+
+function applySlitherlinkState(lines) {
+  try {
+    if (!lines || !lines.horizontal || !lines.vertical) return false;
+    if (!(window.Game && window.Game.currentState)) return false;
+    var hs = window.Game.currentState.cellHorizontalStatus;
+    var vs = window.Game.currentState.cellVerticalStatus;
+    if (!Array.isArray(hs) || !Array.isArray(vs)) return false;
+
+    // saveState(true) BEFORE writes — see CLAUDE.md "MAIN-world write
+    // functions: save + render ladder".
+    if (typeof window.Game.saveState === 'function') {
+      window.Game.saveState(true);
+    }
+
+    for (var r = 0; r < hs.length && r < lines.horizontal.length; r++) {
+      var dst = hs[r], src = lines.horizontal[r] || [];
+      if (!Array.isArray(dst)) continue;
+      for (var c = 0; c < dst.length && c < src.length; c++) {
+        dst[c] = src[c] === 1 ? 1 : 0;
+      }
+    }
+    for (var r2 = 0; r2 < vs.length && r2 < lines.vertical.length; r2++) {
+      var dst2 = vs[r2], src2 = lines.vertical[r2] || [];
+      if (!Array.isArray(dst2)) continue;
+      for (var c2 = 0; c2 < dst2.length && c2 < src2.length; c2++) {
+        dst2[c2] = src2[c2] === 1 ? 1 : 0;
+      }
+    }
+    window.Game.currentState.solved = false;
+    window.Game.solved = false;
+
+    if (typeof window.Game.drawCurrentState === 'function') {
+      window.Game.drawCurrentState();
+    } else if (typeof window.Game.render === 'function') {
+      window.Game.render();
+    } else if (typeof window.Game.redraw === 'function') {
+      window.Game.redraw();
+    } else if (typeof window.Game.draw === 'function') {
+      window.Game.draw();
+    }
+    return true;
+  } catch (e) {
+    console.warn('Slitherlink apply failed:', e);
+    return false;
+  }
+}
+
 function readShikakuData() {
   var maxAttempts = 20;
   var pollMs = 250;
