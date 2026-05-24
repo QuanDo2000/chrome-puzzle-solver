@@ -2116,7 +2116,31 @@ function makeWidget() {
     return (h >>> 0).toString(16);
   }
 
+  // Island-set stable signature for the hashi static layer (circles + numbers).
+  // Bridge counts live in the dynamic layer / gridDataSig, NOT here.
+  function hashiIslandsSig(islands) {
+    if (!Array.isArray(islands) || islands.length === 0) return '0';
+    let h = 0x811c9dc5;
+    for (const i of islands) {
+      h ^= (i.row | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+      h ^= (i.col | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+      h ^= (i.number | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return (h >>> 0).toString(36);
+  }
+
   function gridDataSig(grid) {
+    // Hashi grids: { edges: [...] }. No 2D state — bridges encode everything
+    // visible. (No .horizontal/.vertical, so test before the slitherlink arm.)
+    if (grid && Array.isArray(grid.edges) && !grid.horizontal) {
+      let h = 0x811c9dc5;
+      for (const e of grid.edges) {
+        h ^= (e.a | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+        h ^= (e.b | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+        h ^= (e.bridges | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+      }
+      return (h >>> 0).toString(16);
+    }
     if (grid && grid.horizontal && grid.vertical) {
       let h = 0x811c9dc5;
       const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
@@ -2210,6 +2234,9 @@ function makeWidget() {
     if (pd?.type === 'shikaku' && Array.isArray(pd.clues)) {
       drawShikakuCluesOn(ctx, cellSize, pd.clues);
     }
+    if (pd?.type === 'hashi' && Array.isArray(pd.islands)) {
+      drawHashiIslandsOn(ctx, cellSize, pd.islands);
+    }
     if (pd?.type === 'slitherlink') {
       const dotR = Math.max(1.5, cellSize / 14);
       ctx.fillStyle = '#1f2937';
@@ -2294,6 +2321,33 @@ function makeWidget() {
     ctx.restore();
   }
 
+  // Numbered island circles for hashi. Cached in the static layer (island set
+  // changes only on a fresh detect). Bridges paint in the dynamic layer, so
+  // re-drawing the circles AFTER bridges in the main loop keeps the centre
+  // disc covering any bridge stubs that might otherwise poke through.
+  function drawHashiIslandsOn(ctx, cellSize, islands) {
+    const radius = cellSize * 0.35;
+    const fontSize = Math.max(8, Math.floor(cellSize * 0.5));
+    ctx.save();
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const i of islands) {
+      const cx = i.col * cellSize + cellSize / 2;
+      const cy = i.row * cellSize + cellSize / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = Math.max(1.5, cellSize / 14);
+      ctx.stroke();
+      ctx.fillStyle = '#1f2937';
+      ctx.fillText(String(i.number), cx, cy);
+    }
+    ctx.restore();
+  }
+
   function drawRegionBordersOn(ctx, rows, cols, cellSize, rm) {
     if (!rm) return;
     ctx.save();
@@ -2342,7 +2396,7 @@ function makeWidget() {
   }
 
   function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink') return;
+    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi') return;
     ctx.save();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -2378,8 +2432,21 @@ function makeWidget() {
 
   function drawPreview(grid, hint) {
     const isSlitherlink = puzzleData?.type === 'slitherlink';
-    const rows = isSlitherlink ? (puzzleData?.rows || (grid.horizontal ? grid.horizontal.length - 1 : 0)) : grid.length;
-    const cols = isSlitherlink ? (puzzleData?.cols || (grid.horizontal ? (grid.horizontal[0] || []).length : 0)) : grid[0].length;
+    const isHashi = puzzleData?.type === 'hashi';
+    // Hashi's "grid" is { edges }: no 2D extent, so rows/cols come from
+    // puzzleData.{rows,cols}. Slitherlink also takes rows/cols from puzzleData
+    // when present (the H/V arrays imply them, but pd is authoritative).
+    let rows, cols;
+    if (isHashi) {
+      rows = puzzleData?.rows || 0;
+      cols = puzzleData?.cols || 0;
+    } else if (isSlitherlink) {
+      rows = puzzleData?.rows || (grid.horizontal ? grid.horizontal.length - 1 : 0);
+      cols = puzzleData?.cols || (grid.horizontal ? (grid.horizontal[0] || []).length : 0);
+    } else {
+      rows = grid.length;
+      cols = grid[0].length;
+    }
     const bodyWidth = q('.ns-body').clientWidth || 300;
     const cellSize = Math.min(Math.floor((bodyWidth - 4) / cols), Math.floor(350 / rows), 24);
     const w = cols * cellSize, h = rows * cellSize;
@@ -2406,7 +2473,8 @@ function makeWidget() {
                       '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
                       '|cc=' + comparisonCluesSig(pd?.comparisonClues) +
                       '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
-                      '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null);
+                      '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
+                      '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
       staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
@@ -2492,6 +2560,62 @@ function makeWidget() {
           ctx.moveTo(midX + xMarkSize / 2, midY - xMarkSize / 2);
           ctx.lineTo(midX - xMarkSize / 2, midY + xMarkSize / 2);
           ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else if (isHashi) {
+      // Hashi bridges. Single bridges render as one centered line; double
+      // bridges as two parallel lines offset ±bridgeOffset perpendicular to
+      // the bridge direction. The island circles in the static layer cover
+      // each line's endpoints, so we stroke from island-center to
+      // island-center and let the circles mask the inner stubs.
+      const islands = puzzleData?.islands || [];
+      const bridgeOffset = Math.max(2, Math.floor(cellSize / 7));
+      ctx.save();
+      ctx.strokeStyle = '#1a73e8';
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+      ctx.lineCap = 'butt';
+      const edges = grid?.edges || [];
+      for (const e of edges) {
+        if (!e || !e.bridges) continue;
+        const ia = islands[e.a], ib = islands[e.b];
+        if (!ia || !ib) continue;
+        const ax = ia.col * cellSize + cellSize / 2;
+        const ay = ia.row * cellSize + cellSize / 2;
+        const bx = ib.col * cellSize + cellSize / 2;
+        const by = ib.row * cellSize + cellSize / 2;
+        if (e.orientation === 'H') {
+          if (e.bridges === 1) {
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+            ctx.stroke();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(ax, ay - bridgeOffset);
+            ctx.lineTo(bx, by - bridgeOffset);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ax, ay + bridgeOffset);
+            ctx.lineTo(bx, by + bridgeOffset);
+            ctx.stroke();
+          }
+        } else {
+          if (e.bridges === 1) {
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+            ctx.stroke();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(ax - bridgeOffset, ay);
+            ctx.lineTo(bx - bridgeOffset, by);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ax + bridgeOffset, ay);
+            ctx.lineTo(bx + bridgeOffset, by);
+            ctx.stroke();
+          }
         }
       }
       ctx.restore();
@@ -2654,6 +2778,10 @@ function makeWidget() {
       } else if (puzzleData?.type === 'shikaku') {
         // Shikaku hints reveal a rectangle, not a row/column — skip the
         // band highlight; the per-cell loop below paints each hint cell.
+      } else if (hint.type === 'hashi') {
+        // Hashi hint edges are already merged into grid.edges by
+        // applyHintToGrid and painted by the dynamic-bridges branch above.
+        // No row/column band highlight, no per-cell loop applies.
       } else if (hint.type === 'row') {
         ctx.fillStyle = highlightColor;
         ctx.fillRect(0, hint.index * cellSize, w, cellSize);
@@ -2747,6 +2875,21 @@ function makeWidget() {
               ctx.moveTo(em.c * cellSize, em.r * cellSize);
               ctx.lineTo(em.c * cellSize, (em.r + 1) * cellSize);
             }
+            ctx.stroke();
+          }
+        } else if (puzzleData.type === 'hashi') {
+          // Re-stroke wrong bridges in red between the two island centres.
+          // computePuzzleDiff returns {a, b, orientation, expected, actual}
+          // for each mis-drawn bridge (wrong count or unwanted bridge).
+          ctx.lineCap = 'round';
+          ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
+          const islands = puzzleData?.islands || [];
+          for (const m of /** @type {any[]} */ (mistakes)) {
+            const ia = islands[m.a], ib = islands[m.b];
+            if (!ia || !ib) continue;
+            ctx.beginPath();
+            ctx.moveTo(ia.col * cellSize + cellSize / 2, ia.row * cellSize + cellSize / 2);
+            ctx.lineTo(ib.col * cellSize + cellSize / 2, ib.row * cellSize + cellSize / 2);
             ctx.stroke();
           }
         } else {
@@ -2978,11 +3121,15 @@ function makeWidget() {
   }
 
   // For slitherlink the worker result has { horizontal, vertical } instead of
-  // .grid; drawPreview expects the matching shape. Other puzzle types still
-  // pass result.grid through unchanged.
+  // .grid; for hashi it has { edges }. drawPreview expects the matching shape
+  // (same shape readState returns for the puzzle type). Other puzzle types
+  // still pass result.grid through unchanged.
   function previewGridFromResult(result) {
     if (puzzleData?.type === 'slitherlink' && result?.horizontal && result?.vertical) {
       return { horizontal: result.horizontal, vertical: result.vertical };
+    }
+    if (puzzleData?.type === 'hashi' && result?.edges) {
+      return { edges: result.edges };
     }
     return result?.grid;
   }
