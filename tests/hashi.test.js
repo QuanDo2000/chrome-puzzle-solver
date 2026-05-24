@@ -425,3 +425,19 @@ test('HashiSolver: solution cache returns cached result on identical input', () 
   assert.equal(r3.edges[0].bridges, 2);
   HashiSolver.clearSolutionCache();
 });
+
+test('HashiSolver: getHint returns at least one forced edge from current state', () => {
+  HashiSolver.clearSolutionCache();
+  const s = new HashiSolver({
+    rows: 1, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 2 },
+      { index: 1, row: 0, col: 2, number: 2 },
+    ],
+  });
+  const hint = s.getHint([]); // no current edges
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length >= 1);
+  assert.equal(hint[0].bridges, 2);
+  HashiSolver.clearSolutionCache();
+});

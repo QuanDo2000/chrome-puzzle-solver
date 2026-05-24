@@ -7336,6 +7336,58 @@ class HashiSolver {
     }
     return out;
   }
+
+  getHint(currentEdges) {
+    // Seed bounds from currentEdges: any edge currently set to N → lo=hi=N.
+    // Then propagate; collect newly-decided edges as hints. Fall back to
+    // solve() and emit gap edges if propagation alone doesn't deduce.
+    const K = this.islands.length;
+    const minLines = Math.max(1, Math.ceil(K / 10));
+
+    // Build a key for the current edge set so we can apply hints.
+    const currentMap = new Map();
+    for (const e of currentEdges) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      currentMap.set(`${a}-${b}`, e.bridges);
+    }
+    // Seed.
+    for (let i = 0; i < this.edges.length; i++) {
+      const e = this.edges[i];
+      const key = `${e.a}-${e.b}`;
+      if (currentMap.has(key)) {
+        const v = currentMap.get(key);
+        if (v < this.lo[i] || v > this.hi[i]) {
+          // current state contradicts solver bounds — bail
+          return [];
+        }
+        this._assign(i, v, v);
+      }
+    }
+    if (!this.propagate()) return [];
+    // Collect newly forced edges (those that became lo=hi after seed).
+    const hints = [];
+    for (let i = 0; i < this.edges.length; i++) {
+      if (this.lo[i] !== this.hi[i]) continue;
+      const e = this.edges[i];
+      const key = `${e.a}-${e.b}`;
+      if (currentMap.has(key) && currentMap.get(key) === this.lo[i]) continue;
+      hints.push({ a: e.a, b: e.b, orientation: e.orientation, bridges: this.lo[i] });
+      if (hints.length >= minLines) return hints;
+    }
+    // Fallback: solve and emit gap edges (excluding bridges=0 since they
+    // aren't visible board changes).
+    this._rollback(0); // reset for clean solve
+    const r = this.solve();
+    if (!r.solved) return hints;
+    for (const e of r.edges) {
+      const key = `${e.a}-${e.b}`;
+      if (currentMap.get(key) !== e.bridges) {
+        hints.push(e);
+        if (hints.length >= minLines) break;
+      }
+    }
+    return hints;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
