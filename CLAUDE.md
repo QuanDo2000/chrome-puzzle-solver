@@ -1,9 +1,9 @@
 # Project conventions for Claude Code
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
-Binairo Plus, Shikaku, Yin-Yang, and Slitherlink puzzles on puzzles-mobile.com.
-Seven solver classes in `solver.js`, a content-script widget in `content.js`,
-and a small service worker in `background.js`.
+Binairo Plus, Shikaku, Yin-Yang, Slitherlink, and Hashi puzzles on
+puzzles-mobile.com. Eight solver classes in `solver.js`, a content-script
+widget in `content.js`, and a small service worker in `background.js`.
 
 ## Version control: use `jj`, never plain `git`
 
@@ -380,6 +380,88 @@ Tried during CDCL build (2026-05-23):
   the entire cell graph. Far-away edge changes flip probe outcomes
   without dirtying any cell adjacent to the probed edge, so cache-skip
   admits stale results. Manifests as fuzz failures and false UNSAT.
+
+### Hashi encoding
+
+`/hashi/*` has dedicated `HashiSolver` + `hashiHandler`. The URL path is
+`/hashi/`, page internal `slug === 'bridges'`. The `handler.matches()`
+keys on `/hashi/`; `dumpPuzzleForBench` accepts `/hashi/`, `/bridges/`,
+or `slug === 'bridges'` so dumps work even if the path varies.
+
+Page encoding (island-based, not grid):
+- `task` — flat array of `{index, number: string, row, col}`, one entry
+  per island. `number` is the required bridge total; **parse to int at
+  the boundary** (`parseInt(island.number, 10)` in `dumpPuzzleForBench`
+  / `readHashiData`).
+- `currentState.cellStatus[id]` — parallel-indexed to `task[id]`. Per
+  island: `right: {index, col, bridges}` and `bottom: {index, row,
+  bridges}` (owner side of each bridge, pointing at the partner's
+  island index); `bl/bt/bb/br` — bridge-count mirrors for each side
+  (`-1` = no neighbour in that direction, `0/1/2` = current bridge
+  count); `total` — sum of the four mirrors with `-1` clamped to 0.
+
+**Sentinel detection:** use `br === -1` (or `bl/bt/bb`) to test "no
+neighbour in that direction", NOT `right.index === 0` — island 0 is a
+real id, so an owner pointing at index 0 is meaningful, not a null
+marker.
+
+**Apply contract** (`applyHashiState`). Per edge `(a, b)`:
+1. Owner is the lower-coordinate island (`Math.min(e.a, e.b)`); partner
+   is the higher. Horizontal → owner writes `right.bridges`; vertical →
+   owner writes `bottom.bridges`.
+2. Per edge, set owner's `right.bridges`/`bottom.bridges` AND owner's
+   `br`/`bb` mirror AND partner's `bl`/`bt` mirror (three writes per
+   edge — the page reads all three independently in different render
+   paths).
+3. After all edges applied, recompute every island's `total` from its
+   four mirrors (don't trust incremental updates; the page reads
+   `total` directly for the "complete" check overlay).
+4. Reset all bridge counts to 0 BEFORE applying edges (clears any prior
+   state), then wrap the whole write with `saveState(true)` BEFORE
+   writes; fall through `drawCurrentState → render → redraw` ladder
+   AFTER (same save+render contract as the cell-state puzzles).
+
+Solver shape: `HashiSolver` with one variable per candidate edge between
+adjacent islands (skipping crossings), tracked as `lo`/`hi` ∈ {0..2}
+representing the current feasible range. Trail-based undo (`_assign`
+pushes flat 3-int groups, `_rollback` restores). Propagation fixpoint:
+crossing exclusion (two edges that geometrically cross cannot both have
+`hi > 0` — force one to 0), degree forcing (sum of `hi` at an island ≥
+required ≥ sum of `lo`; tighten edges to make both bounds reachable),
+two-1s isolation (an edge between two `required=1` islands cannot be
+the only edge connecting them to the rest — would form a 2-island
+sub-component), connectivity cut (if removing an UNKNOWN edge would
+disconnect a known-required-positive sub-component from the rest,
+force it positive). After local rules stall, at `_depth === 0` and
+`!_inLookahead`, runs 1-step lookahead: probe each unsettled edge with
+each feasible value, run lookahead-free inner propagate, force survivor
+on single-side contradictions. Then most-constrained backtracking.
+
+Solution shape: `{solved, edges: [{a, b, orientation: 'H'|'V', bridges:
+1|2}, ...]}`. `a`/`b` are island indices in solver-edge-construction
+order (owner-first by iteration), NOT canonically sorted — the diff
+arm and `applyHashiState` both normalize via `Math.min`/`Math.max` so
+ordering doesn't matter downstream. Static `_solutionCache` 50-entry
+LRU keyed FNV-1a of `(rows, cols, islands sorted by (r, c), target
+each)`; **deep-copy via `_cloneResult` on store and get** (the edge
+list could otherwise be mutated by callers and corrupt the cache).
+
+localStorage cache prefix: `hashi-solution:` (registered in
+`SOLUTION_KEY_PREFIXES` so the per-puzzle clear button drops it).
+
+Loop done-check: **"every solution edge matches"** — iterate
+`puzzleData.solution.edges`, look up the corresponding bridge count on
+the live board (via island ids + orientation), all must equal. Hashi
+boards have no "cell" concept, so the empty-cell sentinel used by the
+cell-state puzzles doesn't apply.
+
+`computePuzzleDiff('hashi', board, solution)` returns `[{a, b,
+orientation, expected, actual}, ...]` for edges where the live bridge
+count contradicts the solution. Two arms: (1) iterate solution edges,
+flag any with non-zero board count that disagrees; (2) iterate board
+edges, flag any with non-zero count where the solution has 0 (extra
+bridges drawn that shouldn't exist). Zero-bridge entries on the board
+are never flagged (analogous to UNKNOWN slitherlink edges).
 
 ### Binairo: triples inline, duplicates at completion
 
