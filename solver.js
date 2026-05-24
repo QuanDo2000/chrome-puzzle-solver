@@ -6243,7 +6243,29 @@ class SlitherlinkSolver {
       }
 
       if (lineFails && emptyFails) {
-        this._lastConflictReason = [...new Set([...lineContradictionReason, ...emptyContradictionReason])];
+        // Lookahead has proven the candidate edge has no consistent value under
+        // the current trail. Probe-captured reasons reference vars that are
+        // rolled back below, so handing them to CDCL gives _analyzeConflict
+        // dangling pointers — UIP analysis sees no current-level material and
+        // either produces an empty learned clause (→ backjump to 0 → spurious
+        // UNSAT) or learns over-wide clauses that wrongly prune the search.
+        //
+        // Instead, blame the most recent current-level decision (chronological
+        // backtrack semantics, same as the legacy _backtrack path). _analyzeConflict
+        // will then learn a unit clause forcing that decision's negation, and
+        // backjump to the level below. CDCL still learns useful clauses from
+        // rule-level conflicts (which DO have well-formed reasons); only lookahead
+        // double-fails get this degenerate-but-sound treatment.
+        let lastDecisionVar = -1;
+        if (this._decisionLevel > 0) {
+          for (let ti = this.trail.length - 1; ti >= 0; ti--) {
+            if (this._decisionLevels[ti] === this._decisionLevel && this._reasons[ti] === null) {
+              lastDecisionVar = this._varAtTrailIndex(ti);
+              break;
+            }
+          }
+        }
+        this._lastConflictReason = lastDecisionVar >= 0 ? [lastDecisionVar] : [];
         this._inLookahead = false;
         return false;
       }
