@@ -918,6 +918,13 @@ function solveExtraData() {
       clues: data.clues,
     };
   }
+  if (data.type === 'hashi') {
+    return {
+      rows: data.rows,
+      cols: data.cols,
+      islands: data.islands,
+    };
+  }
   if (data.type === 'yinyang') {
     return {
       rows: data.rows,
@@ -1120,6 +1127,26 @@ function shikakuCacheKey(data) {
   return 'shikaku-solution:' + (h >>> 0).toString(16);
 }
 
+function hashiCacheKey(data) {
+  if (data?.type !== 'hashi') return null;
+  // FNV-1a over (nameplate, rows, cols, sorted islands flattened).
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x48); // 'H' nameplate so hashi keys can't collide with other types
+  mix(data.rows | 0);
+  mix(data.cols | 0);
+  const islands = Array.isArray(data.islands) ? data.islands : [];
+  mix(islands.length);
+  const sorted = islands.slice().sort((a, b) =>
+    a.row - b.row || a.col - b.col || a.number - b.number);
+  for (const i of sorted) {
+    mix(i.row | 0);
+    mix(i.col | 0);
+    mix(i.number | 0);
+  }
+  return 'hashi-solution:' + (h >>> 0).toString(16);
+}
+
 function yinYangCacheKey(data) {
   if (data?.type !== 'yinyang') return null;
   // FNV-1a over (type nameplate, rows, cols, flattened task).
@@ -1159,6 +1186,7 @@ function getCachedGridSolution(data) {
     : data?.type === 'shikaku' ? shikakuCacheKey(data)
     : data?.type === 'yinyang' ? yinYangCacheKey(data)
     : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
+    : data?.type === 'hashi' ? hashiCacheKey(data)
     : null;
   if (!key) return null;
   try {
@@ -1176,6 +1204,10 @@ function getCachedGridSolution(data) {
         vertical: parsed.vertical.map(row => row.slice()),
       };
     }
+    if (data.type === 'hashi') {
+      if (!Array.isArray(parsed?.edges)) return null;
+      return { edges: parsed.edges.map(e => ({ ...e })) };
+    }
     if (!Array.isArray(parsed?.grid)) return null;
     return parsed.grid.map(row => row.slice());
   } catch {
@@ -1190,6 +1222,7 @@ function cacheGridSolution(data, grid) {
     : data?.type === 'shikaku' ? shikakuCacheKey(data)
     : data?.type === 'yinyang' ? yinYangCacheKey(data)
     : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
+    : data?.type === 'hashi' ? hashiCacheKey(data)
     : null;
   if (!key) return;
   try {
@@ -1197,6 +1230,11 @@ function cacheGridSolution(data, grid) {
       if (!grid || !grid.horizontal || !grid.vertical) return;
       localStorage.setItem(key, JSON.stringify({
         horizontal: grid.horizontal, vertical: grid.vertical, savedAt: Date.now(),
+      }));
+    } else if (data?.type === 'hashi') {
+      if (!grid || !Array.isArray(grid.edges)) return;
+      localStorage.setItem(key, JSON.stringify({
+        edges: grid.edges, savedAt: Date.now(),
       }));
     } else {
       if (!Array.isArray(grid)) return;
@@ -2841,12 +2879,15 @@ function makeWidget() {
   // anywhere we record a successful solve, including paths that aren't going
   // into "preview ready" mode (e.g., loopHandler's own intermediate solve).
   function recordSolveSuccess(result) {
-    // Slitherlink's result is { solved, horizontal, vertical } — every other
-    // puzzle type returns { solved, grid }. Keep puzzleData.solution in the
-    // same shape readState returns, so downstream consumers (gsComplete,
-    // endComplete, mistake-diff) can compare directly without re-checking.
+    // Slitherlink's result is { solved, horizontal, vertical }; hashi's result
+    // is { solved, edges }; every other puzzle type returns { solved, grid }.
+    // Keep puzzleData.solution in the same shape readState returns, so
+    // downstream consumers (gsComplete, endComplete, mistake-diff) can compare
+    // directly without re-checking.
     if (puzzleData?.type === 'slitherlink') {
       puzzleData.solution = { horizontal: result.horizontal, vertical: result.vertical };
+    } else if (puzzleData?.type === 'hashi') {
+      puzzleData.solution = { edges: result.edges };
     } else {
       puzzleData.solution = result.grid;
     }
