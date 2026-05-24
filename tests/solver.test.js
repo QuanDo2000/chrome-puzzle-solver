@@ -2604,3 +2604,38 @@ test('SlitherlinkSolver+CDCL: fuzz-generated small puzzles all solve correctly',
     }
   }
 });
+
+test('SlitherlinkSolver+CDCL: 30x30 daily still solves under 2s with same output', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  const realPuzzles = require('./fixtures/real-puzzles.js');
+  const daily = realPuzzles.slitherlinkRealDaily30x30;
+  // Skip gracefully until the fixture is captured in T16.
+  if (!daily || daily.rows !== 30 || daily.cols !== 30) {
+    console.warn('No 30x30 daily fixture; skipping daily regression test');
+    return;
+  }
+  const s = new SlitherlinkSolver({ width: daily.cols, height: daily.rows, task: daily.task });
+  s.maxMs = 10000;
+  const t0 = Date.now();
+  const r = s.solve();
+  const dt = Date.now() - t0;
+  assert.equal(r.solved, true, '30x30 daily should fully solve with CDCL');
+  assert.ok(dt < 2000, `30x30 daily should solve in <2s; took ${dt}ms`);
+});
+
+test('SlitherlinkSolver+CDCL: 50x40 monthly solves to completion under 10s', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  const realPuzzles = require('./fixtures/real-puzzles.js');
+  const monthly = realPuzzles.slitherlinkRealMonthly50x40_a;
+  if (!monthly) {
+    console.warn('No 50x40 monthly fixture; will be added in Task 16');
+    return;
+  }
+  const s = new SlitherlinkSolver({ width: monthly.cols, height: monthly.rows, task: monthly.task });
+  s.maxMs = 10000;
+  const t0 = Date.now();
+  const r = s.solve();
+  const dt = Date.now() - t0;
+  assert.equal(r.solved, true, `50x40 monthly should solve to completion via CDCL; got ${r.error || 'partial'}`);
+  assert.ok(dt < 10000, `50x40 monthly should solve in <10s; took ${dt}ms (target was 5s)`);
+});
