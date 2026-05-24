@@ -728,5 +728,93 @@ module.exports = {
       ]
     ],
     "error": null
+  },
+  "hashi3x3Tiny": {
+    "solved": false,
+    "edges": [
+      {
+        "a": 0,
+        "b": 1,
+        "orientation": "H",
+        "bridges": 1
+      },
+      {
+        "a": 0,
+        "b": 2,
+        "orientation": "V",
+        "bridges": 1
+      },
+      {
+        "a": 1,
+        "b": 3,
+        "orientation": "V",
+        "bridges": 1
+      },
+      {
+        "a": 2,
+        "b": 3,
+        "orientation": "H",
+        "bridges": 1
+      }
+    ]
+  },
+  "hashi7x7Easy": {
+    "solved": true,
+    "edges": [
+      {
+        "a": 0,
+        "b": 1,
+        "orientation": "H",
+        "bridges": 2
+      },
+      {
+        "a": 0,
+        "b": 5,
+        "orientation": "V",
+        "bridges": 2
+      },
+      {
+        "a": 1,
+        "b": 9,
+        "orientation": "V",
+        "bridges": 1
+      },
+      {
+        "a": 2,
+        "b": 8,
+        "orientation": "V",
+        "bridges": 2
+      },
+      {
+        "a": 3,
+        "b": 7,
+        "orientation": "V",
+        "bridges": 1
+      },
+      {
+        "a": 4,
+        "b": 6,
+        "orientation": "V",
+        "bridges": 1
+      },
+      {
+        "a": 5,
+        "b": 6,
+        "orientation": "H",
+        "bridges": 2
+      },
+      {
+        "a": 6,
+        "b": 7,
+        "orientation": "H",
+        "bridges": 1
+      },
+      {
+        "a": 8,
+        "b": 9,
+        "orientation": "H",
+        "bridges": 1
+      }
+    ]
   }
 };

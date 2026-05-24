@@ -172,4 +172,34 @@ module.exports = {
       [-1,  2,  3,  1, -1],
     ],
   },
+
+  // Tiny 3x3 Hashi sanity puzzle with a unique solution: four corner islands
+  // forming a 1-2-2-1 cycle (single bridges around the loop).
+  hashi3x3Tiny: {
+    rows: 3, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 1, row: 0, col: 2, number: 2 },
+      { index: 2, row: 2, col: 0, number: 2 },
+      { index: 3, row: 2, col: 2, number: 1 },
+    ],
+  },
+
+  // 7x7 Hashi captured from a real recon dump. Exercises both single and
+  // double bridges plus crossing exclusion.
+  hashi7x7Easy: {
+    rows: 7, cols: 7,
+    islands: [
+      { index: 0, row: 0, col: 1, number: 4 },
+      { index: 1, row: 0, col: 6, number: 3 },
+      { index: 2, row: 1, col: 0, number: 2 },
+      { index: 3, row: 1, col: 5, number: 1 },
+      { index: 4, row: 2, col: 3, number: 1 },
+      { index: 5, row: 5, col: 1, number: 4 },
+      { index: 6, row: 5, col: 3, number: 4 },
+      { index: 7, row: 5, col: 5, number: 2 },
+      { index: 8, row: 6, col: 0, number: 3 },
+      { index: 9, row: 6, col: 6, number: 2 },
+    ],
+  },
 };

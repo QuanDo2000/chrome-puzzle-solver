@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, computePuzzleDiff } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, computePuzzleDiff } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -2654,4 +2654,20 @@ test('SlitherlinkSolver+CDCL: 50x40 monthly returns a sound result within budget
   // Not solved → must be a sound timeout-partial, not a spurious UNSAT.
   assert.equal(r.error, 'timed out', `monthly returned error=${r.error}; expected 'timed out' or solved=true (spurious UNSAT regression?)`);
   assert.equal(r.partial, true, 'monthly partial result missing partial=true');
+});
+
+test('HashiSolver: hashi3x3Tiny matches golden', () => {
+  HashiSolver.clearSolutionCache();
+  const p = fixtures.hashi3x3Tiny;
+  const result = new HashiSolver(p).solve();
+  assert.deepEqual(result, golden.hashi3x3Tiny);
+  HashiSolver.clearSolutionCache();
+});
+
+test('HashiSolver: hashi7x7Easy matches golden', () => {
+  HashiSolver.clearSolutionCache();
+  const p = fixtures.hashi7x7Easy;
+  const result = new HashiSolver(p).solve();
+  assert.deepEqual(result, golden.hashi7x7Easy);
+  HashiSolver.clearSolutionCache();
 });
