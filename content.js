@@ -1946,7 +1946,14 @@ function makeWidget() {
   // stays at the call site.
   function renderHintStatusAndPreview(h, grid) {
     setHintStatus(h);
-    if (grid) drawPreview(grid, h);
+    if (grid) {
+      // Hashi's drawPreview arm reads bridges from grid.edges; the hint
+      // edges must be merged in first since hashi has no separate hint-
+      // overlay branch (slitherlink/galaxies/cell-based hints paint via
+      // dedicated overlay paths in drawPreview).
+      if (h?.type === 'hashi') applyHintToGrid(grid, h);
+      drawPreview(grid, h);
+    }
   }
 
   function hintStatusNodes(h) {
