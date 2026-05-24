@@ -181,3 +181,48 @@ test('HeyawakeSolver._buildLineConstraints: column scan emits vertical spans', (
   assert.deepEqual(Array.from(s.lineConstraints[0]), [0, 1, 2]);
   assert.deepEqual(Array.from(s.lineConstraints[1]), [1, 2, 3]);
 });
+
+test('HeyawakeSolver._applyLineConstraints: span with one unknown forces it black', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 4,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }], target: -1 },
+      { cells: [{ r: 0, c: 1 }], target: -1 },
+      { cells: [{ r: 0, c: 2 }], target: -1 },
+      { cells: [{ r: 0, c: 3 }], target: -1 },
+    ],
+    initialState: [[2, 0, 2, 2]],
+  });
+  assert.equal(s._applyLineConstraints(), true);
+  assert.equal(s.cellStatus[1], 1);
+});
+
+test('HeyawakeSolver._applyLineConstraints: all-white span → contradiction', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 4,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }], target: -1 },
+      { cells: [{ r: 0, c: 1 }], target: -1 },
+      { cells: [{ r: 0, c: 2 }], target: -1 },
+      { cells: [{ r: 0, c: 3 }], target: -1 },
+    ],
+    initialState: [[2, 2, 2, 2]],
+  });
+  assert.equal(s._applyLineConstraints(), false);
+});
+
+test('HeyawakeSolver._applyLineConstraints: span with black is satisfied (no force)', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 4,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }], target: -1 },
+      { cells: [{ r: 0, c: 1 }], target: -1 },
+      { cells: [{ r: 0, c: 2 }], target: -1 },
+      { cells: [{ r: 0, c: 3 }], target: -1 },
+    ],
+    initialState: [[1, 0, 0, 0]],
+  });
+  assert.equal(s._applyLineConstraints(), true);
+  assert.equal(s.cellStatus[1], 0);
+  assert.equal(s.cellStatus[2], 0);
+});

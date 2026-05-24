@@ -7838,6 +7838,23 @@ class HeyawakeSolver {
     return true;
   }
 
+  _applyLineConstraints() {
+    for (let i = 0; i < this.lineConstraints.length; i++) {
+      const cells = this.lineConstraints[i];
+      let nB = 0, nU = 0, uIdx = -1;
+      for (let j = 0; j < cells.length; j++) {
+        const v = this.cellStatus[cells[j]];
+        if (v === 1) nB++;
+        else if (v === 0) { nU++; uIdx = cells[j]; }
+      }
+      if (nB === 0 && nU === 0) return false;
+      if (nB === 0 && nU === 1) {
+        if (!this._set(uIdx, 1)) return false;
+      }
+    }
+    return true;
+  }
+
   _buildLineConstraints() {
     this.lineConstraints = [];
     for (let r = 0; r < this.rows; r++) {
