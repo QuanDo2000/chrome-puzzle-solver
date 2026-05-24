@@ -2297,3 +2297,50 @@ test('SlitherlinkSolver: vertex rule contradiction sets _lastConflictReason', ()
     assert.ok(v >= 0 && v < s.totalVars, `varId ${v} out of range`);
   }
 });
+
+test('SlitherlinkSolver: _analyzeConflict derives first-UIP learned clause', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+
+  const varA = s._varIdEdge('H', 0);  // id 0
+  const varB = s._varIdEdge('H', 1);  // id 1
+  const varC = s._varIdEdge('H', 2);  // id 2
+
+  // Simulate trail entries directly. Edge encoding: (kind<<24)|idx, kind 0=H.
+  s.trail = [
+    (0 << 24) | 0,
+    (0 << 24) | 1,
+    (0 << 24) | 2,
+  ];
+  s._reasons = [
+    null,           // varA: decision at level 1
+    null,           // varB: decision at level 2
+    [varA, varB],   // varC: implied by varA + varB
+  ];
+  s._decisionLevels = [1, 2, 2];
+  s._decisionLevel = 2;
+
+  // Set actual edge values so _varValue returns the right sign.
+  s.H[0] = 1; // varA = LINE
+  s.H[1] = 1; // varB = LINE
+  s.H[2] = 1; // varC = LINE
+
+  // Conflict reason includes varC and varB.
+  const conflictReason = [varC, varB];
+  const learned = s._analyzeConflict(conflictReason);
+
+  assert.ok(Array.isArray(learned));
+  // UIP is varC at level 2 (most recently assigned current-level var).
+  // Negated using ~ convention.
+  assert.ok(learned.includes(~varC), `expected ~varC=${~varC} in learned; got ${JSON.stringify(learned)}`);
+  // Resolution of varC's reason brings in varA (level 1, earlier).
+  assert.ok(learned.includes(~varA), `expected ~varA=${~varA} in learned; got ${JSON.stringify(learned)}`);
+  // Exactly one current-level literal (the UIP) in the learned clause.
+  const level2Lits = learned.filter(lit => {
+    const v = lit >= 0 ? lit : ~lit;
+    return s._decisionLevelOf(v) === 2;
+  });
+  assert.equal(level2Lits.length, 1, `expected 1 current-level literal; got ${JSON.stringify(level2Lits)}`);
+});

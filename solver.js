@@ -4754,6 +4754,142 @@ class SlitherlinkSolver {
     return true;
   }
 
+  // Returns the varId for the trail entry at position i.
+  // Trail encoding: bits 24-25 = kind (0=H edge, 1=V edge, 2=color), bits 0-23 = idx.
+  _varAtTrailIndex(i) {
+    const e = this.trail[i];
+    const idx = e & 0xFFFFFF;
+    const kind = (e >> 24) & 3;
+    if (kind === 0) return this._varIdEdge('H', idx);
+    if (kind === 1) return this._varIdEdge('V', idx);
+    if (kind === 2) return this._varIdCell(idx);
+    return -1;
+  }
+
+  // Returns the decision level at which varId was assigned, or 0 if unknown.
+  _decisionLevelOf(varId) {
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      if (this._varAtTrailIndex(i) === varId) return this._decisionLevels[i];
+    }
+    return 0;
+  }
+
+  // Returns the trail index for varId, or -1 if not found.
+  _trailIndexOf(varId) {
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      if (this._varAtTrailIndex(i) === varId) return i;
+    }
+    return -1;
+  }
+
+  // First-UIP conflict analysis (CDCL §4).
+  // conflictReason: array of varIds involved in the conflict.
+  // Returns the learned clause as an array of literals (using ~lit convention).
+  // Each literal negates the current assignment of its variable.
+  //
+  // Algorithm: walk the trail backward from the most recently assigned
+  // current-level variable, resolving implications until exactly one
+  // current-level variable remains (the UIP). Literals at earlier levels
+  // go directly into the learned clause.
+  //
+  // Subsumption during seeding: if a current-level var X in conflictReason
+  // appears in the reason of another current-level var Y in conflictReason,
+  // X is already captured through Y's implication chain and is not counted
+  // separately toward pathCount. This prevents spurious double-counting when
+  // the conflict reason contains both an implied var and one of its antecedents.
+  _analyzeConflict(conflictReason) {
+    const learned = [];
+    const seen = new Uint8Array(this.totalVars + 1);
+    let pathCount = 0;
+
+    // Pre-pass: mark all conflict vars seen so reason-expansion won't
+    // re-add them, and collect vars that appear in the reasons of other
+    // current-level conflict vars (they are "subsumed" and won't be counted
+    // toward pathCount separately).
+    const subsumed = new Uint8Array(this.totalVars + 1);
+    for (const varId of conflictReason) {
+      if (varId < 0 || varId >= this.totalVars) continue;
+      seen[varId] = 1;
+      const lvl = this._decisionLevelOf(varId);
+      if (lvl !== this._decisionLevel) continue;
+      const trailIdx = this._trailIndexOf(varId);
+      if (trailIdx < 0) continue;
+      const reason = this._reasons[trailIdx];
+      if (!reason) continue;
+      for (const av of reason) {
+        if (av >= 0 && av < this.totalVars) subsumed[av] = 1;
+      }
+    }
+
+    // Seed pathCount and earlier-level learned literals from conflictReason.
+    for (const varId of conflictReason) {
+      if (varId < 0 || varId >= this.totalVars) continue;
+      const value = this._varValue(varId);
+      if (value === 0) continue;
+      const lvl = this._decisionLevelOf(varId);
+      if (lvl === 0) continue;
+      const lit = value > 0 ? ~varId : varId;
+      if (lvl < this._decisionLevel) {
+        learned.push(lit);
+      } else if (!subsumed[varId]) {
+        // Current-level var not subsumed by another conflict var's reason.
+        pathCount++;
+      }
+      // Subsumed current-level vars: seen is already set, so they won't be
+      // double-counted when encountered during reason expansion below.
+    }
+
+    // Walk trail backward to find first UIP.
+    for (let i = this.trail.length - 1; pathCount > 0 && i >= 0; i--) {
+      const varAtI = this._varAtTrailIndex(i);
+      if (varAtI < 0 || !seen[varAtI]) continue;
+      if (this._decisionLevels[i] !== this._decisionLevel) continue;
+      if (subsumed[varAtI]) continue;  // skip subsumed vars in the walk
+
+      pathCount--;
+
+      const reason = this._reasons[i];
+      if (pathCount === 0 || reason === null) {
+        // varAtI is the first UIP: the single remaining current-level variable.
+        const value = this._varValue(varAtI);
+        learned.push(value > 0 ? ~varAtI : varAtI);
+        // Expand UIP's reason to capture any earlier-level antecedents that
+        // were subsumed during seeding and thus not yet in the learned clause.
+        if (reason) {
+          for (const av of reason) {
+            if (av < 0 || av >= this.totalVars) continue;
+            const aLvl = this._decisionLevelOf(av);
+            if (aLvl === 0 || aLvl >= this._decisionLevel) continue;
+            if (seen[av] && !subsumed[av]) continue;  // already in learned
+            const aVal = this._varValue(av);
+            if (aVal === 0) continue;
+            learned.push(aVal > 0 ? ~av : av);
+            seen[av] = 1;
+          }
+        }
+        break;
+      }
+
+      // Resolve varAtI: replace it with its antecedents.
+      for (const av of reason) {
+        if (av < 0 || av >= this.totalVars) continue;
+        if (seen[av]) continue;  // already in working set
+        seen[av] = 1;
+        const aLvl = this._decisionLevelOf(av);
+        if (aLvl === 0) continue;
+        const aValue = this._varValue(av);
+        const aLit = aValue > 0 ? ~av : av;
+        if (aLvl < this._decisionLevel) {
+          learned.push(aLit);
+        } else {
+          pathCount++;
+        }
+      }
+    }
+
+    return learned;
+  }
+
   // Returns the color of cell (r,c): 1=INSIDE, 2=OUTSIDE, 0=UNKNOWN.
   // Out-of-grid coordinates are implicitly OUTSIDE (2).
   _colorOf(r, c) {
