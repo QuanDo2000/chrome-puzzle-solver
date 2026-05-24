@@ -7152,6 +7152,63 @@ class HashiSolver {
     }
     return true;
   }
+
+  propagate() {
+    // Iterate the four cheap rules to a fixpoint, then lookahead at top
+    // level only.
+    let changedOverall = true;
+    while (changedOverall) {
+      if (this._timeUp()) return true; // bail without contradicting
+      changedOverall = false;
+      const mark = this.trail.length;
+      if (!this._applyCrossings()) return false;
+      if (!this._applyDegree()) return false;
+      if (!this._applyTwoOnesIsolation()) return false;
+      if (!this._applyConnectivityCut()) return false;
+      if (this.trail.length > mark) changedOverall = true;
+    }
+    if (this._depth === 0 && !this._inLookahead) {
+      if (!this._applyLookahead()) return false;
+    }
+    return true;
+  }
+
+  _applyLookahead() {
+    // For each undecided edge, probe each remaining value. If exactly one
+    // value propagates without contradiction, force the survivor.
+    let changed = true;
+    while (changed) {
+      if (this._timeUp()) return true;
+      changed = false;
+      for (let i = 0; i < this.edges.length; i++) {
+        if (this.lo[i] === this.hi[i]) continue;
+        const survivors = [];
+        for (let v = this.lo[i]; v <= this.hi[i]; v++) {
+          const mark = this.trail.length;
+          this._inLookahead = true;
+          this._assign(i, v, v);
+          const ok = this.propagate();
+          this._rollback(mark);
+          this._inLookahead = false;
+          if (ok) survivors.push(v);
+          if (survivors.length > 1) break;
+        }
+        if (survivors.length === 0) return false;
+        if (survivors.length === 1 && (this.lo[i] !== survivors[0] || this.hi[i] !== survivors[0])) {
+          this._assign(i, survivors[0], survivors[0]);
+          if (!this._applyCrossings()) return false;
+          if (!this._applyDegree()) return false;
+          changed = true;
+        }
+      }
+    }
+    return true;
+  }
+
+  _timeUp() {
+    if (this.maxMs <= 0) return false;
+    return (Date.now() - this._startedAt) > this.maxMs;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
