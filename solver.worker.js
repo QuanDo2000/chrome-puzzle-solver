@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -74,6 +74,14 @@ self.onmessage = function (e) {
       // on timeout, so capping shorter just makes the wait reasonable —
       // user gets the deducible portion sooner instead of waiting 30 s.
       s.maxMs = 10000;
+      result = s.solve();
+    } else if (type === 'hashi' && extraData) {
+      const s = new HashiSolver({
+        rows: extraData.rows,
+        cols: extraData.cols,
+        islands: extraData.islands,
+        maxMs: 10000,
+      });
       result = s.solve();
     } else {
       const s = new NonogramSolver(rowClues, colClues);
