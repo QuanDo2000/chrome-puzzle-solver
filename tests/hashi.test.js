@@ -442,6 +442,79 @@ test('HashiSolver: getHint returns at least one forced edge from current state',
   HashiSolver.clearSolutionCache();
 });
 
+test('HashiSolver.getStepwiseHint: degree-saturate names the rule and lists every forced edge', () => {
+  HashiSolver.clearSolutionCache();
+  // 4-island in the middle with exactly 2 neighbours, both capped at 2 →
+  // saturated: degMax = 2 + 2 = 4 = target, so both edges forced to 2.
+  const s = new HashiSolver({
+    rows: 1, cols: 5,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 2 },
+      { index: 1, row: 0, col: 2, number: 4 },
+      { index: 2, row: 0, col: 4, number: 2 },
+    ],
+  });
+  const r = s.getStepwiseHint([]);
+  assert.ok(r);
+  assert.equal(r.rule, 'degree-saturate');
+  assert.equal(r.edges.length, 2);
+  assert.ok(r.description.includes('max possible'));
+  for (const e of r.edges) assert.equal(e.bridges, 2);
+});
+
+test('HashiSolver.getStepwiseHint: rule-outs (two-1s, crossings) applied silently — first surfaced firing is positive', () => {
+  HashiSolver.clearSolutionCache();
+  // Two-1s isolation forbids e(0,2) horizontal between the 1-islands; after
+  // that rule-out, degree forcing on each 1-island has only one remaining
+  // edge (the vertical to a 2-island), forcing it to 1.
+  // Layout:
+  //   1 . 1
+  //   . . .
+  //   2 . 2
+  const s = new HashiSolver({
+    rows: 3, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 1, row: 0, col: 2, number: 1 },
+      { index: 2, row: 2, col: 0, number: 2 },
+      { index: 3, row: 2, col: 2, number: 2 },
+    ],
+  });
+  const r = s.getStepwiseHint([]);
+  assert.ok(r);
+  // No bridges=0 surfaces — only positive deductions are user-visible.
+  for (const e of r.edges) assert.ok(e.bridges > 0, `expected positive bridge, got ${JSON.stringify(e)}`);
+});
+
+test('HashiSolver.getStepwiseHint: repeated calls solve a small puzzle and then return null', () => {
+  HashiSolver.clearSolutionCache();
+  const data = {
+    rows: 1, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 2 },
+      { index: 1, row: 0, col: 2, number: 2 },
+    ],
+  };
+  const current = [];
+  let steps = 0;
+  while (steps < 10) {
+    HashiSolver.clearSolutionCache();
+    const s = new HashiSolver(data);
+    const r = s.getStepwiseHint(current);
+    if (!r) break;
+    for (const e of r.edges) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      const existing = current.find(x => Math.min(x.a, x.b) === a && Math.max(x.a, x.b) === b);
+      if (existing) existing.bridges = e.bridges;
+      else current.push(e);
+    }
+    steps++;
+  }
+  assert.ok(steps >= 1 && steps <= 5, `expected 1-5 stepwise calls, got ${steps}`);
+  assert.equal(current.filter(e => e.bridges > 0).length, 1);
+  assert.equal(current.find(e => e.a === 0 && e.b === 1).bridges, 2);
+});
+
 test('HashiSolver: getHint treats bridges=0 currentEdges as unknown, not forced', () => {
   // readHashiState emits ALL neighbour pairs (including bridges=0 for
   // unconnected). getHint must ignore the 0-entries; treating them as

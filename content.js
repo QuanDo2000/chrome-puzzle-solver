@@ -1553,19 +1553,23 @@ async function getHint(request = {}) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
     } else if (detectedGrid.type === 'hashi') {
-      // grid here is { edges } from hashiHandler.readState. HashiSolver.getHint
-      // returns a plain array of forced edges (each { a, b, orientation,
-      // bridges }), or [] when nothing is deducible. Wrap into the hint
-      // envelope shape the rest of content.js expects so applyHintToGrid /
-      // applyHintHandler / setHintStatus can dispatch on type.
+      // grid here is { edges } from hashiHandler.readState. Stepwise hint
+      // returns one rule firing at a time {edges, rule, description} so the
+      // user (and Loop) sees one logical deduction per click, explained.
       const solver = new HashiSolver({
         rows, cols, islands: detectedGrid.islands,
       });
-      const edges = solver.getHint(grid.edges || []);
-      if (!edges || edges.length === 0) {
+      const step = solver.getStepwiseHint(grid.edges || []);
+      if (!step || !step.edges || step.edges.length === 0) {
         return { success: false, error: 'No more bridges can be deduced from the current state. Click Solve to finish.' };
       }
-      hint = { type: 'hashi', edges, count: edges.length };
+      hint = {
+        type: 'hashi',
+        edges: step.edges,
+        count: step.edges.length,
+        rule: step.rule,
+        description: step.description,
+      };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1916,10 +1920,13 @@ function makeWidget() {
   function hashiHintStatusNodes(h) {
     // Hashi hints are an array of { a, b, orientation, bridges } edges; bridges
     // is the deduced count (1 or 2, or 0 for "this connection is impossible").
-    // The endpoint indices refer to puzzleData.islands; resolve to coords when
-    // we can so the single-edge message points the user at the right pair.
+    // Stepwise hints carry a .description naming the rule that fired — show it
+    // verbatim so the user sees the logical reason for the deduction.
     const total = h?.edges?.length || 0;
     if (total === 0) return ['No hint available'];
+    if (h.description) {
+      return [bold(h.description)];
+    }
     const islands = puzzleData?.islands || [];
     const fmtIsland = (idx) => {
       const isl = islands[idx];

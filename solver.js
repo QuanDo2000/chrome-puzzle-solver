@@ -7430,6 +7430,253 @@ class HashiSolver {
     }
     return hints;
   }
+
+  // Stepwise hint: returns the next visible logical deduction. Each call
+  // surfaces ONE rule firing that yields at least one positive bridge the
+  // user can draw on the board. Rule-outs (forced to 0 bridges) are not
+  // applicable on the page UI, so they're applied silently inside this
+  // call and only the rule whose positive deduction emerges is named.
+  //
+  // Rule order, cheapest first:
+  //   1. degree-saturate (per-island sum constraint forcing to 2-bridges)
+  //   2. two-1s isolation (rule-out — silent)
+  //   3. crossing exclusion (rule-out — silent)
+  //   4. degree-tighten (per-island producing positives)
+  //   5. connectivity cut (positive)
+  //   6. 1-step lookahead (positive)
+  //
+  // Return shape:
+  //   { edges:[{a,b,orientation,bridges}], rule:string, description:string }
+  //   or null when no further positive deduction is possible.
+  getStepwiseHint(currentEdges) {
+    // Build current map (skip bridges=0 — those are unknown, not "forced 0").
+    const currentMap = new Map();
+    for (const e of currentEdges || []) {
+      if (e.bridges > 0) {
+        const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+        currentMap.set(`${a}-${b}`, e.bridges);
+      }
+    }
+
+    // Seed from current.
+    for (let i = 0; i < this.edges.length; i++) {
+      const e = this.edges[i];
+      const key = `${e.a}-${e.b}`;
+      if (currentMap.has(key)) {
+        const v = currentMap.get(key);
+        if (v < this.lo[i] || v > this.hi[i]) { this._rollback(0); return null; }
+        this._assign(i, v, v);
+      }
+    }
+
+    const fmtPos = (id) => {
+      const isl = this.islands[id];
+      return `(row ${isl.r + 1}, col ${isl.c + 1})`;
+    };
+    const done = (result) => { this._rollback(0); return result; };
+
+    // Collect edges newly decided since `mark` whose final value is POSITIVE
+    // and that the user hasn't already drawn at that value. Used to detect
+    // "is this firing producing something the user can act on?"
+    const positiveSince = (mark) => {
+      const seen = new Set();
+      const out = [];
+      for (let t = mark; t < this.trail.length; t += 3) {
+        const ei = this.trail[t];
+        if (seen.has(ei)) continue;
+        seen.add(ei);
+        if (this.lo[ei] !== this.hi[ei]) continue;
+        if (this.lo[ei] === 0) continue;
+        const e = this.edges[ei];
+        const key = `${e.a}-${e.b}`;
+        if (currentMap.has(key) && currentMap.get(key) === this.lo[ei]) continue;
+        out.push({ a: e.a, b: e.b, orientation: e.orientation, bridges: this.lo[ei] });
+      }
+      return out;
+    };
+    const anyChangeSince = (mark) => this.trail.length > mark;
+
+    // Outer loop: silently apply rule-outs (two-1s, crossings, degree-leftover)
+    // until a rule produces at least one POSITIVE deduction. Each iteration
+    // tries the rules in priority order; rule-outs accumulate inside this
+    // call so subsequent rule passes see the tightened state.
+    let safety = 0;
+    while (safety++ < this.edges.length * 4 + 10) {
+      // ── Rule 1: per-island degree forcing (can yield positives or rule-outs)
+      let degreePositive = null;
+      let degreeChanged = false;
+      for (let id = 0; id < this.islands.length; id++) {
+        const target = this.islands[id].target;
+        const inc = this.incident[id];
+        let degMin = 0, degMax = 0;
+        for (let k = 0; k < inc.length; k++) {
+          degMin += this.lo[inc[k]];
+          degMax += this.hi[inc[k]];
+        }
+        if (degMin > target || degMax < target) return done(null);
+        if (degMin === target && degMax === target) continue;
+
+        const mark = this.trail.length;
+        let tightened = false;
+        for (let k = 0; k < inc.length; k++) {
+          const ei = inc[k];
+          const newLo = Math.max(this.lo[ei], target - (degMax - this.hi[ei]));
+          const newHi = Math.min(this.hi[ei], target - (degMin - this.lo[ei]));
+          if (newLo > newHi) return done(null);
+          if (newLo !== this.lo[ei] || newHi !== this.hi[ei]) {
+            const dLo = newLo - this.lo[ei], dHi = newHi - this.hi[ei];
+            this._assign(ei, newLo, newHi);
+            degMin += dLo; degMax += dHi;
+            tightened = true;
+          }
+        }
+        if (!tightened) continue;
+        degreeChanged = true;
+        const positives = positiveSince(mark);
+        if (positives.length > 0) {
+          const pos = fmtPos(id);
+          const allMax = positives.every(e => e.bridges === 2);
+          const rule = allMax ? 'degree-saturate' : 'degree-tighten';
+          const description = allMax
+            ? `Island ${pos} target ${target} = max possible — each remaining edge must be 2 bridges.`
+            : `Island ${pos} target ${target} forces ${positives.length === 1 ? 'a bridge' : 'bridges'} on its remaining edge${positives.length === 1 ? '' : 's'}.`;
+          degreePositive = { edges: positives, rule, description, pivot: { island: id } };
+          break;
+        }
+        // Rule-out only (degree-leftover) — applied, continue scanning.
+      }
+      if (degreePositive) return done(degreePositive);
+
+      // ── Rule 2: two-1s isolation (silent rule-outs only) ─────────────
+      let twoOnesChanged = false;
+      if (this.islands.length > 2) {
+        for (let i = 0; i < this.edges.length; i++) {
+          if (this.hi[i] === 0) continue;
+          const e = this.edges[i];
+          if (this.islands[e.a].target !== 1 || this.islands[e.b].target !== 1) continue;
+          if (this.lo[i] > 0) return done(null);
+          this._assign(i, 0, 0);
+          twoOnesChanged = true;
+        }
+      }
+
+      // ── Rule 3: crossing exclusion (silent rule-outs only) ───────────
+      let crossingChanged = false;
+      for (let i = 0; i < this.edges.length; i++) {
+        if (this.lo[i] < 1) continue;
+        const partners = this.crosses[i];
+        for (let k = 0; k < partners.length; k++) {
+          const j = partners[k];
+          if (this.hi[j] === 0) continue;
+          if (this.lo[j] > 0) return done(null);
+          this._assign(j, 0, 0);
+          crossingChanged = true;
+        }
+      }
+
+      // If silent rule-outs changed anything, restart so degree forcing can
+      // pick up positives enabled by the new constraints.
+      if (twoOnesChanged || crossingChanged || degreeChanged) continue;
+
+      // ── Rule 4: connectivity cut (positive only) ─────────────────────
+      const K = this.islands.length;
+      if (K > 1) {
+        for (let i = 0; i < this.edges.length; i++) {
+          if (this.hi[i] === 0 || this.lo[i] >= 1) continue;
+          const visited = new Uint8Array(K);
+          const stack = [0];
+          visited[0] = 1;
+          while (stack.length) {
+            const u = stack.pop();
+            const inc = this.incident[u];
+            for (let k = 0; k < inc.length; k++) {
+              const ei2 = inc[k];
+              if (ei2 === i) continue;
+              if (this.hi[ei2] === 0) continue;
+              const v = this.edges[ei2].a === u ? this.edges[ei2].b : this.edges[ei2].a;
+              if (!visited[v]) { visited[v] = 1; stack.push(v); }
+            }
+          }
+          let allReachable = true;
+          for (let v = 0; v < K; v++) { if (!visited[v]) { allReachable = false; break; } }
+          if (allReachable) continue;
+          const mark = this.trail.length;
+          this._assign(i, Math.max(this.lo[i], 1), this.hi[i]);
+          const positives = positiveSince(mark);
+          if (positives.length === 0) {
+            // The cut forced lo≥1 but the edge still has hi=2 (so lo=1, hi=2
+            // — not yet a positive decision). Apply degree on its endpoints
+            // to potentially resolve, then keep going by restarting outer.
+            if (anyChangeSince(mark)) break;
+            continue;
+          }
+          const e = this.edges[i];
+          const description = `Without a bridge between ${fmtPos(e.a)} and ${fmtPos(e.b)}, the network would be disconnected — at least one bridge required.`;
+          return done({
+            edges: positives,
+            rule: 'connectivity-cut',
+            description,
+            pivot: { edge: i },
+          });
+        }
+      }
+
+      // ── Rule 5: 1-step lookahead (positive only) ─────────────────────
+      if (this._depth === 0 && !this._inLookahead) {
+        for (let i = 0; i < this.edges.length; i++) {
+          if (this.lo[i] === this.hi[i]) continue;
+          const survivors = [];
+          for (let v = this.lo[i]; v <= this.hi[i]; v++) {
+            const probeMark = this.trail.length;
+            this._inLookahead = true;
+            this._assign(i, v, v);
+            const ok = this.propagate();
+            this._rollback(probeMark);
+            this._inLookahead = false;
+            if (ok) survivors.push(v);
+            if (survivors.length > 1) break;
+          }
+          if (survivors.length === 0) return done(null);
+          if (survivors.length === 1) {
+            const survivor = survivors[0];
+            const mark = this.trail.length;
+            this._assign(i, survivor, survivor);
+            const positives = positiveSince(mark);
+            if (positives.length === 0) continue; // forced to 0, keep scanning
+            const e = this.edges[i];
+            const description = `Trying any value other than ${survivor} bridge${survivor === 1 ? '' : 's'} between ${fmtPos(e.a)} and ${fmtPos(e.b)} leads to a contradiction.`;
+            return done({
+              edges: positives,
+              rule: 'lookahead',
+              description,
+              pivot: { edge: i },
+            });
+          }
+        }
+      }
+
+      // Nothing fired this iteration; exit loop and try fallback.
+      break;
+    }
+
+    // ── Fallback: solve and emit one gap edge ─────────────────────────
+    this._rollback(0); // clean state for cached solve
+    const r = this.solve();
+    if (!r.solved) return null;
+    for (const e of r.edges) {
+      const key = `${Math.min(e.a, e.b)}-${Math.max(e.a, e.b)}`;
+      const cur = currentMap.get(key);
+      if (cur !== e.bridges) {
+        return {
+          edges: [e],
+          rule: 'solve-gap',
+          description: `From the complete solution: bridge between ${fmtPos(e.a)} and ${fmtPos(e.b)} (${e.bridges} bridge${e.bridges === 1 ? '' : 's'}).`,
+          pivot: null,
+        };
+      }
+    }
+    return null; // already solved
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
