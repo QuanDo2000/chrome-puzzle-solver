@@ -979,21 +979,31 @@ function applyHashiState(edges) {
       if (cell.bb !== -1) cell.bb = 0;
       if (cell.br !== -1) cell.br = 0;
     }
-    // Apply edges.
+    // Apply edges. Owner is determined by POSITION, NOT by numeric index:
+    // - H edge: owner is the LEFT island (smaller col); only LEFT has a
+    //   real `right` link pointing rightward to the partner.
+    // - V edge: owner is the UPPER island (smaller row); only UPPER has a
+    //   real `bottom` link pointing down to the partner.
+    // The page's index assignment isn't guaranteed row-major (the 30×30
+    // daily happens to be, but other boards may not be), so using
+    // min(e.a, e.b) as owner can write to the wrong cell's sentinel
+    // `right`/`bottom`, drawing bridges in wrong positions.
     if (Array.isArray(edges)) {
       for (var i = 0; i < edges.length; i++) {
         var e = edges[i];
         if (!e || e.bridges == null || e.bridges === 0) continue;
-        var ownerIdx = Math.min(e.a, e.b);
-        var partnerIdx = Math.max(e.a, e.b);
-        var owner = cs[ownerIdx];
-        var partner = cs[partnerIdx];
-        if (!owner || !partner) continue;
+        var ca = cs[e.a], cb = cs[e.b];
+        if (!ca || !cb) continue;
+        var owner, partner;
         if (e.orientation === 'H') {
+          if (ca.col < cb.col) { owner = ca; partner = cb; }
+          else { owner = cb; partner = ca; }
           if (owner.right) owner.right.bridges = e.bridges;
           owner.br = e.bridges;
           partner.bl = e.bridges;
         } else {
+          if (ca.row < cb.row) { owner = ca; partner = cb; }
+          else { owner = cb; partner = ca; }
           if (owner.bottom) owner.bottom.bridges = e.bridges;
           owner.bb = e.bridges;
           partner.bt = e.bridges;
