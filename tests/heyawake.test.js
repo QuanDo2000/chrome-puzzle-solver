@@ -135,3 +135,49 @@ test('HeyawakeSolver._set: white write has no adjacency side effect', () => {
   assert.equal(s.cellStatus[0], 0); // neighbours unchanged
   assert.equal(s.cellStatus[2], 0);
 });
+
+test('HeyawakeSolver._buildLineConstraints: 1x4 with 4 rooms emits 2 minimal spans', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 4,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }], target: -1 },
+      { cells: [{ r: 0, c: 1 }], target: -1 },
+      { cells: [{ r: 0, c: 2 }], target: -1 },
+      { cells: [{ r: 0, c: 3 }], target: -1 },
+    ],
+  });
+  assert.equal(s.lineConstraints.length, 2);
+  assert.deepEqual(Array.from(s.lineConstraints[0]), [0, 1, 2]);
+  assert.deepEqual(Array.from(s.lineConstraints[1]), [1, 2, 3]);
+});
+
+test('HeyawakeSolver._buildLineConstraints: room spanning 2 cells produces wider middle', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 5,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }], target: -1 },
+      { cells: [{ r: 0, c: 1 }, { r: 0, c: 2 }], target: -1 },
+      { cells: [{ r: 0, c: 3 }], target: -1 },
+      { cells: [{ r: 0, c: 4 }], target: -1 },
+    ],
+  });
+  // Triple (0,1,2): cells [0,1,2,3]; triple (1,2,3): cells [2,3,4]
+  assert.equal(s.lineConstraints.length, 2);
+  assert.deepEqual(Array.from(s.lineConstraints[0]), [0, 1, 2, 3]);
+  assert.deepEqual(Array.from(s.lineConstraints[1]), [2, 3, 4]);
+});
+
+test('HeyawakeSolver._buildLineConstraints: column scan emits vertical spans', () => {
+  const s = new HeyawakeSolver({
+    rows: 4, cols: 1,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }], target: -1 },
+      { cells: [{ r: 1, c: 0 }], target: -1 },
+      { cells: [{ r: 2, c: 0 }], target: -1 },
+      { cells: [{ r: 3, c: 0 }], target: -1 },
+    ],
+  });
+  assert.equal(s.lineConstraints.length, 2);
+  assert.deepEqual(Array.from(s.lineConstraints[0]), [0, 1, 2]);
+  assert.deepEqual(Array.from(s.lineConstraints[1]), [1, 2, 3]);
+});

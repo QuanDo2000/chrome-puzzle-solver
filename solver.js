@@ -7765,6 +7765,7 @@ class HeyawakeSolver {
     this._depth = 0;
     this._inLookahead = false;
     this.maxMs = maxMs || 0;
+    this._buildLineConstraints();
     this._startedAt = 0;
   }
 
@@ -7835,6 +7836,52 @@ class HeyawakeSolver {
       }
     }
     return true;
+  }
+
+  _buildLineConstraints() {
+    this.lineConstraints = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = new Array(this.cols);
+      for (let c = 0; c < this.cols; c++) row[c] = r * this.cols + c;
+      this._scanLineForConstraints(row);
+    }
+    for (let c = 0; c < this.cols; c++) {
+      const col = new Array(this.rows);
+      for (let r = 0; r < this.rows; r++) col[r] = r * this.cols + c;
+      this._scanLineForConstraints(col);
+    }
+    this.lineConstraintsByCell = Array.from({ length: this.rows * this.cols }, () => []);
+    for (let i = 0; i < this.lineConstraints.length; i++) {
+      const cells = this.lineConstraints[i];
+      for (let j = 0; j < cells.length; j++) {
+        this.lineConstraintsByCell[cells[j]].push(i);
+      }
+    }
+  }
+
+  _scanLineForConstraints(cellIdxs) {
+    const n = cellIdxs.length;
+    if (n < 3) return;
+    const segments = [];
+    let curRoom = this.cellToRoom[cellIdxs[0]];
+    let curStart = 0;
+    for (let i = 1; i < n; i++) {
+      const r = this.cellToRoom[cellIdxs[i]];
+      if (r !== curRoom) {
+        segments.push({ room: curRoom, start: curStart, end: i - 1 });
+        curRoom = r;
+        curStart = i;
+      }
+    }
+    segments.push({ room: curRoom, start: curStart, end: n - 1 });
+    for (let i = 0; i + 2 < segments.length; i++) {
+      const a = segments[i], b = segments[i + 1], c = segments[i + 2];
+      const span = [];
+      span.push(cellIdxs[a.end]);
+      for (let k = b.start; k <= b.end; k++) span.push(cellIdxs[k]);
+      span.push(cellIdxs[c.start]);
+      this.lineConstraints.push(new Int32Array(span));
+    }
   }
 }
 
