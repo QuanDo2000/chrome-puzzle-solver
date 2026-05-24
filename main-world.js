@@ -905,6 +905,119 @@ function applyShikakuState(solution, clues) {
   }
 }
 
+function readHashiData() {
+  try {
+    var G = window.Game;
+    if (!G || !G.task || !G.puzzleWidth || !G.puzzleHeight) return null;
+    if (!Array.isArray(G.task)) return null;
+    var islands = [];
+    for (var i = 0; i < G.task.length; i++) {
+      var island = G.task[i];
+      if (!island) continue;
+      islands.push({
+        index: island.index,
+        row: island.row,
+        col: island.col,
+        number: parseInt(island.number, 10),
+      });
+    }
+    return {
+      rows: G.puzzleHeight,
+      cols: G.puzzleWidth,
+      islands: islands,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function readHashiState() {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return null;
+    var cs = G.currentState.cellStatus;
+    if (!Array.isArray(cs)) return null;
+    var edges = [];
+    for (var id = 0; id < cs.length; id++) {
+      var cell = cs[id];
+      if (!cell) continue;
+      // Right neighbour: br !== -1 means a right neighbour exists.
+      if (cell.br !== -1 && cell.right) {
+        var aR = Math.min(id, cell.right.index);
+        var bR = Math.max(id, cell.right.index);
+        edges.push({ a: aR, b: bR, orientation: 'H', bridges: cell.right.bridges });
+      }
+      // Bottom neighbour: bb !== -1.
+      if (cell.bb !== -1 && cell.bottom) {
+        var aB = Math.min(id, cell.bottom.index);
+        var bB = Math.max(id, cell.bottom.index);
+        edges.push({ a: aB, b: bB, orientation: 'V', bridges: cell.bottom.bridges });
+      }
+    }
+    return { edges: edges };
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyHashiState(edges) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return false;
+    if (typeof G.saveState === 'function') {
+      G.saveState(true);
+    }
+    var cs = G.currentState.cellStatus;
+    // Reset all bridge counts first.
+    for (var id = 0; id < cs.length; id++) {
+      var cell = cs[id];
+      if (!cell) continue;
+      if (cell.right) cell.right.bridges = 0;
+      if (cell.bottom) cell.bottom.bridges = 0;
+      if (cell.bl !== -1) cell.bl = 0;
+      if (cell.bt !== -1) cell.bt = 0;
+      if (cell.bb !== -1) cell.bb = 0;
+      if (cell.br !== -1) cell.br = 0;
+    }
+    // Apply edges.
+    if (Array.isArray(edges)) {
+      for (var i = 0; i < edges.length; i++) {
+        var e = edges[i];
+        if (!e || e.bridges == null || e.bridges === 0) continue;
+        var ownerIdx = Math.min(e.a, e.b);
+        var partnerIdx = Math.max(e.a, e.b);
+        var owner = cs[ownerIdx];
+        var partner = cs[partnerIdx];
+        if (!owner || !partner) continue;
+        if (e.orientation === 'H') {
+          if (owner.right) owner.right.bridges = e.bridges;
+          owner.br = e.bridges;
+          partner.bl = e.bridges;
+        } else {
+          if (owner.bottom) owner.bottom.bridges = e.bridges;
+          owner.bb = e.bridges;
+          partner.bt = e.bridges;
+        }
+      }
+    }
+    // Recompute totals.
+    for (var id2 = 0; id2 < cs.length; id2++) {
+      var c2 = cs[id2];
+      if (!c2) continue;
+      c2.total = Math.max(0, c2.bl) + Math.max(0, c2.bt) +
+                 Math.max(0, c2.bb) + Math.max(0, c2.br);
+    }
+    // Render ladder.
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    if (typeof G.render === 'function') G.render();
+    if (typeof G.redraw === 'function') G.redraw();
+    return true;
+  } catch (e) {
+    console.warn('Hashi apply failed:', e);
+    return false;
+  }
+}
+
 // Dump the current puzzle in our test/fixtures format, for capturing real
 // puzzles to feed into bench-real.js. On failure returns
 // { error, diagnostic, path } where `diagnostic` describes the shape of
@@ -1101,6 +1214,31 @@ function dumpPuzzleForBench() {
         pos++;
       }
       return { type: 'galaxies', rows: cellH, cols: cellW, stars: stars, path: path };
+    }
+
+    // Hashi: islands list, no grid clues. g.task is a flat array of island
+    // descriptors, not a 2D grid — must come before any generic-fallback
+    // 2D-grid path or the shape-walkers below will trip on it.
+    if (path.indexOf('/hashi/') !== -1 || path.indexOf('/bridges/') !== -1 ||
+        (g.slug === 'bridges')) {
+      if (!Array.isArray(g.task)) {
+        return { error: 'hashi: g.task is not an array', diagnostic: diagnostic(g), path: path };
+      }
+      var islands = [];
+      for (var i = 0; i < g.task.length; i++) {
+        var island = g.task[i];
+        if (!island) continue;
+        islands.push({
+          index: island.index,
+          row: island.row,
+          col: island.col,
+          number: parseInt(island.number, 10),
+        });
+      }
+      return {
+        type: 'hashi', rows: height, cols: width,
+        islands: islands, path: path,
+      };
     }
 
     if (path.indexOf('/aquarium/') !== -1) {
