@@ -4,7 +4,7 @@
 // For each puzzle, runs 5 solves, reports min / median / max plus solver type,
 // solved flag, and search-node count where applicable.
 
-const { NonogramSolver, AquariumSolver, GalaxiesSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver } = require('../solver.js');
 const fixtures = require('./fixtures/real-puzzles.js');
 
 // Silence AquariumSolver's init log (if any leak through).
@@ -23,27 +23,31 @@ function buildSolver(p) {
   if (p.type === 'nonogram') return new NonogramSolver(p.rowClues, p.colClues);
   if (p.type === 'aquarium') return new AquariumSolver(p.rowClues, p.colClues, p.regionMap, p.rows, p.cols);
   if (p.type === 'galaxies') return new GalaxiesSolver(p.stars, p.rows, p.cols);
+  if (p.type === 'hashi') return new HashiSolver({ rows: p.rows, cols: p.cols, islands: p.islands, maxMs: 10000 });
   return null;
 }
 
 for (const name of Object.keys(fixtures)) {
   const p = fixtures[name];
-  // bench-real.js covers nonogram/aquarium/galaxies. The newer puzzle types
-  // (binairo, shikaku, yin-yang) share real-puzzles.js but have their own
-  // dedicated bench scripts (bench-binairo.js etc.), so skip them here.
+  // bench-real.js covers nonogram/aquarium/galaxies/hashi. The other puzzle
+  // types (binairo, shikaku, yin-yang, slitherlink) share real-puzzles.js but
+  // have their own dedicated bench scripts (bench-binairo.js etc.), so skip
+  // them here.
   if (!buildSolver(p)) continue;
   // Discard WARMUP iterations to skip V8 JIT cold-start cost.
   for (let i = 0; i < WARMUP; i++) {
     GalaxiesSolver.clearSolutionCache();
+    HashiSolver.clearSolutionCache();
     buildSolver(p).solve(null);
   }
   const times = [];
   let solved = null;
   let nodes = null;
   for (let i = 0; i < N; i++) {
-    // GalaxiesSolver has a static solution cache — clear it so each iteration
-    // measures a real solve rather than a cache hit.
+    // GalaxiesSolver and HashiSolver have static solution caches — clear them
+    // so each iteration measures a real solve rather than a cache hit.
     GalaxiesSolver.clearSolutionCache();
+    HashiSolver.clearSolutionCache();
     const s = buildSolver(p);
     const t0 = process.hrtime.bigint();
     const r = s.solve(null);

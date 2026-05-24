@@ -401,4 +401,24 @@ module.exports = {
       { row: 4, col: 4, area: 2 },
     ],
   },
+
+  // 7x7 Hashi captured from a real recon dump. Mirrors fixtures.hashi7x7Easy
+  // in shape; this copy lives in real-puzzles.js so bench-real.js exercises
+  // the hashi code path.
+  hashiReal7x7_a: {
+    type: 'hashi',
+    rows: 7, cols: 7,
+    islands: [
+      { index: 0, row: 0, col: 1, number: 4 },
+      { index: 1, row: 0, col: 6, number: 3 },
+      { index: 2, row: 1, col: 0, number: 2 },
+      { index: 3, row: 1, col: 5, number: 1 },
+      { index: 4, row: 2, col: 3, number: 1 },
+      { index: 5, row: 5, col: 1, number: 4 },
+      { index: 6, row: 5, col: 3, number: 4 },
+      { index: 7, row: 5, col: 5, number: 2 },
+      { index: 8, row: 6, col: 0, number: 3 },
+      { index: 9, row: 6, col: 6, number: 2 },
+    ],
+  },
 };
