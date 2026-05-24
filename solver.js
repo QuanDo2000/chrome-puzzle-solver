@@ -7114,6 +7114,44 @@ class HashiSolver {
     }
     return true;
   }
+
+  _applyConnectivityCut() {
+    // Cheap reachability check: for each undecided edge e with hi[e] > 0,
+    // check whether removing it (treating hi=0) would split the graph
+    // into multiple components when only using edges with hi > 0.
+    // If so, lo[e] must be ≥ 1 (the edge is a cut).
+    const K = this.islands.length;
+    if (K <= 1) return true;
+    for (let i = 0; i < this.edges.length; i++) {
+      if (this.hi[i] === 0) continue;
+      if (this.lo[i] >= 1) continue;
+      // Check connectivity skipping edge i.
+      const visited = new Uint8Array(K);
+      const stack = [0];
+      visited[0] = 1;
+      while (stack.length) {
+        const u = stack.pop();
+        const inc = this.incident[u];
+        for (let k = 0; k < inc.length; k++) {
+          const ei = inc[k];
+          if (ei === i) continue;
+          if (this.hi[ei] === 0) continue;
+          const v = this.edges[ei].a === u ? this.edges[ei].b : this.edges[ei].a;
+          if (!visited[v]) { visited[v] = 1; stack.push(v); }
+        }
+      }
+      let allReachable = true;
+      for (let v = 0; v < K; v++) {
+        if (!visited[v]) { allReachable = false; break; }
+      }
+      if (!allReachable) {
+        // Edge i is a cut. Force lo ≥ 1.
+        if (this.hi[i] < 1) return false;
+        this._assign(i, Math.max(this.lo[i], 1), this.hi[i]);
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
