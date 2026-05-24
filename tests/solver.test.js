@@ -2410,3 +2410,41 @@ test('SlitherlinkSolver: _analyzeConflict derives first-UIP learned clause', () 
   });
   assert.equal(level2Lits.length, 1, `expected 1 current-level literal; got ${JSON.stringify(level2Lits)}`);
 });
+
+test('SlitherlinkSolver: _addLearnedClause stores clauses up to cap', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  for (let i = 0; i < 4999; i++) {
+    s._addLearnedClause([i + 1]);
+  }
+  assert.equal(s._learnedClauses.length, 4999);
+});
+
+test('SlitherlinkSolver: _addLearnedClause evicts on overflow', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  for (let i = 0; i < 5000; i++) {
+    s._addLearnedClause([i + 1]);
+  }
+  assert.equal(s._learnedClauses.length, 3750);
+});
+
+test('SlitherlinkSolver: _addLearnedClause evicts lowest-activity clauses', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  for (let i = 0; i < 4999; i++) {
+    s._addLearnedClause([i + 1]);
+  }
+  for (let i = 0; i < 10; i++) {
+    s._learnedClauses[i].activity = 999;
+  }
+  s._addLearnedClause([9999]);
+  const highActivity = s._learnedClauses.filter(c => c.activity === 999);
+  assert.equal(highActivity.length, 10);
+});

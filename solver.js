@@ -4709,6 +4709,15 @@ class SlitherlinkSolver {
     return this._setColor(decoded.idx, positive ? 1 : 2);
   }
 
+  _addLearnedClause(literals) {
+    this._learnedClauses.push({ literals: literals.slice(), activity: 1 });
+    if (this._learnedClauses.length >= this._maxLearnedClauses) {
+      this._learnedClauses.sort((a, b) => a.activity - b.activity);
+      const drop = Math.floor(this._maxLearnedClauses / 4);
+      this._learnedClauses.splice(0, drop);
+    }
+  }
+
   // Propagates all learned clauses as unit-propagation rules.
   // Literal encoding: lit >= 0 = positive (LINE/INSIDE), lit < 0 = negative
   // (EMPTY/OUTSIDE), varId = lit >= 0 ? lit : ~lit.
