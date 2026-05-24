@@ -404,3 +404,18 @@ test('HashiSolver: solve returns solved=false on impossible input', () => {
   const r = s.solve();
   assert.equal(r.solved, false);
 });
+
+test('HashiSolver: solution cache returns cached result on identical input', () => {
+  HashiSolver.clearSolutionCache();
+  const data = {
+    rows: 1, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 2 },
+      { index: 1, row: 0, col: 2, number: 2 },
+    ],
+  };
+  const r1 = new HashiSolver(data).solve();
+  const r2 = new HashiSolver(data).solve();
+  assert.deepEqual(r1, r2);
+  HashiSolver.clearSolutionCache();
+});

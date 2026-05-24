@@ -7211,14 +7211,32 @@ class HashiSolver {
   }
 
   solve() {
-    this._startedAt = Date.now();
-    if (!this.propagate()) return { solved: false, edges: this._emit() };
-    if (this._isComplete()) return { solved: true, edges: this._emit() };
-    if (!this._backtrack()) {
-      if (this._timeUp()) return { solved: false, edges: this._emit(), error: 'timed out' };
-      return { solved: false, edges: this._emit() };
+    const key = HashiSolver._cacheKey({
+      rows: this.rows, cols: this.cols, islands: this.islands.map((i, idx) => ({
+        row: i.r, col: i.c, number: i.target,
+      })),
+    });
+    if (HashiSolver._solutionCache.has(key)) {
+      return HashiSolver._solutionCache.get(key);
     }
-    return { solved: true, edges: this._emit() };
+    this._startedAt = Date.now();
+    let result;
+    if (!this.propagate()) result = { solved: false, edges: this._emit() };
+    else if (this._isComplete()) result = { solved: true, edges: this._emit() };
+    else if (!this._backtrack()) {
+      result = this._timeUp()
+        ? { solved: false, edges: this._emit(), error: 'timed out' }
+        : { solved: false, edges: this._emit() };
+    } else {
+      result = { solved: true, edges: this._emit() };
+    }
+    // LRU: evict oldest if at cap.
+    if (HashiSolver._solutionCache.size >= HASHI_CACHE_MAX) {
+      const firstKey = HashiSolver._solutionCache.keys().next().value;
+      HashiSolver._solutionCache.delete(firstKey);
+    }
+    HashiSolver._solutionCache.set(key, result);
+    return result;
   }
 
   _backtrack() {
@@ -7294,6 +7312,28 @@ class HashiSolver {
     return out;
   }
 }
+
+const HASHI_CACHE_MAX = 50;
+HashiSolver._solutionCache = new Map();
+
+HashiSolver.clearSolutionCache = function () {
+  HashiSolver._solutionCache.clear();
+};
+
+HashiSolver._cacheKey = function (data) {
+  // FNV-1a over (rows, cols, islands sorted by (row, col)).
+  const sorted = data.islands.slice().sort((a, b) =>
+    a.row - b.row || a.col - b.col
+  );
+  let h = 0x811c9dc5;
+  const mix = (x) => {
+    h ^= x & 0xff;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  };
+  mix(data.rows); mix(data.cols); mix(sorted.length);
+  for (const i of sorted) { mix(i.row); mix(i.col); mix(i.number); }
+  return h >>> 0;
+};
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, computePuzzleDiff };
