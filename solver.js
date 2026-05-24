@@ -7900,6 +7900,43 @@ class HeyawakeSolver {
       this.lineConstraints.push(new Int32Array(span));
     }
   }
+
+  _applyConnectivity() {
+    const total = this.rows * this.cols;
+    let anchor = -1;
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] === 2) { anchor = i; break; }
+    }
+    if (anchor < 0) return true; // no whites yet — no constraint
+    const visited = new Uint8Array(total);
+    visited[anchor] = 1;
+    const stack = [anchor];
+    while (stack.length) {
+      const u = stack.pop();
+      const r = (u / this.cols) | 0;
+      const c = u - r * this.cols;
+      if (r > 0) {
+        const ni = u - this.cols;
+        if (!visited[ni] && this.cellStatus[ni] !== 1) { visited[ni] = 1; stack.push(ni); }
+      }
+      if (r < this.rows - 1) {
+        const ni = u + this.cols;
+        if (!visited[ni] && this.cellStatus[ni] !== 1) { visited[ni] = 1; stack.push(ni); }
+      }
+      if (c > 0) {
+        const ni = u - 1;
+        if (!visited[ni] && this.cellStatus[ni] !== 1) { visited[ni] = 1; stack.push(ni); }
+      }
+      if (c < this.cols - 1) {
+        const ni = u + 1;
+        if (!visited[ni] && this.cellStatus[ni] !== 1) { visited[ni] = 1; stack.push(ni); }
+      }
+    }
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] === 2 && !visited[i]) return false;
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

@@ -226,3 +226,39 @@ test('HeyawakeSolver._applyLineConstraints: span with black is satisfied (no for
   assert.equal(s.cellStatus[1], 0);
   assert.equal(s.cellStatus[2], 0);
 });
+
+test('HeyawakeSolver._applyConnectivity: blacks splitting whites → contradiction', () => {
+  const s = new HeyawakeSolver({
+    rows: 3, cols: 3,
+    rooms: [
+      { cells: Array.from({ length: 9 }, (_, i) => ({ r: (i / 3) | 0, c: i % 3 })), target: -1 },
+    ],
+  });
+  s.cellStatus[0] = 2; s.cellStatus[1] = 1; s.cellStatus[2] = 2;
+  s.cellStatus[3] = 1; s.cellStatus[4] = 1; s.cellStatus[5] = 1;
+  s.cellStatus[6] = 2; s.cellStatus[7] = 1; s.cellStatus[8] = 2;
+  assert.equal(s._applyConnectivity(), false);
+});
+
+test('HeyawakeSolver._applyConnectivity: reachable whites through unknowns → ok', () => {
+  const s = new HeyawakeSolver({
+    rows: 3, cols: 3,
+    rooms: [
+      { cells: Array.from({ length: 9 }, (_, i) => ({ r: (i / 3) | 0, c: i % 3 })), target: -1 },
+    ],
+    initialState: [[2, 0, 0], [0, 0, 0], [0, 0, 2]],
+  });
+  assert.equal(s._applyConnectivity(), true);
+});
+
+test('HeyawakeSolver._applyConnectivity: no whites yet → ok', () => {
+  const s = new HeyawakeSolver({
+    rows: 2, cols: 2,
+    rooms: [
+      { cells: [
+        { r: 0, c: 0 }, { r: 0, c: 1 }, { r: 1, c: 0 }, { r: 1, c: 1 },
+      ], target: -1 },
+    ],
+  });
+  assert.equal(s._applyConnectivity(), true);
+});
