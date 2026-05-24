@@ -4971,8 +4971,13 @@ class SlitherlinkSolver {
                 toExpand.push(av);
                 continue;
               }
-              // Earlier-level antecedent: add to learned if not already there.
-              if (seen[av] && !subsumed[av]) continue;
+              // Earlier-level antecedent: skip if already in learned.
+              // For earlier-level vars at this point, seen[av]===1 implies the
+              // var was already pushed to learned (via the pre-pass at line 4913,
+              // or the resolution loop at line 4996). The subsumed flag tracks
+              // current-level subsumption and does not apply to learned-set
+              // membership for earlier-level vars.
+              if (seen[av]) continue;
               const aVal = this._varValue(av);
               if (aVal === 0) continue;
               learned.push(aVal > 0 ? ~av : av);
@@ -6415,6 +6420,8 @@ class SlitherlinkSolver {
 
       this._decisionLevel++;
       this._currentReason = null;
+      // Shouldn't happen: we picked an unassigned variable. Defensive guard
+      // in case _pickDecisionLiteral and the trail state ever drift.
       if (!this._forceLiteral(lit)) {
         return false;
       }
@@ -6449,6 +6456,8 @@ class SlitherlinkSolver {
     }
   }
 
+  // Dead — kept for reference until T17 cleanup. `_cdclSearch()` is the live
+  // search path; `solve()` no longer calls this method.
   _backtrack() {
     if (this._budgetExceeded()) return false;
     if (this._allEdgesAssigned()) {
