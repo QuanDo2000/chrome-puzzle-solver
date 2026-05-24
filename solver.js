@@ -4484,6 +4484,17 @@ class SlitherlinkSolver {
     // Edge entries: old value is always 0 (UNKNOWN) so we don't trail it.
     this.trail = [];
 
+    // ── CDCL reason tracking (parallel to this.trail) ────────────────────
+    // _reasons[i]: null = decision; [...varIds] = propagation antecedents.
+    // _decisionLevels[i]: decision level at the time of the trail entry.
+    this._reasons = [];
+    this._decisionLevels = [];
+    // Current search decision level (0 = top-level propagation).
+    this._decisionLevel = 0;
+    // Set by a rule helper before it calls _setEdge/_setColor so those
+    // setters can capture the reason. Decisions set it to null explicitly.
+    this._currentReason = null;
+
     // Scratch arrays for connectivity propagation (_propagateConnectivity).
     const N = H * W;
     this._slSeen = new Uint8Array(N);

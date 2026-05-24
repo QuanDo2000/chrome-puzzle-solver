@@ -1926,3 +1926,16 @@ test('SlitherlinkSolver: _varValue after _setColor OUTSIDE returns -1', () => {
   s._setColor(1, 2);
   assert.equal(s._varValue(s._varIdCell(1)), -1);
 });
+
+test('SlitherlinkSolver: reason structures initialized correctly after construction', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  assert.ok(Array.isArray(s._reasons), '_reasons must be an array');
+  assert.equal(s._reasons.length, 0);
+  assert.ok(Array.isArray(s._decisionLevels), '_decisionLevels must be an array');
+  assert.equal(s._decisionLevels.length, 0);
+  assert.equal(s._decisionLevel, 0);
+  assert.equal(s._currentReason, null);
+});
