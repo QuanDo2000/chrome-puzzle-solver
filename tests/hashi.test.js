@@ -441,3 +441,22 @@ test('HashiSolver: getHint returns at least one forced edge from current state',
   assert.equal(hint[0].bridges, 2);
   HashiSolver.clearSolutionCache();
 });
+
+test('computePuzzleDiff hashi: flags wrong bridges, ignores unknown', () => {
+  const { computePuzzleDiff } = require('../solver.js');
+  const solution = {
+    edges: [
+      { a: 0, b: 1, orientation: 'H', bridges: 2 },
+      { a: 0, b: 2, orientation: 'V', bridges: 1 },
+    ],
+  };
+  const board = {
+    edges: [
+      { a: 0, b: 1, orientation: 'H', bridges: 1 }, // wrong (sol: 2)
+      // a-c missing entirely (unknown — should NOT flag)
+    ],
+  };
+  const diff = computePuzzleDiff('hashi', board, solution);
+  assert.equal(diff.length, 1);
+  assert.deepEqual(diff[0], { a: 0, b: 1, orientation: 'H', expected: 2, actual: 1 });
+});

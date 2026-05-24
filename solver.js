@@ -6925,6 +6925,39 @@ function _slitherlinkDiff(board, solution) {
 function computePuzzleDiff(type, grid, solution, stars) {
   const out = [];
   if (type === 'slitherlink') return _slitherlinkDiff(grid, solution);
+  if (type === 'hashi') {
+    const board = grid;
+    const diff = [];
+    const boardMap = new Map();
+    for (const e of (board.edges || [])) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      boardMap.set(`${a}-${b}`, e.bridges);
+    }
+    for (const e of (solution.edges || [])) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      const actual = boardMap.get(`${a}-${b}`);
+      if (actual === undefined || actual === 0) continue;
+      if (actual !== e.bridges) {
+        diff.push({ a, b, orientation: e.orientation, expected: e.bridges, actual });
+      }
+    }
+    // Also flag bridges drawn that shouldn't exist (solution=0 or missing).
+    const solMap = new Map();
+    for (const e of (solution.edges || [])) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      solMap.set(`${a}-${b}`, e.bridges);
+    }
+    for (const e of (board.edges || [])) {
+      if (e.bridges === 0) continue;
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      const key = `${a}-${b}`;
+      const expected = solMap.get(key) || 0;
+      if (expected === 0) {
+        diff.push({ a, b, orientation: e.orientation, expected: 0, actual: e.bridges });
+      }
+    }
+    return diff;
+  }
   if (!Array.isArray(grid) || !Array.isArray(solution)) return out;
   if (type === 'shikaku') return _shikakuDiff(grid, solution);
   if (type === 'galaxies') return _galaxiesDiff(grid, solution, stars);
