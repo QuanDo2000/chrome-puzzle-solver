@@ -17,6 +17,7 @@ declare const BinairoSolver: any;
 declare const ShikakuSolver: any;
 declare const YinYangSolver: any;
 declare const SlitherlinkSolver: any;
+declare const HashiSolver: any;
 
 // Helpers from handler.js.
 // MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in
@@ -41,10 +42,13 @@ type MainWorldFn =
   | 'readSlitherlinkData'
   | 'readSlitherlinkState'
   | 'applySlitherlinkState'
+  | 'readHashiData'
+  | 'readHashiState'
+  | 'applyHashiState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
-declare function computePuzzleDiff(type: string, grid: any, solution: any, stars?: any): ({ row: number, col: number } | { orientation: 'h' | 'v', r: number, c: number })[];
+declare function computePuzzleDiff(type: string, grid: any, solution: any, stars?: any): ({ row: number, col: number } | { orientation: 'h' | 'v', r: number, c: number } | { a: number, b: number, orientation: any, expected: any, actual: any })[];
 declare function callMainWorld(funcName: MainWorldFn, args?: unknown[]): Promise<any>;
 declare function getActiveHandler(): any;
 declare function parsePuzzleTask(): any;

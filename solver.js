@@ -6916,24 +6916,28 @@ function _slitherlinkDiff(board, solution) {
  * player has PLACED incorrectly (empty cells are never flagged). Pure — no
  * DOM. Used by the widget preview to highlight mistakes.
  *
- * @param {string} type   'nonogram'|'aquarium'|'binairo'|'yinyang'|'galaxies'|'shikaku'|'slitherlink'
- * @param {number[][]|{horizontal:number[][], vertical:number[][]}} grid      the player's current board
- * @param {number[][]|{horizontal:number[][], vertical:number[][]}} solution  the solved board
+ * @param {string} type   'nonogram'|'aquarium'|'binairo'|'yinyang'|'galaxies'|'shikaku'|'slitherlink'|'hashi'
+ * @param {number[][]|{horizontal:number[][], vertical:number[][]}} grid      the player's current board (hashi uses {islands, edges} — cast locally)
+ * @param {number[][]|{horizontal:number[][], vertical:number[][]}} solution  the solved board (hashi uses {islands, edges} — cast locally)
  * @param {{row:number,col:number}[]} [stars]  galaxies stars (doubled coords); galaxies only
- * @returns {{row:number, col:number}[]|{orientation:string, r:number, c:number}[]}
+ * @returns {{row:number, col:number}[]|{orientation:string, r:number, c:number}[]|{a:number, b:number, orientation:string, expected:number, actual:number}[]}
  */
 function computePuzzleDiff(type, grid, solution, stars) {
   const out = [];
   if (type === 'slitherlink') return _slitherlinkDiff(grid, solution);
   if (type === 'hashi') {
-    const board = grid;
+    // Hashi grids are {islands, edges}, not the 2D / H+V shapes the public
+    // signature advertises for the other puzzle types. Cast locally so the
+    // rest of this block can read .edges without tsc complaining.
+    const board = /** @type {any} */ (grid);
+    const sol = /** @type {any} */ (solution);
     const diff = [];
     const boardMap = new Map();
     for (const e of (board.edges || [])) {
       const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
       boardMap.set(`${a}-${b}`, e.bridges);
     }
-    for (const e of (solution.edges || [])) {
+    for (const e of (sol.edges || [])) {
       const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
       const actual = boardMap.get(`${a}-${b}`);
       if (actual === undefined || actual === 0) continue;
@@ -6943,7 +6947,7 @@ function computePuzzleDiff(type, grid, solution, stars) {
     }
     // Also flag bridges drawn that shouldn't exist (solution=0 or missing).
     const solMap = new Map();
-    for (const e of (solution.edges || [])) {
+    for (const e of (sol.edges || [])) {
       const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
       solMap.set(`${a}-${b}`, e.bridges);
     }
