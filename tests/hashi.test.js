@@ -73,10 +73,12 @@ test('HashiSolver: _assign tightens bounds; _rollback restores', () => {
   assert.equal(s.lo[0], 0);
   assert.equal(s.hi[0], 2);
   const mark = s.trail.length;
-  s._assign(0, 2, 2); // force bridges=2
+  assert.equal(s._assign(0, 2, 2), true); // force bridges=2
   assert.equal(s.lo[0], 2);
   assert.equal(s.hi[0], 2);
+  assert.equal(s._assign(0, 2, 2), false); // no-op short-circuit
   s._rollback(mark);
   assert.equal(s.lo[0], 0);
   assert.equal(s.hi[0], 2);
+  assert.equal(s.trail.length, mark);
 });

@@ -7028,11 +7028,14 @@ class HashiSolver {
   }
 
   _assign(ei, newLo, newHi) {
-    // Tighten lo upward and hi downward. Push the OLD values so rollback
-    // can restore. Caller already validated newLo ≤ newHi.
-    this.trail.push(ei, this.lo[ei], this.hi[ei]);
+    // Monotonic tighten: caller must ensure newLo >= lo[ei] && newHi <= hi[ei].
+    // Returns false on no-op (avoids trail bloat under redundant tightening).
+    const oldLo = this.lo[ei], oldHi = this.hi[ei];
+    if (oldLo === newLo && oldHi === newHi) return false;
+    this.trail.push(ei, oldLo, oldHi);
     this.lo[ei] = newLo;
     this.hi[ei] = newHi;
+    return true;
   }
 
   _rollback(mark) {
