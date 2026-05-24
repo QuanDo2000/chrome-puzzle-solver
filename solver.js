@@ -7790,6 +7790,35 @@ class HeyawakeSolver {
     if (this.maxMs <= 0) return false;
     return (Date.now() - this._startedAt) > this.maxMs;
   }
+
+  _applyRoomCounts() {
+    for (let k = 0; k < this.K; k++) {
+      if (this.target[k] < 0) continue;
+      const cells = this.roomCells[k];
+      let nB = 0, nU = 0;
+      for (let i = 0; i < cells.length; i++) {
+        const v = this.cellStatus[cells[i]];
+        if (v === 1) nB++;
+        else if (v === 0) nU++;
+      }
+      if (nB > this.target[k]) return false;
+      if (nB + nU < this.target[k]) return false;
+      if (nB === this.target[k] && nU > 0) {
+        for (let i = 0; i < cells.length; i++) {
+          if (this.cellStatus[cells[i]] === 0) {
+            if (!this._set(cells[i], 2)) return false;
+          }
+        }
+      } else if (nB + nU === this.target[k] && nU > 0) {
+        for (let i = 0; i < cells.length; i++) {
+          if (this.cellStatus[cells[i]] === 0) {
+            if (!this._set(cells[i], 1)) return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
