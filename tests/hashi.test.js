@@ -442,6 +442,29 @@ test('HashiSolver: getHint returns at least one forced edge from current state',
   HashiSolver.clearSolutionCache();
 });
 
+test('HashiSolver: getHint treats bridges=0 currentEdges as unknown, not forced', () => {
+  // readHashiState emits ALL neighbour pairs (including bridges=0 for
+  // unconnected). getHint must ignore the 0-entries; treating them as
+  // forced lo=hi=0 would saturate every edge and contradict the degree
+  // constraints, returning [] (the bug observed on the 30x30 daily).
+  HashiSolver.clearSolutionCache();
+  const s = new HashiSolver({
+    rows: 1, cols: 5,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 1, row: 0, col: 2, number: 2 },
+      { index: 2, row: 0, col: 4, number: 1 },
+    ],
+  });
+  // Simulate readHashiState: every neighbour pair, all bridges=0.
+  const fakeCurrent = s.edges.map(e => ({
+    a: e.a, b: e.b, orientation: e.orientation, bridges: 0,
+  }));
+  const hint = s.getHint(fakeCurrent);
+  assert.ok(hint.length >= 1, 'expected hint despite bridges=0 noise');
+  HashiSolver.clearSolutionCache();
+});
+
 test('computePuzzleDiff hashi: flags wrong bridges, ignores unknown', () => {
   const { computePuzzleDiff } = require('../solver.js');
   const solution = {

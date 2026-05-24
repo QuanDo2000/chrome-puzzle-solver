@@ -7381,7 +7381,11 @@ class HashiSolver {
     const K = this.islands.length;
     const minLines = Math.max(1, Math.ceil(K / 10));
 
-    // Build a key for the current edge set so we can apply hints.
+    // Build a key for the current edge set so we can apply hints. The page
+    // (and readHashiState) emits ALL neighbour pairs including bridges=0
+    // for unconnected pairs — those are "unknown / blank" in hashi semantics,
+    // not "forced to 0". Skip them on seed; only drawn bridges (1 or 2)
+    // count as user assignments.
     const currentMap = new Map();
     for (const e of currentEdges) {
       const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
@@ -7393,6 +7397,7 @@ class HashiSolver {
       const key = `${e.a}-${e.b}`;
       if (currentMap.has(key)) {
         const v = currentMap.get(key);
+        if (v === 0) continue; // unconnected — leave as unknown
         if (v < this.lo[i] || v > this.hi[i]) {
           // current state contradicts solver bounds — bail
           return [];
