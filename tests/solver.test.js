@@ -2298,6 +2298,72 @@ test('SlitherlinkSolver: vertex rule contradiction sets _lastConflictReason', ()
   }
 });
 
+test('SlitherlinkSolver: _computeBackjumpLevel returns second-highest level', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const v1 = s._varIdEdge('H', 0);  // id 0, level 1
+  const v2 = s._varIdEdge('H', 1);  // id 1, level 2
+  const v3 = s._varIdEdge('H', 2);  // id 2, level 3
+  s.trail = [(0 << 24) | 0, (0 << 24) | 1, (0 << 24) | 2];
+  s._decisionLevels = [1, 2, 3];
+  s._reasons = [null, null, null];
+
+  // Learned clause literals at levels [3, 1, 2] → max=3, second=2.
+  // Use ~v for negation to handle var id 0 unambiguously.
+  const learned = [~v3, ~v1, ~v2];
+  const level = s._computeBackjumpLevel(learned);
+  assert.equal(level, 2);
+});
+
+test('SlitherlinkSolver: _computeBackjumpLevel single level returns 0', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const v1 = s._varIdEdge('H', 0);
+  s.trail = [(0 << 24) | 0];
+  s._decisionLevels = [3];
+  s._reasons = [null];
+  const level = s._computeBackjumpLevel([~v1]);
+  assert.equal(level, 0);
+});
+
+test('SlitherlinkSolver: _backjumpTo resets trail and _decisionLevel', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+
+  s.H[0] = 1;
+  s.trail.push((0 << 24) | 0);
+  s._reasons.push(null);
+  s._decisionLevels.push(1);
+
+  s.H[1] = 1;
+  s.trail.push((0 << 24) | 1);
+  s._reasons.push(null);
+  s._decisionLevels.push(2);
+
+  s.H[2] = 1;
+  s.trail.push((0 << 24) | 2);
+  s._reasons.push(null);
+  s._decisionLevels.push(3);
+
+  s._decisionLevel = 3;
+
+  s._backjumpTo(1);
+
+  assert.equal(s._decisionLevel, 1);
+  for (let i = 0; i < s._decisionLevels.length; i++) {
+    assert.ok(s._decisionLevels[i] <= 1, `trail entry ${i} has level ${s._decisionLevels[i]} > 1`);
+  }
+  assert.equal(s.H[1], 0);
+  assert.equal(s.H[2], 0);
+  assert.equal(s.H[0], 1);
+});
+
 test('SlitherlinkSolver: _analyzeConflict derives first-UIP learned clause', () => {
   const s = new SlitherlinkSolver({
     width: 3, height: 3,

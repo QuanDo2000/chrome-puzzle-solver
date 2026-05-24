@@ -4890,6 +4890,40 @@ class SlitherlinkSolver {
     return learned;
   }
 
+  // Returns the second-highest decision level among literals in a learned clause.
+  // Used by CDCL to determine the target level for a backjump (the level at which
+  // the learned clause becomes unit after rolling back).
+  // Returns 0 if there is only one distinct level (backjump to root).
+  _computeBackjumpLevel(learned) {
+    let max = 0, second = 0;
+    for (const lit of learned) {
+      const varId = lit >= 0 ? lit : ~lit;
+      const lvl = this._decisionLevelOf(varId);
+      if (lvl > max) {
+        second = max;
+        max = lvl;
+      } else if (lvl > second && lvl < max) {
+        second = lvl;
+      }
+    }
+    return second;
+  }
+
+  // Rolls the trail back to the first entry whose decision level exceeds `level`,
+  // then sets this._decisionLevel = level.
+  // After this call all trail entries have level ≤ `level`.
+  _backjumpTo(level) {
+    let mark = this.trail.length;
+    for (let i = 0; i < this.trail.length; i++) {
+      if (this._decisionLevels[i] > level) {
+        mark = i;
+        break;
+      }
+    }
+    this._rollback(mark);
+    this._decisionLevel = level;
+  }
+
   // Returns the color of cell (r,c): 1=INSIDE, 2=OUTSIDE, 0=UNKNOWN.
   // Out-of-grid coordinates are implicitly OUTSIDE (2).
   _colorOf(r, c) {
