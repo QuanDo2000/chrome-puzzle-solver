@@ -2448,3 +2448,68 @@ test('SlitherlinkSolver: _addLearnedClause evicts lowest-activity clauses', () =
   const highActivity = s._learnedClauses.filter(c => c.activity === 999);
   assert.equal(highActivity.length, 10);
 });
+
+test('SlitherlinkSolver: _bumpVsids increments scores', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  assert.equal(s._vsidsScores[5], 0);
+  assert.equal(s._vsidsScores[6], 0);
+  assert.equal(s._vsidsScores[13], 0);
+  // Literals: +5 (var 5), ~7 (var 7, negated), 13 (var 13).
+  s._bumpVsids([5, ~7, 13]);
+  assert.equal(s._vsidsScores[5], 1);
+  assert.equal(s._vsidsScores[7], 1);
+  assert.equal(s._vsidsScores[13], 1);
+  assert.equal(s._vsidsScores[0], 0);
+});
+
+test('SlitherlinkSolver: _decayVsidsIfDue decays only after 256 calls', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._vsidsScores[5] = 10;
+  s._learnedClauses = [{ literals: [5], activity: 8 }];
+
+  for (let i = 0; i < 255; i++) s._decayVsidsIfDue();
+  assert.equal(s._vsidsScores[5], 10);
+  assert.equal(s._learnedClauses[0].activity, 8);
+
+  s._decayVsidsIfDue();
+  assert.ok(Math.abs(s._vsidsScores[5] - 9.5) < 0.01,
+    `expected ~9.5, got ${s._vsidsScores[5]}`);
+  assert.ok(Math.abs(s._learnedClauses[0].activity - 7.6) < 0.01,
+    `expected ~7.6, got ${s._learnedClauses[0].activity}`);
+  assert.equal(s._vsidsConflictsSinceDecay, 0);
+});
+
+test('SlitherlinkSolver: _pickDecisionLiteral picks highest VSIDS score', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._vsidsScores[2] = 0.5;
+  s._vsidsScores[4] = 2.0;
+  s._vsidsScores[7] = 1.0;
+  const lit = s._pickDecisionLiteral();
+  // Extract varId with ~lit convention.
+  const varId = lit >= 0 ? lit : ~lit;
+  assert.equal(varId, 4);
+});
+
+test('SlitherlinkSolver: _pickDecisionLiteral falls back when all scores zero', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const lit = s._pickDecisionLiteral();
+  // Returns 0 only if all vars assigned; with empty grid, must return non-zero.
+  // Under ~lit convention, a positive literal can be 0 (var 0 positive).
+  // So we can't simply assert "lit !== 0"; instead verify a valid var ID came back
+  // by checking _varValue is 0 for that var (unassigned).
+  const varId = lit >= 0 ? lit : ~lit;
+  assert.ok(varId >= 0 && varId < s.totalVars, `varId ${varId} out of range`);
+  assert.equal(s._varValue(varId), 0, 'returned literal must be unassigned');
+});

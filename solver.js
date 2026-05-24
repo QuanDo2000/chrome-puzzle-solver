@@ -4499,6 +4499,10 @@ class SlitherlinkSolver {
     this._learnedClauses = [];       // [{ literals: int[], activity: number }]
     this._maxLearnedClauses = 5000;
     this._lastConflictReason = null; // set by any rule that returns false
+    this._vsidsScores = new Float32Array(this.totalVars);
+    this._vsidsDecay = 0.95;
+    this._vsidsDecayInterval = 256;
+    this._vsidsConflictsSinceDecay = 0;
 
     // Scratch arrays for connectivity propagation (_propagateConnectivity).
     const N = H * W;
@@ -4716,6 +4720,48 @@ class SlitherlinkSolver {
       const drop = Math.floor(this._maxLearnedClauses / 4);
       this._learnedClauses.splice(0, drop);
     }
+  }
+
+  _bumpVsids(literals) {
+    for (const lit of literals) {
+      const varId = lit >= 0 ? lit : ~lit;
+      this._vsidsScores[varId] += 1;
+    }
+  }
+
+  _decayVsidsIfDue() {
+    this._vsidsConflictsSinceDecay++;
+    if (this._vsidsConflictsSinceDecay < this._vsidsDecayInterval) return;
+    this._vsidsConflictsSinceDecay = 0;
+    for (let i = 0; i < this.totalVars; i++) {
+      this._vsidsScores[i] *= this._vsidsDecay;
+    }
+    for (const c of this._learnedClauses) {
+      c.activity *= this._vsidsDecay;
+    }
+  }
+
+  _pickDecisionLiteral() {
+    let best = -1;
+    let bestScore = -Infinity;
+    for (let v = 0; v < this.totalVars; v++) {
+      if (this._varValue(v) !== 0) continue;
+      if (this._vsidsScores[v] > bestScore) {
+        bestScore = this._vsidsScores[v];
+        best = v;
+      }
+    }
+    if (best === -1) return 0; // all assigned — caller must check _allEdgesAssigned() separately
+
+    // When all scores are 0 (no conflicts yet), fall back to existing
+    // domain-specific heuristics for a smarter initial branch.
+    if (bestScore === 0) {
+      const edgePick = this._pickEdge();
+      if (edgePick) return this._varIdEdge(/** @type {'H'|'V'} */ (edgePick.kind), edgePick.idx);
+    }
+    // Pick positive sense (LINE / INSIDE) by default — just return the var ID
+    // (which is itself a positive literal under ~lit convention).
+    return best;
   }
 
   // Propagates all learned clauses as unit-propagation rules.
