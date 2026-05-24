@@ -7047,6 +7047,21 @@ class HashiSolver {
       this.hi[ei] = oldHi;
     }
   }
+
+  _applyCrossings() {
+    // For each edge with lo ≥ 1, force all crossing partners to hi = 0.
+    // Contradiction if any crossing partner already has lo > 0.
+    for (let i = 0; i < this.edges.length; i++) {
+      if (this.lo[i] < 1) continue;
+      const partners = this.crosses[i];
+      for (let k = 0; k < partners.length; k++) {
+        const j = partners[k];
+        if (this.lo[j] > 0) return false;
+        if (this.hi[j] > 0) this._assign(j, 0, 0);
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

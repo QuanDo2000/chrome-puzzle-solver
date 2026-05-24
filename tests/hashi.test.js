@@ -82,3 +82,39 @@ test('HashiSolver: _assign tightens bounds; _rollback restores', () => {
   assert.equal(s.hi[0], 2);
   assert.equal(s.trail.length, mark);
 });
+
+test('HashiSolver: crossing exclusion — forcing lo[e]≥1 sets hi[crosses]=0', () => {
+  const s = new HashiSolver({
+    rows: 3, cols: 4,
+    islands: [
+      { index: 0, row: 0, col: 1, number: 1 },
+      { index: 1, row: 1, col: 0, number: 1 },
+      { index: 2, row: 1, col: 3, number: 1 },
+      { index: 3, row: 2, col: 1, number: 1 },
+    ],
+  });
+  const iH = s.edges.findIndex(e => e.a === 1 && e.b === 2);
+  const iV = s.edges.findIndex(e => e.a === 0 && e.b === 3);
+  // Force horizontal edge to lo=1
+  s._assign(iH, 1, s.hi[iH]);
+  const ok = s._applyCrossings();
+  assert.equal(ok, true);
+  assert.equal(s.hi[iV], 0); // vertical forced to 0
+});
+
+test('HashiSolver: crossing exclusion — contradiction if both forced', () => {
+  const s = new HashiSolver({
+    rows: 3, cols: 4,
+    islands: [
+      { index: 0, row: 0, col: 1, number: 1 },
+      { index: 1, row: 1, col: 0, number: 1 },
+      { index: 2, row: 1, col: 3, number: 1 },
+      { index: 3, row: 2, col: 1, number: 1 },
+    ],
+  });
+  const iH = s.edges.findIndex(e => e.a === 1 && e.b === 2);
+  const iV = s.edges.findIndex(e => e.a === 0 && e.b === 3);
+  s._assign(iH, 1, s.hi[iH]);
+  s._assign(iV, 1, s.hi[iV]);
+  assert.equal(s._applyCrossings(), false);
+});
