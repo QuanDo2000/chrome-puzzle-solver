@@ -187,3 +187,40 @@ test('HashiSolver: degree forcing — over-target is contradiction', () => {
   s._assign(0, 2, 2); // bypass cap: force lo=2 on a 1-island's only edge
   assert.equal(s._applyDegree(), false);
 });
+
+test('HashiSolver: two-1s isolation — edge between two 1-islands forbidden when other islands exist', () => {
+  //   1 . 1
+  //   . . .
+  //   . 2 .
+  // Islands 0 (0,0)=1, 1 (0,2)=1, 2 (2,1)=2.
+  // Edge (0,1) is the H edge between the two 1-islands. If it has 1 bridge,
+  // both 1-islands are saturated → the 2-island can't connect → disconnected.
+  // So edge(0,1).hi must be 0.
+  const s = new HashiSolver({
+    rows: 3, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 1, row: 0, col: 2, number: 1 },
+      { index: 2, row: 2, col: 1, number: 2 },
+    ],
+  });
+  const ok = s._applyTwoOnesIsolation();
+  assert.equal(ok, true);
+  const e01 = s.edges.findIndex(e => e.a === 0 && e.b === 1);
+  assert.equal(s.hi[e01], 0);
+});
+
+test('HashiSolver: two-1s isolation — allowed when puzzle has exactly two islands', () => {
+  const s = new HashiSolver({
+    rows: 1, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 1, row: 0, col: 2, number: 1 },
+    ],
+  });
+  const e01 = s.edges.findIndex(e => e.a === 0 && e.b === 1);
+  const hiBefore = s.hi[e01];
+  const ok = s._applyTwoOnesIsolation();
+  assert.equal(ok, true);
+  assert.equal(s.hi[e01], hiBefore); // unchanged
+});

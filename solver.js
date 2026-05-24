@@ -7099,6 +7099,21 @@ class HashiSolver {
     }
     return true;
   }
+
+  _applyTwoOnesIsolation() {
+    // An edge between two islands with target=1 forms a closed 2-component
+    // when given 1 bridge. Forbid it unless the puzzle is exactly those
+    // two islands.
+    if (this.islands.length <= 2) return true;
+    for (let i = 0; i < this.edges.length; i++) {
+      const e = this.edges[i];
+      if (this.islands[e.a].target === 1 && this.islands[e.b].target === 1) {
+        if (this.lo[i] > 0) return false;
+        if (this.hi[i] > 0) this._assign(i, 0, 0);
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
