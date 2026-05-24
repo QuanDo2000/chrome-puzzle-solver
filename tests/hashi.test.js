@@ -336,3 +336,71 @@ test('HashiSolver: maxMs budget bails the solver', () => {
   // Solver doesn't time out on trivial input — just verify constructor accepted it.
   assert.equal(s.maxMs, 1);
 });
+
+test('HashiSolver: solve trivial 2-island puzzle', () => {
+  const s = new HashiSolver({
+    rows: 1, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 2 },
+      { index: 1, row: 0, col: 2, number: 2 },
+    ],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.equal(r.edges.length, 1);
+  assert.equal(r.edges[0].bridges, 2);
+});
+
+test('HashiSolver: solve a 3-island puzzle requiring degree+connectivity', () => {
+  const s = new HashiSolver({
+    rows: 1, cols: 5,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 1, row: 0, col: 2, number: 2 },
+      { index: 2, row: 0, col: 4, number: 1 },
+    ],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  const map = new Map(r.edges.map(e => [`${e.a}-${e.b}`, e.bridges]));
+  assert.equal(map.get('0-1'), 1);
+  assert.equal(map.get('1-2'), 1);
+});
+
+test('HashiSolver: solve the captured 7x7-easy', () => {
+  const s = new HashiSolver({
+    rows: 7, cols: 7,
+    islands: [
+      { index: 0, row: 0, col: 1, number: 4 },
+      { index: 1, row: 0, col: 6, number: 3 },
+      { index: 2, row: 1, col: 0, number: 2 },
+      { index: 3, row: 1, col: 5, number: 1 },
+      { index: 4, row: 2, col: 3, number: 1 },
+      { index: 5, row: 5, col: 1, number: 4 },
+      { index: 6, row: 5, col: 3, number: 4 },
+      { index: 7, row: 5, col: 5, number: 2 },
+      { index: 8, row: 6, col: 0, number: 3 },
+      { index: 9, row: 6, col: 6, number: 2 },
+    ],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  // Verify every island's degree matches its number.
+  const deg = new Array(10).fill(0);
+  for (const e of r.edges) {
+    deg[e.a] += e.bridges;
+    deg[e.b] += e.bridges;
+  }
+  const targets = [4, 3, 2, 1, 1, 4, 4, 2, 3, 2];
+  for (let i = 0; i < 10; i++) assert.equal(deg[i], targets[i], `island ${i}`);
+});
+
+test('HashiSolver: solve returns solved=false on impossible input', () => {
+  // 1-island with no neighbours.
+  const s = new HashiSolver({
+    rows: 1, cols: 1,
+    islands: [{ index: 0, row: 0, col: 0, number: 1 }],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, false);
+});

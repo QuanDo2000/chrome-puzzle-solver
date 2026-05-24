@@ -7209,6 +7209,90 @@ class HashiSolver {
     if (this.maxMs <= 0) return false;
     return (Date.now() - this._startedAt) > this.maxMs;
   }
+
+  solve() {
+    this._startedAt = Date.now();
+    if (!this.propagate()) return { solved: false, edges: this._emit() };
+    if (this._isComplete()) return { solved: true, edges: this._emit() };
+    if (!this._backtrack()) {
+      if (this._timeUp()) return { solved: false, edges: this._emit(), error: 'timed out' };
+      return { solved: false, edges: this._emit() };
+    }
+    return { solved: true, edges: this._emit() };
+  }
+
+  _backtrack() {
+    // Most-constrained variable: largest pressure on tightest endpoint.
+    let bestEi = -1;
+    let bestScore = -1;
+    for (let i = 0; i < this.edges.length; i++) {
+      if (this.lo[i] === this.hi[i]) continue;
+      const e = this.edges[i];
+      const tA = this.islands[e.a].target, tB = this.islands[e.b].target;
+      const score = Math.max(tA, tB) * 10 + (this.hi[i] - this.lo[i]);
+      if (score > bestScore) { bestScore = score; bestEi = i; }
+    }
+    if (bestEi === -1) return this._isComplete();
+
+    this._depth++;
+    // Branch high → low.
+    for (let v = this.hi[bestEi]; v >= this.lo[bestEi]; v--) {
+      const mark = this.trail.length;
+      this._assign(bestEi, v, v);
+      if (this.propagate() && this._backtrack()) {
+        this._depth--;
+        return true;
+      }
+      this._rollback(mark);
+      if (this._timeUp()) break;
+    }
+    this._depth--;
+    return false;
+  }
+
+  _isComplete() {
+    // All edges decided + degrees match + single connected component.
+    for (let i = 0; i < this.edges.length; i++) {
+      if (this.lo[i] !== this.hi[i]) return false;
+    }
+    const K = this.islands.length;
+    const deg = new Int32Array(K);
+    for (let i = 0; i < this.edges.length; i++) {
+      if (this.lo[i] === 0) continue;
+      deg[this.edges[i].a] += this.lo[i];
+      deg[this.edges[i].b] += this.lo[i];
+    }
+    for (let id = 0; id < K; id++) {
+      if (deg[id] !== this.islands[id].target) return false;
+    }
+    // Connectivity over bridges ≥ 1.
+    const visited = new Uint8Array(K);
+    visited[0] = 1;
+    const stack = [0];
+    while (stack.length) {
+      const u = stack.pop();
+      const inc = this.incident[u];
+      for (let k = 0; k < inc.length; k++) {
+        const ei = inc[k];
+        if (this.lo[ei] === 0) continue;
+        const v = this.edges[ei].a === u ? this.edges[ei].b : this.edges[ei].a;
+        if (!visited[v]) { visited[v] = 1; stack.push(v); }
+      }
+    }
+    for (let id = 0; id < K; id++) if (!visited[id]) return false;
+    return true;
+  }
+
+  _emit() {
+    const out = [];
+    for (let i = 0; i < this.edges.length; i++) {
+      if (this.lo[i] !== this.hi[i]) continue;
+      if (this.lo[i] === 0) continue;
+      const e = this.edges[i];
+      out.push({ a: e.a, b: e.b, orientation: e.orientation, bridges: this.lo[i] });
+    }
+    return out;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
