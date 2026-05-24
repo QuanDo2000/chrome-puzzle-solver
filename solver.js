@@ -4723,28 +4723,37 @@ class SlitherlinkSolver {
         const colorBelow = this._colorOf(r, c);
         const idxAbove = (r - 1) >= 0 ? (r - 1) * W + c : -1;
         const idxBelow = r < H ? r * W + c : -1;
+        const eVar = this._varIdEdge('H', this._hIdx(r, c));
         if (e === 1) {
           // LINE → colors must differ.
           if (colorAbove !== 0 && colorBelow !== 0 && colorAbove === colorBelow) return false;
           if (colorAbove !== 0 && colorBelow === 0) {
             // Force below to opposite.
             const forced = colorAbove === 1 ? 2 : 1;
-            if (idxBelow >= 0) { if (!this._setColor(idxBelow, forced)) return false; onChange(); }
-            else if (forced !== 2) return false;  // out-of-grid must be OUTSIDE
+            if (idxBelow >= 0) {
+              this._currentReason = [eVar, ...(idxAbove >= 0 ? [this._varIdCell(idxAbove)] : [])];
+              if (!this._setColor(idxBelow, forced)) return false; onChange();
+            } else if (forced !== 2) return false;  // out-of-grid must be OUTSIDE
           } else if (colorBelow !== 0 && colorAbove === 0) {
             const forced = colorBelow === 1 ? 2 : 1;
-            if (idxAbove >= 0) { if (!this._setColor(idxAbove, forced)) return false; onChange(); }
-            else if (forced !== 2) return false;
+            if (idxAbove >= 0) {
+              this._currentReason = [eVar, ...(idxBelow >= 0 ? [this._varIdCell(idxBelow)] : [])];
+              if (!this._setColor(idxAbove, forced)) return false; onChange();
+            } else if (forced !== 2) return false;
           }
         } else {
           // EMPTY → colors must be same.
           if (colorAbove !== 0 && colorBelow !== 0 && colorAbove !== colorBelow) return false;
           if (colorAbove !== 0 && colorBelow === 0) {
-            if (idxBelow >= 0) { if (!this._setColor(idxBelow, colorAbove)) return false; onChange(); }
-            else if (colorAbove !== 2) return false;
+            if (idxBelow >= 0) {
+              this._currentReason = [eVar, ...(idxAbove >= 0 ? [this._varIdCell(idxAbove)] : [])];
+              if (!this._setColor(idxBelow, colorAbove)) return false; onChange();
+            } else if (colorAbove !== 2) return false;
           } else if (colorBelow !== 0 && colorAbove === 0) {
-            if (idxAbove >= 0) { if (!this._setColor(idxAbove, colorBelow)) return false; onChange(); }
-            else if (colorBelow !== 2) return false;
+            if (idxAbove >= 0) {
+              this._currentReason = [eVar, ...(idxBelow >= 0 ? [this._varIdCell(idxBelow)] : [])];
+              if (!this._setColor(idxAbove, colorBelow)) return false; onChange();
+            } else if (colorBelow !== 2) return false;
           }
         }
       }
@@ -4760,25 +4769,34 @@ class SlitherlinkSolver {
         const colorRight = this._colorOf(r, c);
         const idxLeft = (c - 1) >= 0 ? r * W + (c - 1) : -1;
         const idxRight = c < W ? r * W + c : -1;
+        const eVar = this._varIdEdge('V', this._vIdx(r, c));
         if (e === 1) {
           if (colorLeft !== 0 && colorRight !== 0 && colorLeft === colorRight) return false;
           if (colorLeft !== 0 && colorRight === 0) {
             const forced = colorLeft === 1 ? 2 : 1;
-            if (idxRight >= 0) { if (!this._setColor(idxRight, forced)) return false; onChange(); }
-            else if (forced !== 2) return false;
+            if (idxRight >= 0) {
+              this._currentReason = [eVar, ...(idxLeft >= 0 ? [this._varIdCell(idxLeft)] : [])];
+              if (!this._setColor(idxRight, forced)) return false; onChange();
+            } else if (forced !== 2) return false;
           } else if (colorRight !== 0 && colorLeft === 0) {
             const forced = colorRight === 1 ? 2 : 1;
-            if (idxLeft >= 0) { if (!this._setColor(idxLeft, forced)) return false; onChange(); }
-            else if (forced !== 2) return false;
+            if (idxLeft >= 0) {
+              this._currentReason = [eVar, ...(idxRight >= 0 ? [this._varIdCell(idxRight)] : [])];
+              if (!this._setColor(idxLeft, forced)) return false; onChange();
+            } else if (forced !== 2) return false;
           }
         } else {
           if (colorLeft !== 0 && colorRight !== 0 && colorLeft !== colorRight) return false;
           if (colorLeft !== 0 && colorRight === 0) {
-            if (idxRight >= 0) { if (!this._setColor(idxRight, colorLeft)) return false; onChange(); }
-            else if (colorLeft !== 2) return false;
+            if (idxRight >= 0) {
+              this._currentReason = [eVar, ...(idxLeft >= 0 ? [this._varIdCell(idxLeft)] : [])];
+              if (!this._setColor(idxRight, colorLeft)) return false; onChange();
+            } else if (colorLeft !== 2) return false;
           } else if (colorRight !== 0 && colorLeft === 0) {
-            if (idxLeft >= 0) { if (!this._setColor(idxLeft, colorRight)) return false; onChange(); }
-            else if (colorRight !== 2) return false;
+            if (idxLeft >= 0) {
+              this._currentReason = [eVar, ...(idxRight >= 0 ? [this._varIdCell(idxRight)] : [])];
+              if (!this._setColor(idxLeft, colorRight)) return false; onChange();
+            } else if (colorRight !== 2) return false;
           }
         }
       }
@@ -4793,7 +4811,13 @@ class SlitherlinkSolver {
         const colorAbove = this._colorOf(r - 1, c);
         const colorBelow = this._colorOf(r, c);
         if (colorAbove === 0 || colorBelow === 0) continue;
+        const idxAbove = (r - 1) >= 0 ? (r - 1) * W + c : -1;
+        const idxBelow = r < H ? r * W + c : -1;
         const expectedEdge = colorAbove !== colorBelow ? 1 : 2;
+        const antecedents = [];
+        if (idxAbove >= 0) antecedents.push(this._varIdCell(idxAbove));
+        if (idxBelow >= 0) antecedents.push(this._varIdCell(idxBelow));
+        this._currentReason = antecedents;
         if (!this._setEdge(eIdx, 'H', expectedEdge)) return false;
         onChange();
       }
@@ -4806,7 +4830,13 @@ class SlitherlinkSolver {
         const colorLeft = this._colorOf(r, c - 1);
         const colorRight = this._colorOf(r, c);
         if (colorLeft === 0 || colorRight === 0) continue;
+        const idxLeft = (c - 1) >= 0 ? r * W + (c - 1) : -1;
+        const idxRight = c < W ? r * W + c : -1;
         const expectedEdge = colorLeft !== colorRight ? 1 : 2;
+        const antecedents = [];
+        if (idxLeft >= 0) antecedents.push(this._varIdCell(idxLeft));
+        if (idxRight >= 0) antecedents.push(this._varIdCell(idxRight));
+        this._currentReason = antecedents;
         if (!this._setEdge(eIdx, 'V', expectedEdge)) return false;
         onChange();
       }
@@ -4820,34 +4850,43 @@ class SlitherlinkSolver {
       for (let c = 0; c < W; c++) {
         const clue = taskRow[c];
         if (clue === undefined || clue < 0 || clue > 4) continue;
+        const myIdx = r * W + c;
         const myColor = this._colorOf(r, c);
         if (myColor === 0) continue;
         const opposite = myColor === 1 ? 2 : 1;
+        const myVar = this._varIdCell(myIdx);
         const nbrs = [[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
         let m = 0, u = 0;
+        const oppositeVars = [];
         for (const [nr, nc] of nbrs) {
           const nc2 = this._colorOf(nr, nc);
-          if (nc2 === opposite) m++;
-          else if (nc2 === 0) u++;
+          if (nc2 === opposite) {
+            m++;
+            if (nr >= 0 && nr < H && nc >= 0 && nc < W) oppositeVars.push(this._varIdCell(nr * W + nc));
+          } else if (nc2 === 0) u++;
         }
         if (m > clue) return false;
         if (m + u < clue) return false;
         if (m === clue && u > 0) {
           // Force all unknown neighbors to same color as myColor.
+          const antecedents = [myVar, ...oppositeVars];
           for (const [nr, nc] of nbrs) {
             if (nr < 0 || nr >= H || nc < 0 || nc >= W) continue;
             const ni = nr * W + nc;
             if (this.colors[ni] === 0) {
+              this._currentReason = antecedents;
               if (!this._setColor(ni, myColor)) return false;
               onChange();
             }
           }
         } else if (m + u === clue && u > 0) {
           // Force all unknown neighbors to opposite color.
+          const antecedents = [myVar, ...oppositeVars];
           for (const [nr, nc] of nbrs) {
             if (nr < 0 || nr >= H || nc < 0 || nc >= W) continue;
             const ni = nr * W + nc;
             if (this.colors[ni] === 0) {
+              this._currentReason = antecedents;
               if (!this._setColor(ni, opposite)) return false;
               onChange();
             }

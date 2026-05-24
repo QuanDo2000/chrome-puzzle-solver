@@ -2073,3 +2073,72 @@ test('SlitherlinkSolver: _applyAdjacentThreeH records empty antecedents', () => 
     assert.deepEqual(s._reasons[i], []);
   }
 });
+
+test('SlitherlinkSolver: _propagateColors sub-rule A records edge+color antecedents', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._currentReason = null; s._setEdge(s._hIdx(1, 0), 'H', 1);
+  s._currentReason = null; s._setColor(0, 1);
+  const trailBefore = s.trail.length;
+  const ok = s._propagateColors(() => {});
+  assert.equal(ok, true);
+  assert.equal(s.colors[1 * 3 + 0], 2);
+  let colorForceIdx = -1;
+  for (let i = s.trail.length - 1; i >= trailBefore; i--) {
+    if (((s.trail[i] >> 24) & 3) === 2) { colorForceIdx = i; break; }
+  }
+  assert.ok(colorForceIdx >= 0, 'expected a color trail entry from rule A');
+  const reason = s._reasons[colorForceIdx];
+  assert.ok(Array.isArray(reason));
+  assert.ok(reason.includes(s._varIdEdge('H', s._hIdx(1, 0))), 'reason must include edge var');
+  assert.ok(reason.includes(s._varIdCell(0)), 'reason must include above-cell color var');
+});
+
+test('SlitherlinkSolver: _propagateColors sub-rule B records both-color antecedents', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._currentReason = null; s._setColor(0, 1);
+  s._currentReason = null; s._setColor(1, 2);
+  const trailBefore = s.trail.length;
+  const ok = s._propagateColors(() => {});
+  assert.equal(ok, true);
+  assert.equal(s.V[s._vIdx(0, 1)], 1);
+  let edgeForceIdx = -1;
+  for (let i = s.trail.length - 1; i >= trailBefore; i--) {
+    if (((s.trail[i] >> 24) & 3) !== 2) { edgeForceIdx = i; break; }
+  }
+  assert.ok(edgeForceIdx >= 0, 'expected an edge trail entry from rule B');
+  const reason = s._reasons[edgeForceIdx];
+  assert.ok(Array.isArray(reason));
+  assert.ok(reason.includes(s._varIdCell(0)), 'reason must include left-cell color var');
+  assert.ok(reason.includes(s._varIdCell(1)), 'reason must include right-cell color var');
+});
+
+test('SlitherlinkSolver: _propagateColors sub-rule C records own-color + opposite-neighbor antecedents', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,1,-1],[-1,-1,-1]],
+  });
+  const centerIdx = 1 * 3 + 1;
+  const aboveIdx  = 0 * 3 + 1;
+  s._currentReason = null; s._setColor(centerIdx, 1);
+  s._currentReason = null; s._setColor(aboveIdx, 2);
+  const trailBefore = s.trail.length;
+  const ok = s._propagateColors(() => {});
+  assert.equal(ok, true);
+  let ruleCAntecedentsOk = false;
+  for (let i = trailBefore; i < s.trail.length; i++) {
+    if (((s.trail[i] >> 24) & 3) !== 2) continue;
+    const reason = s._reasons[i];
+    if (!Array.isArray(reason)) continue;
+    if (reason.includes(s._varIdCell(centerIdx)) && reason.includes(s._varIdCell(aboveIdx))) {
+      ruleCAntecedentsOk = true;
+      break;
+    }
+  }
+  assert.ok(ruleCAntecedentsOk, 'rule C should record own-color + opposite-neighbor as antecedents');
+});
