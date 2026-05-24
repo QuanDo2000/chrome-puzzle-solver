@@ -459,6 +459,50 @@ const slitherlinkHandler = {
 
 registerHandler(slitherlinkHandler);
 
+// ── Hashi handler (puzzles-mobile.com/hashi/) ─────────────
+
+const hashiHandler = {
+  name: 'puzzles-mobile-hashi',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/hashi/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readHashiData', []);
+    if (!data) return { ...result, error: 'No Hashi task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'hashi',
+      rows: data.rows, cols: data.cols,
+      islands: data.islands,
+      rowClues: [], colClues: [],
+      _cells: [], _element: stageEl,
+    };
+  },
+
+  async readState(_ctx) {
+    const state = await callMainWorld('readHashiState', []);
+    if (state) return state;
+    return { edges: [] };
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyHashiState', [solution.edges || []]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Hashi apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(hashiHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
