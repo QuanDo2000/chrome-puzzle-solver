@@ -4503,6 +4503,7 @@ class SlitherlinkSolver {
     this._vsidsDecay = 0.95;
     this._vsidsDecayInterval = 256;
     this._vsidsConflictsSinceDecay = 0;
+    this._totalConflicts = 0;
 
     // Scratch arrays for connectivity propagation (_propagateConnectivity).
     const N = H * W;
@@ -4762,6 +4763,17 @@ class SlitherlinkSolver {
     // Pick positive sense (LINE / INSIDE) by default — just return the var ID
     // (which is itself a positive literal under ~lit convention).
     return best;
+  }
+
+  _lubyNext(idx) {
+    for (let size = 1, seq = 1; ; seq++, size = 2 * size + 1) {
+      if (idx === size - 1) return 1 << (seq - 1);
+      if (size / 2 <= idx && idx < size) return this._lubyNext(idx - (size >> 1));
+    }
+  }
+
+  _restart() {
+    this._backjumpTo(0);
   }
 
   // Propagates all learned clauses as unit-propagation rules.

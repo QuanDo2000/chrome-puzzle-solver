@@ -2513,3 +2513,51 @@ test('SlitherlinkSolver: _pickDecisionLiteral falls back when all scores zero', 
   assert.ok(varId >= 0 && varId < s.totalVars, `varId ${varId} out of range`);
   assert.equal(s._varValue(varId), 0, 'returned literal must be unassigned');
 });
+
+test('SlitherlinkSolver: _lubyNext returns the correct first 18 Luby values', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  const expected = [1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 16];
+  for (let i = 0; i < expected.length; i++) {
+    assert.equal(s._lubyNext(i), expected[i], `_lubyNext(${i}) should be ${expected[i]}`);
+  }
+});
+
+test('SlitherlinkSolver: _restart pops trail to level 0', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  s._decisionLevel = 3;
+  // Push three real trail entries (using the existing trail encoding).
+  s.H[0] = 1;
+  s.trail.push((0 << 24) | 0);
+  s._reasons.push(null);
+  s._decisionLevels.push(1);
+  s.H[1] = 1;
+  s.trail.push((0 << 24) | 1);
+  s._reasons.push(null);
+  s._decisionLevels.push(2);
+  s.H[2] = 1;
+  s.trail.push((0 << 24) | 2);
+  s._reasons.push(null);
+  s._decisionLevels.push(3);
+  s._restart();
+  assert.equal(s._decisionLevel, 0);
+  assert.equal(s.trail.length, 0);
+  // Edges rolled back.
+  assert.equal(s.H[0], 0);
+  assert.equal(s.H[1], 0);
+  assert.equal(s.H[2], 0);
+});
+
+test('SlitherlinkSolver: _restart preserves _learnedClauses and _vsidsScores', () => {
+  const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
+  s._learnedClauses.push({ literals: [1, ~2], activity: 5 });
+  s._vsidsScores[0] = 3.14;
+  s._decisionLevel = 1;
+  s.H[0] = 1;
+  s.trail.push((0 << 24) | 0);
+  s._decisionLevels.push(1);
+  s._reasons.push(null);
+  s._restart();
+  assert.equal(s._learnedClauses.length, 1);
+  assert.equal(s._learnedClauses[0].literals[0], 1);
+  assert.ok(Math.abs(s._vsidsScores[0] - 3.14) < 0.001);
+});
