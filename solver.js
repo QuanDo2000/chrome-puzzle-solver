@@ -7026,6 +7026,24 @@ class HashiSolver {
     this.maxMs = data.maxMs || 0;
     this._startedAt = 0;
   }
+
+  _assign(ei, newLo, newHi) {
+    // Tighten lo upward and hi downward. Push the OLD values so rollback
+    // can restore. Caller already validated newLo ≤ newHi.
+    this.trail.push(ei, this.lo[ei], this.hi[ei]);
+    this.lo[ei] = newLo;
+    this.hi[ei] = newHi;
+  }
+
+  _rollback(mark) {
+    while (this.trail.length > mark) {
+      const oldHi = this.trail.pop();
+      const oldLo = this.trail.pop();
+      const ei = this.trail.pop();
+      this.lo[ei] = oldLo;
+      this.hi[ei] = oldHi;
+    }
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

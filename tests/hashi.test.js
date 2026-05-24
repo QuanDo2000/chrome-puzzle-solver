@@ -61,3 +61,22 @@ test('HashiSolver: crossing edges detected', () => {
   assert.deepEqual(s.crosses[iH].sort(), [iV]);
   assert.deepEqual(s.crosses[iV].sort(), [iH]);
 });
+
+test('HashiSolver: _assign tightens bounds; _rollback restores', () => {
+  const s = new HashiSolver({
+    rows: 1, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 2 },
+      { index: 1, row: 0, col: 2, number: 2 },
+    ],
+  });
+  assert.equal(s.lo[0], 0);
+  assert.equal(s.hi[0], 2);
+  const mark = s.trail.length;
+  s._assign(0, 2, 2); // force bridges=2
+  assert.equal(s.lo[0], 2);
+  assert.equal(s.hi[0], 2);
+  s._rollback(mark);
+  assert.equal(s.lo[0], 0);
+  assert.equal(s.hi[0], 2);
+});
