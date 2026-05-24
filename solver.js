@@ -4886,18 +4886,26 @@ class SlitherlinkSolver {
     if (m + n < clue) return false;
     if (m === clue && n > 0) {
       // All UNKNOWN edges → EMPTY.
+      const antecedents = edges
+        .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] !== 0)
+        .map(e => this._varIdEdge(/** @type {'H'|'V'} */ (e.kind), e.idx));
       for (const e of edges) {
         const arr = e.kind === 'H' ? this.H : this.V;
         if (arr[e.idx] === 0) {
+          this._currentReason = antecedents;
           if (!this._setEdge(e.idx, e.kind, 2)) return false;
           onChange();
         }
       }
     } else if (m + n === clue && n > 0) {
       // All UNKNOWN edges → LINE.
+      const antecedents = edges
+        .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] !== 0)
+        .map(e => this._varIdEdge(/** @type {'H'|'V'} */ (e.kind), e.idx));
       for (const e of edges) {
         const arr = e.kind === 'H' ? this.H : this.V;
         if (arr[e.idx] === 0) {
+          this._currentReason = antecedents;
           if (!this._setEdge(e.idx, e.kind, 1)) return false;
           onChange();
         }
@@ -4938,23 +4946,32 @@ class SlitherlinkSolver {
     if (m > 2) return false;
     if (m === 1 && n === 0) return false;
     if (m === 2 && n > 0) {
+      const antecedents = this._dotEdges(r, c)
+        .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] !== 0)
+        .map(e => this._varIdEdge(/** @type {'H'|'V'} */ (e.kind), e.idx));
       for (const e of this._dotEdges(r, c)) {
         const arr = e.kind === 'H' ? this.H : this.V;
         if (arr[e.idx] === 0) {
+          this._currentReason = antecedents;
           if (!this._setEdge(e.idx, e.kind, 2)) return false;
           onChange();
         }
       }
     } else if (m === 1 && n === 1) {
+      const antecedents = this._dotEdges(r, c)
+        .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] === 1)
+        .map(e => this._varIdEdge(/** @type {'H'|'V'} */ (e.kind), e.idx));
       for (const e of this._dotEdges(r, c)) {
         const arr = e.kind === 'H' ? this.H : this.V;
         if (arr[e.idx] === 0) {
+          this._currentReason = antecedents;
           if (!this._setEdge(e.idx, e.kind, 1)) return false;
           onChange();
           break;
         }
       }
     } else if (m === 0 && n === 1) {
+      this._currentReason = [];
       for (const e of this._dotEdges(r, c)) {
         const arr = e.kind === 'H' ? this.H : this.V;
         if (arr[e.idx] === 0) {
@@ -5104,14 +5121,17 @@ class SlitherlinkSolver {
     const [cr, cc, hr, hc, vr, vc] = coords;
     const k = (this.task[cr] || [])[cc];
     if (k !== 3) return true;
-    const forceH = (this.H[this._hIdx(hr, hc)] === 1)
-      ? true
-      : this._setEdge(this._hIdx(hr, hc), 'H', 1) ? (onChange(), true) : false;
-    if (!forceH) return false;
-    const forceV = (this.V[this._vIdx(vr, vc)] === 1)
-      ? true
-      : this._setEdge(this._vIdx(vr, vc), 'V', 1) ? (onChange(), true) : false;
-    return forceV;
+    if (this.H[this._hIdx(hr, hc)] !== 1) {
+      this._currentReason = [];
+      if (!this._setEdge(this._hIdx(hr, hc), 'H', 1)) return false;
+      onChange();
+    }
+    if (this.V[this._vIdx(vr, vc)] !== 1) {
+      this._currentReason = [];
+      if (!this._setEdge(this._vIdx(vr, vc), 'V', 1)) return false;
+      onChange();
+    }
+    return true;
   }
 
   // Corner-1 pattern for one grid corner. Returns false on contradiction.
@@ -5121,14 +5141,17 @@ class SlitherlinkSolver {
     const [cr, cc, hr, hc, vr, vc] = coords;
     const k = (this.task[cr] || [])[cc];
     if (k !== 1) return true;
-    const forceH = (this.H[this._hIdx(hr, hc)] === 2)
-      ? true
-      : this._setEdge(this._hIdx(hr, hc), 'H', 2) ? (onChange(), true) : false;
-    if (!forceH) return false;
-    const forceV = (this.V[this._vIdx(vr, vc)] === 2)
-      ? true
-      : this._setEdge(this._vIdx(vr, vc), 'V', 2) ? (onChange(), true) : false;
-    return forceV;
+    if (this.H[this._hIdx(hr, hc)] !== 2) {
+      this._currentReason = [];
+      if (!this._setEdge(this._hIdx(hr, hc), 'H', 2)) return false;
+      onChange();
+    }
+    if (this.V[this._vIdx(vr, vc)] !== 2) {
+      this._currentReason = [];
+      if (!this._setEdge(this._vIdx(vr, vc), 'V', 2)) return false;
+      onChange();
+    }
+    return true;
   }
 
   // Horizontal adjacent-3-3 pattern for cells (r,c) and (r,c+1). Returns
@@ -5139,6 +5162,7 @@ class SlitherlinkSolver {
     for (const [vr, vc] of [[r, c], [r, c + 1], [r, c + 2]]) {
       const idx = this._vIdx(vr, vc);
       if (this.V[idx] !== 1) {
+        this._currentReason = [];
         if (!this._setEdge(idx, 'V', 1)) return false;
         onChange();
       }
@@ -5154,6 +5178,7 @@ class SlitherlinkSolver {
     for (const [hr, hc] of [[r, c], [r + 1, c], [r + 2, c]]) {
       const idx = this._hIdx(hr, hc);
       if (this.H[idx] !== 1) {
+        this._currentReason = [];
         if (!this._setEdge(idx, 'H', 1)) return false;
         onChange();
       }
@@ -5181,6 +5206,7 @@ class SlitherlinkSolver {
     for (const [arr, idx] of [[this.H, hIdx1], [this.V, vIdx1], [this.H, hIdx2], [this.V, vIdx2]]) {
       if (arr[idx] !== 1) {
         const kind = (arr === this.H) ? 'H' : 'V';
+        this._currentReason = [];
         if (!this._setEdge(idx, kind, 1)) return false;
         onChange();
       }

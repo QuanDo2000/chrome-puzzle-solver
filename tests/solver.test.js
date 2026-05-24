@@ -2004,3 +2004,72 @@ test('SlitherlinkSolver: _rollback pops _reasons and _decisionLevels in sync', (
   assert.equal(s._reasons.length, mark);
   assert.equal(s._decisionLevels.length, mark);
 });
+
+test('SlitherlinkSolver: _applyClueRuleAt records correct antecedents for each forced edge', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[2,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const hTopIdx = s._hIdx(0, 0);
+  const vLeftIdx = s._vIdx(0, 0);
+  s._currentReason = null; s._setEdge(hTopIdx, 'H', 1);
+  s._currentReason = null; s._setEdge(vLeftIdx, 'V', 1);
+
+  const forced = [];
+  const ok = s._applyClueRuleAt(0, 0, () => forced.push(null));
+  assert.equal(ok, true);
+  const trailLen = s.trail.length;
+  const expectedAntecedents = new Set([
+    s._varIdEdge('H', hTopIdx),
+    s._varIdEdge('V', vLeftIdx),
+  ]);
+  for (let i = trailLen - forced.length; i < trailLen; i++) {
+    const reason = s._reasons[i];
+    assert.ok(Array.isArray(reason), `reason at trail[${i}] must be an array`);
+    assert.equal(reason.length, 2, `reason should have 2 antecedents`);
+    for (const v of reason) assert.ok(expectedAntecedents.has(v), `unexpected antecedent ${v}`);
+  }
+});
+
+test('SlitherlinkSolver: _applyVertexRuleAt records correct antecedents', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const hIdx = s._hIdx(0, 0);
+  s._currentReason = null; s._setEdge(hIdx, 'H', 1);
+  const trailBefore = s.trail.length;
+  const ok = s._applyVertexRuleAt(0, 0, () => {});
+  assert.equal(ok, true);
+  assert.equal(s.trail.length, trailBefore + 1, 'should force exactly 1 edge');
+  const reason = s._reasons[s.trail.length - 1];
+  assert.ok(Array.isArray(reason));
+  assert.equal(reason.length, 1);
+  assert.equal(reason[0], s._varIdEdge('H', hIdx));
+});
+
+test('SlitherlinkSolver: _applyCornerThree records empty antecedents', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[3,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const trailBefore = s.trail.length;
+  const ok = s._applyCornerThree('TL', () => {});
+  assert.equal(ok, true);
+  for (let i = trailBefore; i < s.trail.length; i++) {
+    assert.deepEqual(s._reasons[i], []);
+  }
+});
+
+test('SlitherlinkSolver: _applyAdjacentThreeH records empty antecedents', () => {
+  const s = new SlitherlinkSolver({
+    width: 4, height: 3,
+    task: [[3,3,-1,-1],[-1,-1,-1,-1],[-1,-1,-1,-1]],
+  });
+  const trailBefore = s.trail.length;
+  const ok = s._applyAdjacentThreeH(0, 0, () => {});
+  assert.equal(ok, true);
+  for (let i = trailBefore; i < s.trail.length; i++) {
+    assert.deepEqual(s._reasons[i], []);
+  }
+});
