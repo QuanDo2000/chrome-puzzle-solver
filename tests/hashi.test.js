@@ -417,5 +417,11 @@ test('HashiSolver: solution cache returns cached result on identical input', () 
   const r1 = new HashiSolver(data).solve();
   const r2 = new HashiSolver(data).solve();
   assert.deepEqual(r1, r2);
+  // Cache stores deep copies — mutating r1 must not poison subsequent gets.
+  assert.notEqual(r1, r2);
+  assert.notEqual(r1.edges, r2.edges);
+  r1.edges[0].bridges = 99;
+  const r3 = new HashiSolver(data).solve();
+  assert.equal(r3.edges[0].bridges, 2);
   HashiSolver.clearSolutionCache();
 });

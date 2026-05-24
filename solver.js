@@ -7210,15 +7210,45 @@ class HashiSolver {
     return (Date.now() - this._startedAt) > this.maxMs;
   }
 
-  solve() {
-    const key = HashiSolver._cacheKey({
-      rows: this.rows, cols: this.cols, islands: this.islands.map((i, idx) => ({
-        row: i.r, col: i.c, number: i.target,
-      })),
-    });
-    if (HashiSolver._solutionCache.has(key)) {
-      return HashiSolver._solutionCache.get(key);
+  static _solutionCache = new Map();
+  static _maxSolutionCache = 50;
+
+  static clearSolutionCache() {
+    HashiSolver._solutionCache.clear();
+  }
+
+  _cacheKey() {
+    // FNV-1a over (rows, cols, islands sorted by (row, col)).
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(this.rows); mix(this.cols); mix(this.islands.length);
+    const sorted = this.islands.slice().sort((a, b) =>
+      a.r - b.r || a.c - b.c);
+    for (const i of sorted) { mix(i.r); mix(i.c); mix(i.target); }
+    return h >>> 0;
+  }
+
+  _cloneResult(result) {
+    return {
+      solved: result.solved,
+      edges: result.edges.map(e => ({ ...e })),
+      ...(result.error !== undefined ? { error: result.error } : {}),
+    };
+  }
+
+  _storeInCache(key, result) {
+    const m = HashiSolver._solutionCache;
+    if (m.size >= HashiSolver._maxSolutionCache) {
+      const first = m.keys().next().value;
+      m.delete(first);
     }
+    m.set(key, this._cloneResult(result));
+  }
+
+  solve() {
+    const key = this._cacheKey();
+    const cached = HashiSolver._solutionCache.get(key);
+    if (cached) return this._cloneResult(cached);
     this._startedAt = Date.now();
     let result;
     if (!this.propagate()) result = { solved: false, edges: this._emit() };
@@ -7230,12 +7260,7 @@ class HashiSolver {
     } else {
       result = { solved: true, edges: this._emit() };
     }
-    // LRU: evict oldest if at cap.
-    if (HashiSolver._solutionCache.size >= HASHI_CACHE_MAX) {
-      const firstKey = HashiSolver._solutionCache.keys().next().value;
-      HashiSolver._solutionCache.delete(firstKey);
-    }
-    HashiSolver._solutionCache.set(key, result);
+    this._storeInCache(key, result);
     return result;
   }
 
@@ -7312,28 +7337,6 @@ class HashiSolver {
     return out;
   }
 }
-
-const HASHI_CACHE_MAX = 50;
-HashiSolver._solutionCache = new Map();
-
-HashiSolver.clearSolutionCache = function () {
-  HashiSolver._solutionCache.clear();
-};
-
-HashiSolver._cacheKey = function (data) {
-  // FNV-1a over (rows, cols, islands sorted by (row, col)).
-  const sorted = data.islands.slice().sort((a, b) =>
-    a.row - b.row || a.col - b.col
-  );
-  let h = 0x811c9dc5;
-  const mix = (x) => {
-    h ^= x & 0xff;
-    h = Math.imul(h, 0x01000193) >>> 0;
-  };
-  mix(data.rows); mix(data.cols); mix(sorted.length);
-  for (const i of sorted) { mix(i.row); mix(i.col); mix(i.number); }
-  return h >>> 0;
-};
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, computePuzzleDiff };
