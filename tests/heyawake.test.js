@@ -63,15 +63,18 @@ test('HeyawakeSolver._applyRoomCounts: saturated room forces unknowns to white',
 });
 
 test('HeyawakeSolver._applyRoomCounts: must-saturate forces unknowns to black', () => {
+  // Use non-adjacent unknowns (cols 0 and 2) so rule 2 doesn't fire
   const s = new HeyawakeSolver({
-    rows: 1, cols: 3,
+    rows: 1, cols: 4,
     rooms: [
-      { cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }], target: 2 },
+      { cells: [
+        { r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }, { r: 0, c: 3 },
+      ], target: 2 },
     ],
-    initialState: [[2, 0, 0]], // 1 white, 2 unknowns, target 2 → both unknowns must be black
+    initialState: [[0, 2, 0, 2]], // 2 whites, 2 unknowns at cols 0 and 2 (non-adjacent) → both must be black
   });
   assert.equal(s._applyRoomCounts(), true);
-  assert.equal(s.cellStatus[1], 1);
+  assert.equal(s.cellStatus[0], 1);
   assert.equal(s.cellStatus[2], 1);
 });
 
@@ -96,4 +99,39 @@ test('HeyawakeSolver._applyRoomCounts: -1 target is unconstrained', () => {
   });
   assert.equal(s._applyRoomCounts(), true);
   assert.equal(s.cellStatus[2], 0); // unchanged
+});
+
+test('HeyawakeSolver._set: black write forces 4-neighbours to white', () => {
+  const s = new HeyawakeSolver({
+    rows: 3, cols: 3,
+    rooms: [
+      { cells: Array.from({ length: 9 }, (_, i) => ({ r: (i / 3) | 0, c: i % 3 })), target: -1 },
+    ],
+  });
+  // Set center to black; expect up/down/left/right forced white
+  assert.equal(s._set(4, 1), true);
+  assert.equal(s.cellStatus[1], 2); // up
+  assert.equal(s.cellStatus[7], 2); // down
+  assert.equal(s.cellStatus[3], 2); // left
+  assert.equal(s.cellStatus[5], 2); // right
+  assert.equal(s.cellStatus[0], 0); // diagonals untouched
+});
+
+test('HeyawakeSolver._set: black write next to existing black → contradiction', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 2,
+    rooms: [{ cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }], target: -1 }],
+    initialState: [[1, 0]],
+  });
+  assert.equal(s._set(1, 1), false);
+});
+
+test('HeyawakeSolver._set: white write has no adjacency side effect', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 3,
+    rooms: [{ cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }], target: -1 }],
+  });
+  assert.equal(s._set(1, 2), true);
+  assert.equal(s.cellStatus[0], 0); // neighbours unchanged
+  assert.equal(s.cellStatus[2], 0);
 });

@@ -7774,6 +7774,23 @@ class HeyawakeSolver {
     if (old !== 0) return false;
     this.trail.push(idx | (old << 24));
     this.cellStatus[idx] = value;
+    if (value === 1) {
+      const r = (idx / this.cols) | 0;
+      const c = idx - r * this.cols;
+      const neighbours = [];
+      if (r > 0) neighbours.push(idx - this.cols);
+      if (r < this.rows - 1) neighbours.push(idx + this.cols);
+      if (c > 0) neighbours.push(idx - 1);
+      if (c < this.cols - 1) neighbours.push(idx + 1);
+      for (let i = 0; i < neighbours.length; i++) {
+        const ni = neighbours[i];
+        const nv = this.cellStatus[ni];
+        if (nv === 1) return false;
+        if (nv === 0) {
+          if (!this._set(ni, 2)) return false;
+        }
+      }
+    }
     return true;
   }
 
