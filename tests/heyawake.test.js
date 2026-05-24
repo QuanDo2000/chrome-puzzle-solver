@@ -262,3 +262,40 @@ test('HeyawakeSolver._applyConnectivity: no whites yet → ok', () => {
   });
   assert.equal(s._applyConnectivity(), true);
 });
+
+test('HeyawakeSolver._applyConnectivity: articulation unknown gets forced white', () => {
+  // 3x3:
+  //   2 ? 2
+  //   1 ? 1
+  //   2 ? 2
+  // Blacks at (1,0) and (1,2) cut the middle row. Four corners (all white)
+  // can only reach each other through the middle column (cells 1, 4, 7).
+  // Cell 4 (center) is an articulation point — removing it leaves
+  // top whites disconnected from bottom whites. It must be forced white.
+  const s = new HeyawakeSolver({
+    rows: 3, cols: 3,
+    rooms: [
+      { cells: Array.from({ length: 9 }, (_, i) => ({ r: (i / 3) | 0, c: i % 3 })), target: -1 },
+    ],
+  });
+  s.cellStatus[0] = 2; s.cellStatus[2] = 2;
+  s.cellStatus[3] = 1; s.cellStatus[5] = 1;
+  s.cellStatus[6] = 2; s.cellStatus[8] = 2;
+  assert.equal(s._applyConnectivity(), true);
+  assert.equal(s.cellStatus[4], 2, 'cell 4 (center) must be forced white');
+});
+
+test('HeyawakeSolver._applyConnectivity: articulation skipped inside lookahead', () => {
+  const s = new HeyawakeSolver({
+    rows: 3, cols: 3,
+    rooms: [
+      { cells: Array.from({ length: 9 }, (_, i) => ({ r: (i / 3) | 0, c: i % 3 })), target: -1 },
+    ],
+  });
+  s.cellStatus[0] = 2; s.cellStatus[2] = 2;
+  s.cellStatus[3] = 1; s.cellStatus[5] = 1;
+  s.cellStatus[6] = 2; s.cellStatus[8] = 2;
+  s._inLookahead = true;
+  assert.equal(s._applyConnectivity(), true);
+  assert.equal(s.cellStatus[4], 0, 'cell 4 must NOT be forced inside lookahead');
+});
