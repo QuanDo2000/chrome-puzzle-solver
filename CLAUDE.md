@@ -421,6 +421,115 @@ autoSolve takes 30 s, Hint still returns instantly (was 30 s before that
 fix). Other puzzle types still await because their hint heuristics
 consult the cached solution for mistake comparison.
 
+### Slitherlink CDCL search
+
+`SlitherlinkSolver.solve()` no longer calls `_backtrack()` — it calls
+`_cdclSearch()`, a CDCL (Conflict-Driven Clause Learning) loop with
+first-UIP analysis, non-chronological backjumping, VSIDS branching, LRU
+learned-clause storage (cap 5000), and Luby restarts (RESTART_UNIT=100).
+`_backtrack` is kept as dead code for reference; do not delete it without
+first replacing `_cdclSearch`. The relevant entry points:
+
+- **Variable encoding** — `_varIdEdge('H'|'V', idx)`, `_varIdCell(idx)`,
+  `_decodeVar(varId)`. H edges occupy `[0, numH)`, V edges `[numH,
+  numH+numV)`, cell colors `[numH+numV, totalVars)`.
+- **Literals** — `~lit` convention: `lit >= 0` is positive (LINE /
+  INSIDE), `lit < 0` is negative (EMPTY / OUTSIDE), `varId = lit >= 0 ?
+  lit : ~lit`. **Never use `Math.abs(lit)` or `-lit`** — variable 0 is a
+  real edge and the sign of 0 is ambiguous under arithmetic negation.
+- **Reason tracking** — `_setEdge`/`_setColor` push `_currentReason` (set
+  by rule helpers before they force) into a `_reasons[]` array parallel to
+  `this.trail`. Decisions push `null`. `_decisionLevels[]` tracks the
+  level at which each entry was made.
+- **Conflict analysis** — `_analyzeConflict(conflictReason)` runs the
+  classic first-UIP walk with two non-textbook additions:
+  (1) a subsumption pre-pass — current-level conflict vars whose reasons
+  reference other current-level conflict vars are marked "subsumed" so
+  they don't double-count toward pathCount;
+  (2) a rescue path — if all current-level vars in `conflictReason` are
+  subsumed (so seeding leaves `pathCount === 0`), walk the trail backward
+  to find the most recent current-level seen var and clear its subsumed
+  flag. Without this, lookahead-driven contradictions could produce
+  empty-but-not-empty learned clauses that backjump-to-0 incorrectly.
+- **VSIDS** — `Float32Array` per-variable scores, decay 0.95 every 256
+  conflicts. `_pickDecisionLiteral()` returns the highest-score
+  unassigned variable. **The caller must `_allEdgesAssigned()`-check
+  separately** — literal 0 is a valid literal (H-edge 0 / LINE), so
+  `_pickDecisionLiteral` can't use 0 as an "all assigned" sentinel
+  unambiguously.
+- **Luby restarts** — `_lubyNext(idx)` returns the canonical Luby
+  sequence (Knuth, AofA Vol 4A §7.2.2.2): `[1, 1, 2, 1, 1, 2, 4, 1, 1, 2,
+  1, 1, 2, 4, 8, ...]`. The original implementation copied a buggy
+  iterative formula from the spec that non-terminated on `idx === 1`;
+  fixed to the standard 1-indexed recurrence and the test fixture updated.
+  Restarts pop trail to level 0, keep all learned clauses + VSIDS scores.
+
+**Slitherlink performance envelope** (as of 2026-05-23):
+
+| board                | path                  | wall time      |
+| -------------------- | --------------------- | -------------- |
+| 5×5 real             | propagate alone       | ~0.6 ms median |
+| 30×30 synthetic-rect | propagate alone       | ~200 ms        |
+| 50×40 monthly real   | times out, partial    | 30 s (budget)  |
+
+The 50×40 monthly currently **does not solve** within the worker's 10 s
+budget (or even 30 s in a bench). It returns `{ solved: false, partial:
+true, error: 'timed out', horizontal, vertical }` with ~38 % of edges
+deduced — usable for the Hint/Loop interactive path but not a one-shot
+solve. The bottleneck is `_applyLookahead`: each top-level propagate
+runs the per-cell probing loop (~750 ms per call on the monthly), which
+caps CDCL at ~40 conflicts/s — far too few to drive a 2000-edge puzzle
+to completion through branching.
+
+The monthly fixture `slitherlinkRealMonthly50x40_a` in
+`tests/fixtures/real-puzzles.js` carries `expectSolved: false` so
+`bench-slitherlink.js` records the timing as a baseline without failing.
+The corresponding `tests/solver.test.js` integration test asserts only
+**soundness** (returns within wall-clock guard; not a spurious
+`error: 'no solution found'`), not solvedness. Tighten both once a real
+perf fix lands.
+
+**Lookahead/CDCL composition constraint.** `_applyLookahead`'s
+double-fail (both LINE and EMPTY probes contradict) cannot use the
+probe-collected antecedent set as a CDCL conflict reason: those vars are
+forced inside the probe and get rolled back below the analysis point,
+so `_analyzeConflict` sees them as level 0 and learns nothing. Instead,
+the double-fail handler blames **the most recent current-level decision**
+in the trail (chronological-backtrack semantics, same as the legacy
+`_backtrack`). `_analyzeConflict` then learns the unit clause
+`~lastDecision`, backjump pops to the level below, the next propagate
+forces the opposite sense. Rule-level conflicts (which DO have
+well-formed reasons that survive rollback) still drive normal first-UIP
+CDCL learning.
+
+### Approaches ruled out for the Slitherlink monthly perf gap
+
+Tried during the CDCL build (2026-05-23). Documented so future maintainers
+don't re-walk these paths without new insight:
+
+- **Disable lookahead inside `_cdclSearch` (set `_depth = 1`)**: makes
+  per-propagate cheap (~5 ms) and lets CDCL accumulate hundreds of
+  conflicts. But the rule set without lookahead is too weak — on
+  known-solvable boards CDCL converges to a *spurious UNSAT*
+  (`error: 'no solution found'`). Without stronger non-probing inference
+  rules this trade is unsound.
+- **Use probe-collected antecedents as the CDCL conflict reason on
+  lookahead double-fail (the original lookahead reason capture)**: as
+  above — the vars are rolled back below `_analyzeConflict`'s reach, so
+  the UIP walk learns empty clauses. Was the source of the spurious
+  UNSAT observed on the monthly before the 2026-05-23 fix.
+- **Use "all current-level decisions" as the conflict reason on
+  double-fail**: derives wide learned clauses (`~d1 ∨ ~d2 ∨ ... ∨ ~dk`).
+  Each one prunes a huge swath of the search space; after ~10 conflicts
+  CDCL falsely concludes UNSAT.
+- **Per-edge `_lookaheadClean` cache + adjacent-cell dirty tracking**:
+  unsound for Slitherlink because parity (`_propagateParity`, scans full
+  rows/columns) and connectivity rules (`_propagateConnectivity`, BFS
+  across the entire cell graph) are non-local. A far-away edge change
+  can flip a probe outcome without dirtying any cell adjacent to the
+  probed edge, so the cache-skip lets in stale results. Manifests as
+  fuzz-test failures and false UNSAT on the monthly.
+
 ### Backtracking validates duplicates at completion; triples validated inline
 
 `BinairoSolver._applyBalance` and `_applyUniqueness` now call
