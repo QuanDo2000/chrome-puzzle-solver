@@ -7062,6 +7062,43 @@ class HashiSolver {
     }
     return true;
   }
+
+  _applyDegree() {
+    // For each island, enforce sum(bridges) == target on incident edges.
+    // Iterate to fixpoint (a tightening on one edge can cascade through
+    // the other endpoint).
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let id = 0; id < this.islands.length; id++) {
+        const target = this.islands[id].target;
+        const inc = this.incident[id];
+        let degMin = 0, degMax = 0;
+        for (let k = 0; k < inc.length; k++) {
+          degMin += this.lo[inc[k]];
+          degMax += this.hi[inc[k]];
+        }
+        if (degMin > target || degMax < target) return false;
+        for (let k = 0; k < inc.length; k++) {
+          const ei = inc[k];
+          // newLo = max(lo[ei], target - (degMax - hi[ei]))
+          const newLo = Math.max(this.lo[ei], target - (degMax - this.hi[ei]));
+          // newHi = min(hi[ei], target - (degMin - lo[ei]))
+          const newHi = Math.min(this.hi[ei], target - (degMin - this.lo[ei]));
+          if (newLo > newHi) return false;
+          if (newLo !== this.lo[ei] || newHi !== this.hi[ei]) {
+            const dLo = newLo - this.lo[ei];
+            const dHi = newHi - this.hi[ei];
+            this._assign(ei, newLo, newHi);
+            degMin += dLo;
+            degMax += dHi;
+            changed = true;
+          }
+        }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

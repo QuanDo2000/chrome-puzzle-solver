@@ -118,3 +118,72 @@ test('HashiSolver: crossing exclusion — contradiction if both forced', () => {
   s._assign(iV, 1, s.hi[iV]);
   assert.equal(s._applyCrossings(), false);
 });
+
+test('HashiSolver: degree forcing — 1-island with one neighbour forces bridge=1', () => {
+  // 1-island at (0,0) with only one neighbour (the 2-island at (0,2)).
+  // The 2-island needs another neighbour so the overall puzzle is
+  // bounds-consistent — otherwise degMax<target on island 1 would
+  // make _applyDegree report a contradiction. Add a 1-island at (0,4).
+  // Edges: e0=(0,1) horizontal, e1=(1,2) horizontal. Both hi capped at 1.
+  // Island 0 (target=1, inc=[e0]): forces lo[e0]=1.
+  const s = new HashiSolver({
+    rows: 1, cols: 5,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 1, row: 0, col: 2, number: 2 },
+      { index: 2, row: 0, col: 4, number: 1 },
+    ],
+  });
+  const ok = s._applyDegree();
+  assert.equal(ok, true);
+  // 1-island needs exactly 1, only one edge → lo=1.
+  assert.equal(s.lo[0], 1);
+  assert.equal(s.hi[0], 1);
+});
+
+test('HashiSolver: degree forcing — saturated 4-island with 2 neighbours forces both edges to 2', () => {
+  //   . . 3 . .
+  //   . . . . .
+  //   3 . 4 . 3
+  // Island 0 (0,2)=3, island 1 (2,0)=3, island 2 (2,2)=4, island 3 (2,4)=3.
+  // Island 2 has 3 neighbours: 0 above, 1 left, 3 right. Degree budget = 4 = 2+2+0 etc.
+  // Need a simpler case: 4-island with exactly 2 neighbours.
+  //   . 4 .
+  //   . . .
+  //   . 3 .   ← bottom neighbour
+  //   . . .
+  // No — 4-island with 2 neighbours and degree saturated: target=4, max=2+2=4 → both forced to 2.
+  // Use 1D: 4-island in middle of three islands:
+  //   2 . 4 . 2
+  //   ↑ only horizontal edges, two of them. target[0]=2, target[2]=4, target[4]=2.
+  // Wait: middle island is 4 with two neighbours; max possible = 2+2 = 4 → force both to 2.
+  const s = new HashiSolver({
+    rows: 1, cols: 5,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 2 },
+      { index: 1, row: 0, col: 2, number: 4 },
+      { index: 2, row: 0, col: 4, number: 2 },
+    ],
+  });
+  // edge(0,1): hi = min(2, 2, 4) = 2; edge(1,2): hi = min(2, 4, 2) = 2.
+  // Middle island target=4, degMax = 2 + 2 = 4 → both must be 2.
+  const ok = s._applyDegree();
+  assert.equal(ok, true);
+  const e01 = s.edges.findIndex(e => e.a === 0 && e.b === 1);
+  const e12 = s.edges.findIndex(e => e.a === 1 && e.b === 2);
+  assert.equal(s.lo[e01], 2);
+  assert.equal(s.lo[e12], 2);
+});
+
+test('HashiSolver: degree forcing — over-target is contradiction', () => {
+  // 1-island with min already 2 → contradiction
+  const s = new HashiSolver({
+    rows: 1, cols: 3,
+    islands: [
+      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 1, row: 0, col: 2, number: 2 },
+    ],
+  });
+  s._assign(0, 2, 2); // bypass cap: force lo=2 on a 1-island's only edge
+  assert.equal(s._applyDegree(), false);
+});
