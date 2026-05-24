@@ -309,15 +309,18 @@ test('HashiSolver: propagate runs rules to fixpoint and returns true on consiste
 });
 
 test('HashiSolver: propagate returns false on contradiction', () => {
+  // Three 1-islands collinear: [1, _, 1, _, 1]. Two-1s isolation forbids
+  // edge(0,1) and edge(1,2) (both endpoints target=1, K=3 > 2). Then
+  // _applyDegree sees island 0 with target=1 but degMax=0 → contradiction.
   const s = new HashiSolver({
-    rows: 1, cols: 3,
+    rows: 1, cols: 5,
     islands: [
       { index: 0, row: 0, col: 0, number: 1 },
       { index: 1, row: 0, col: 2, number: 1 },
+      { index: 2, row: 0, col: 4, number: 1 },
     ],
   });
-  // Two 1-islands as only puzzle: edge can be 1 → both saturated. Solvable.
-  assert.equal(s.propagate(), true);
+  assert.equal(s.propagate(), false);
 });
 
 test('HashiSolver: maxMs budget bails the solver', () => {
