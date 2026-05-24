@@ -2577,8 +2577,10 @@ test('SlitherlinkSolver+CDCL: 5x5 fixture solves identically via _cdclSearch', (
   assert.equal(r.horizontal[0].length, slitherlink5x5.cols);
   assert.equal(r.vertical.length, slitherlink5x5.rows);
   assert.equal(r.vertical[0].length, slitherlink5x5.cols + 1);
-  for (const row of r.horizontal) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2);
-  for (const row of r.vertical) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2);
+  // A solved puzzle has every edge determined: LINE (1) or EMPTY (2).
+  // UNKNOWN (0) in a "solved=true" result would be a bug.
+  for (const row of r.horizontal) for (const v of row) assert.ok(v === 1 || v === 2, `horizontal edge ${v} not LINE/EMPTY`);
+  for (const row of r.vertical) for (const v of row) assert.ok(v === 1 || v === 2, `vertical edge ${v} not LINE/EMPTY`);
 });
 
 test('SlitherlinkSolver+CDCL: fuzz-generated small puzzles all solve correctly', () => {
@@ -2596,8 +2598,9 @@ test('SlitherlinkSolver+CDCL: fuzz-generated small puzzles all solve correctly',
     s.maxMs = 5000;
     const r = s.solve();
     if (r.solved) {
-      for (const row of r.horizontal) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2, 'horizontal edge must be 0, 1, or 2');
-      for (const row of r.vertical) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2, 'vertical edge must be 0, 1, or 2');
+      // Solved puzzles have every edge determined to LINE (1) or EMPTY (2).
+      for (const row of r.horizontal) for (const v of row) assert.ok(v === 1 || v === 2, `horizontal edge ${v} not LINE/EMPTY`);
+      for (const row of r.vertical) for (const v of row) assert.ok(v === 1 || v === 2, `vertical edge ${v} not LINE/EMPTY`);
     }
   }
 });
