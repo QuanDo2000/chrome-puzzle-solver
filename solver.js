@@ -6461,7 +6461,16 @@ class SlitherlinkSolver {
         conflictsSinceRestart++;
         this._totalConflicts++;
 
-        if (this._decisionLevel === 0) { return false; }
+        if (this._decisionLevel === 0) {
+          // Level-0 conflict: the propagate that just failed wrote some
+          // forced values before hitting a contradiction. Without an
+          // explicit backjump those writes leak into _emit(), so the
+          // partial cache would hold mid-fixpoint state. Backjump to 0
+          // pops them and leaves a sound post-rollback snapshot for the
+          // caller to emit.
+          this._backjumpTo(0);
+          return false;
+        }
 
         const conflictReason = this._lastConflictReason;
         const learned = this._analyzeConflict(conflictReason);
@@ -6594,13 +6603,14 @@ class SlitherlinkSolver {
       this._storeInCache(key, out);
       return { solved: true, horizontal: out.horizontal, vertical: out.vertical };
     }
-    // CDCL search failed or timed out. Trail-rollback restored the state to
-    // the post-propagation snapshot (everything propagate() + lookahead
-    // could deduce). Return that as a partial so callers can show the
-    // user the deducible portion instead of nothing — meaningful on hard
-    // boards (e.g. the 50×40 monthly: ~38% of edges determined in ~3s
-    // before backtracking gives up). Cache so repeated Hint/Loop clicks
-    // don't re-burn the budget.
+    // CDCL search failed or timed out. _cdclSearch's exit paths
+    // (_backjumpTo(0) on level-0 conflict, budget check after restart, etc.)
+    // leave the trail at level 0 — the post-propagation snapshot of
+    // everything propagate() + lookahead could deduce at the root. Return
+    // that as a partial so callers can show the deducible portion instead
+    // of nothing — meaningful on hard boards (e.g. the 50×40 monthly:
+    // ~38% of edges determined in ~3s before backtracking gives up).
+    // Cache so repeated Hint/Loop clicks don't re-burn the budget.
     const partial = this._emit();
     if (this._timedOut) SlitherlinkSolver._storeInPartialCache(key, partial);
     return {
@@ -6988,9 +6998,17 @@ class HashiSolver {
     this.rows = rows;
     this.cols = cols;
     // Copy islands into normalized {r, c, target} form, indexed by id.
-    this.islands = islands.map(i => ({
-      r: i.row, c: i.col, target: i.number,
-    }));
+    // Validate target up-front: parseInt('') === NaN and Int8Array silently
+    // coerces NaN → 0, which would produce a degenerate "no bridges"
+    // solution reported as solved=true. Reject non-finite or out-of-range
+    // targets immediately so the caller can surface a real diagnostic.
+    this.islands = islands.map((i, idx) => {
+      const target = i.number;
+      if (!Number.isInteger(target) || target < 1 || target > 8) {
+        throw new Error(`HashiSolver: island ${idx} at (${i.row},${i.col}) has invalid target ${target}`);
+      }
+      return { r: i.row, c: i.col, target };
+    });
     const K = this.islands.length;
 
     // byPos[r*cols+c] → island id (or -1).
@@ -7288,12 +7306,24 @@ class HashiSolver {
     if (cached) return this._cloneResult(cached);
     this._startedAt = Date.now();
     let result;
-    if (!this.propagate()) result = { solved: false, edges: this._emit() };
-    else if (this._isComplete()) result = { solved: true, edges: this._emit() };
-    else if (!this._backtrack()) {
+    if (!this.propagate()) {
+      // propagate() returns false on contradiction without rolling back its
+      // mid-fixpoint writes; emit() on that dirty state would surface
+      // contradictory values. Roll back first so the cached result reflects
+      // an empty (or original) state instead of inconsistent forced edges.
+      this._rollback(0);
+      result = { solved: false, edges: [] };
+    } else if (this._isComplete()) {
+      result = { solved: true, edges: this._emit() };
+    } else if (!this._backtrack()) {
+      // _backtrack rolls back per-branch, so on full failure the state is
+      // the post-propagate snapshot — _emit() is sound either way. The
+      // partial:true flag (timeout only) lets content.js surface deduced
+      // edges as a preview instead of dropping them.
+      const partial = this._emit();
       result = this._timeUp()
-        ? { solved: false, edges: this._emit(), error: 'timed out' }
-        : { solved: false, edges: this._emit() };
+        ? { solved: false, edges: partial, error: 'timed out', partial: true }
+        : { solved: false, edges: partial };
     } else {
       result = { solved: true, edges: this._emit() };
     }
@@ -7378,8 +7408,15 @@ class HashiSolver {
     // Seed bounds from currentEdges: any edge currently set to N → lo=hi=N.
     // Then propagate; collect newly-decided edges as hints. Fall back to
     // solve() and emit gap edges if propagation alone doesn't deduce.
+    //
+    // Edge keys are always min-max normalized: solver-side this.edges[i]
+    // may have e.a > e.b (page's island ordering isn't guaranteed
+    // row-major), but readHashiState always normalizes the pair to
+    // (min, max) before passing in, so we have to look up by the same
+    // shape.
     const K = this.islands.length;
     const minLines = Math.max(1, Math.ceil(K / 10));
+    const keyOf = (a, b) => `${Math.min(a, b)}-${Math.max(a, b)}`;
 
     // Build a key for the current edge set so we can apply hints. The page
     // (and readHashiState) emits ALL neighbour pairs including bridges=0
@@ -7388,30 +7425,36 @@ class HashiSolver {
     // count as user assignments.
     const currentMap = new Map();
     for (const e of currentEdges) {
-      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-      currentMap.set(`${a}-${b}`, e.bridges);
+      currentMap.set(keyOf(e.a, e.b), e.bridges);
     }
-    // Seed.
+    // Seed. On bounds-contradiction we restore and bail with []; the
+    // contradiction-vs-stalled distinction is the stepwise hint's concern,
+    // not the array-returning getHint's.
     for (let i = 0; i < this.edges.length; i++) {
       const e = this.edges[i];
-      const key = `${e.a}-${e.b}`;
+      const key = keyOf(e.a, e.b);
       if (currentMap.has(key)) {
         const v = currentMap.get(key);
         if (v === 0) continue; // unconnected — leave as unknown
         if (v < this.lo[i] || v > this.hi[i]) {
-          // current state contradicts solver bounds — bail
+          this._rollback(0);
           return [];
         }
         this._assign(i, v, v);
       }
     }
-    if (!this.propagate()) return [];
+    if (!this.propagate()) {
+      this._rollback(0);
+      return [];
+    }
     // Collect newly forced edges (those that became lo=hi after seed).
+    // Skip lo===0 deductions — they're forced rule-outs the user can't draw.
     const hints = [];
     for (let i = 0; i < this.edges.length; i++) {
       if (this.lo[i] !== this.hi[i]) continue;
+      if (this.lo[i] === 0) continue;
       const e = this.edges[i];
-      const key = `${e.a}-${e.b}`;
+      const key = keyOf(e.a, e.b);
       if (currentMap.has(key) && currentMap.get(key) === this.lo[i]) continue;
       hints.push({ a: e.a, b: e.b, orientation: e.orientation, bridges: this.lo[i] });
       if (hints.length >= minLines) return hints;
@@ -7422,7 +7465,7 @@ class HashiSolver {
     const r = this.solve();
     if (!r.solved) return hints;
     for (const e of r.edges) {
-      const key = `${e.a}-${e.b}`;
+      const key = keyOf(e.a, e.b);
       if (currentMap.get(key) !== e.bridges) {
         hints.push(e);
         if (hints.length >= minLines) break;
@@ -7447,24 +7490,35 @@ class HashiSolver {
   //
   // Return shape:
   //   { edges:[{a,b,orientation,bridges}], rule:string, description:string }
-  //   or null when no further positive deduction is possible.
+  //   { contradiction: true } when the user's current bridges conflict with
+  //     the puzzle bounds — caller surfaces a specific "your bridges
+  //     conflict" status instead of the generic "no more deductions"
+  //   null when no further positive deduction is possible.
   getStepwiseHint(currentEdges) {
+    // Edge keys are min-max normalized because this.edges[i] may have
+    // e.a > e.b (page island order isn't guaranteed row-major), while
+    // currentEdges from readHashiState are already normalized.
+    const keyOf = (a, b) => `${Math.min(a, b)}-${Math.max(a, b)}`;
     // Build current map (skip bridges=0 — those are unknown, not "forced 0").
     const currentMap = new Map();
     for (const e of currentEdges || []) {
       if (e.bridges > 0) {
-        const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-        currentMap.set(`${a}-${b}`, e.bridges);
+        currentMap.set(keyOf(e.a, e.b), e.bridges);
       }
     }
 
-    // Seed from current.
+    // Seed from current. Bounds violation ⇒ user has drawn an inconsistent
+    // configuration; surface as a structured contradiction so the UI can
+    // tell the user instead of falsely claiming "no more deductions".
     for (let i = 0; i < this.edges.length; i++) {
       const e = this.edges[i];
-      const key = `${e.a}-${e.b}`;
+      const key = keyOf(e.a, e.b);
       if (currentMap.has(key)) {
         const v = currentMap.get(key);
-        if (v < this.lo[i] || v > this.hi[i]) { this._rollback(0); return null; }
+        if (v < this.lo[i] || v > this.hi[i]) {
+          this._rollback(0);
+          return { contradiction: true };
+        }
         this._assign(i, v, v);
       }
     }
@@ -7488,7 +7542,7 @@ class HashiSolver {
         if (this.lo[ei] !== this.hi[ei]) continue;
         if (this.lo[ei] === 0) continue;
         const e = this.edges[ei];
-        const key = `${e.a}-${e.b}`;
+        const key = keyOf(e.a, e.b);
         if (currentMap.has(key) && currentMap.get(key) === this.lo[ei]) continue;
         out.push({ a: e.a, b: e.b, orientation: e.orientation, bridges: this.lo[ei] });
       }

@@ -914,11 +914,18 @@ function readHashiData() {
     for (var i = 0; i < G.task.length; i++) {
       var island = G.task[i];
       if (!island) continue;
+      // Reject malformed targets here rather than passing NaN through —
+      // HashiSolver's constructor stores into an Int8Array that silently
+      // coerces NaN to 0, producing a degenerate solved=true with no
+      // bridges drawn. Skipping the island makes the failure visible
+      // (solver will mismatch counts) instead of silent.
+      var number = parseInt(island.number, 10);
+      if (!isFinite(number) || number < 1 || number > 8) continue;
       islands.push({
         index: island.index,
         row: island.row,
         col: island.col,
-        number: parseInt(island.number, 10),
+        number: number,
       });
     }
     return {

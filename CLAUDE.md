@@ -568,8 +568,10 @@ Click the widget's **📋 Dump** button. Writes a JSON snippet (matching
 ## MV3 hardening contract
 
 - `background.js`'s `onMessage` rejects `sender.id !== chrome.runtime.id`
-  and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (20
-  entries). TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep in sync.
+  and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST`. TS-side
+  mirror is `MainWorldFn` in `globals.d.ts`; the two lists must stay in
+  sync (every entry on one is on the other) — don't pin a count here, it
+  drifts when puzzles are added.
 - `callMainWorld` has a 15 s wall-clock timeout via `Promise.race` — if SW
   dies mid-call, caller resolves `null` instead of hanging.
 - `execMain` targets `sender.tab.id`, not the active tab — handles

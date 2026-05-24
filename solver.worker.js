@@ -90,9 +90,13 @@ self.onmessage = function (e) {
   } catch (err) {
     // Preserve stack so content.js can console.error it. Plain Error objects
     // don't survive structured cloning intact; copy the fields we need.
+    // Hashi's result shape is { solved, edges }, so include edges:[] —
+    // otherwise recordSolveSuccess would assign puzzleData.solution.edges
+    // = undefined and downstream `for (const e of solution.edges)` throws.
     result = {
       solved: false,
       grid: null,
+      edges: type === 'hashi' ? [] : undefined,
       error: (err && err.message) ? err.message : String(err),
       stack: err && err.stack ? String(err.stack) : undefined,
       errorName: err && err.name ? err.name : undefined,

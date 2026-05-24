@@ -1560,6 +1560,9 @@ async function getHint(request = {}) {
         rows, cols, islands: detectedGrid.islands,
       });
       const step = solver.getStepwiseHint(grid.edges || []);
+      if (step && step.contradiction) {
+        return { success: false, error: 'Current bridges conflict with the puzzle — undo, or click Solve to reset.' };
+      }
       if (!step || !step.edges || step.edges.length === 0) {
         return { success: false, error: 'No more bridges can be deduced from the current state. Click Solve to finish.' };
       }
@@ -1647,14 +1650,15 @@ const WIDGET_STORAGE_KEY = 'ns_widget_state';
 // Puzzle types the widget knows how to solve. Used by the "no puzzle here"
 // status to point users at a sample URL for each supported type.
 const SUPPORTED_PUZZLES = [
-  { name: 'Nonogram',     url: 'https://www.puzzles-mobile.com/nonograms/' },
   { name: 'Aquarium',     url: 'https://www.puzzles-mobile.com/aquarium/' },
-  { name: 'Galaxies',     url: 'https://www.puzzles-mobile.com/galaxies/' },
   { name: 'Binairo',      url: 'https://www.puzzles-mobile.com/binairo/' },
   { name: 'Binairo Plus', url: 'https://www.puzzles-mobile.com/binairo-plus/' },
+  { name: 'Galaxies',     url: 'https://www.puzzles-mobile.com/galaxies/' },
+  { name: 'Hashi',        url: 'https://www.puzzles-mobile.com/hashi/' },
+  { name: 'Nonogram',     url: 'https://www.puzzles-mobile.com/nonograms/' },
   { name: 'Shikaku',      url: 'https://www.puzzles-mobile.com/shikaku/' },
-  { name: 'Yin-Yang',     url: 'https://www.puzzles-mobile.com/yin-yang/' },
   { name: 'Slitherlink',  url: 'https://www.puzzles-mobile.com/loop/' },
+  { name: 'Yin-Yang',     url: 'https://www.puzzles-mobile.com/yin-yang/' },
 ];
 
 // Reference set by makeWidget() so the top-level message listener (for the
@@ -3040,6 +3044,13 @@ function makeWidget() {
         applyPartialResult(result);
         return;
       }
+      // Hashi partial: HashiSolver.solve emits {partial:true, edges:[...]}
+      // on timeout. Show the deduced bridges as a preview instead of
+      // dropping them.
+      if (result?.partial && puzzleData?.type === 'hashi' && Array.isArray(result.edges)) {
+        applyHashiPartialResult(result);
+        return;
+      }
       if (result?.partialGrid) {
         cachePartial(puzzleData, result.partialGrid, result.partialFilled);
       } else if (result?.error === 'partial state exhausted') {
@@ -3111,7 +3122,7 @@ function makeWidget() {
     if (puzzleData?.type === 'slitherlink') {
       puzzleData.solution = { horizontal: result.horizontal, vertical: result.vertical };
     } else if (puzzleData?.type === 'hashi') {
-      puzzleData.solution = { edges: result.edges };
+      puzzleData.solution = { solved: result.solved, edges: result.edges };
     } else {
       puzzleData.solution = result.grid;
     }
@@ -3170,21 +3181,102 @@ function makeWidget() {
     drawPreview({ horizontal: result.horizontal, vertical: result.vertical });
   }
 
+  // Hashi twin of applyPartialResult. Deliberately does NOT call
+  // recordSolveSuccess: a partial cached as the canonical solution would
+  // mis-trigger hashiDoneCheck (which would treat partial as the full
+  // solution).
+  function applyHashiPartialResult(result) {
+    loopConfirming = false;
+    clearPendingHint();
+    solveBtn.textContent = 'Confirm';
+    confirming = true;
+    setStatus(
+      `Partial only: ${result.edges.length} bridges deduced (board too hard for full solve). Apply, then finish manually.`,
+      'info',
+    );
+    drawPreview({ edges: result.edges });
+  }
+
+  // Apply a hashi hint by merging its edges into the live board and calling
+  // applyHashiState. Prefers `hint.edges` (the named stepwise deduction the
+  // user was just shown — bypassing this in favor of solution diffing was a
+  // regression that decoupled the apply path from the previewed rule).
+  // Falls back to solution.edges diffing only when no pendingHint is present
+  // (Loop's first auto-step, or a stale invocation). Returns
+  // { success: true } / { success: false, error }.
+  async function applyHashiHintEdges(hint) {
+    const current = await callMainWorld('readHashiState', []);
+    if (!current) return { success: false, error: 'Hashi state read failed' };
+    let toApply;
+    if (hint?.edges?.length) {
+      toApply = hint.edges;
+    } else {
+      const solution = puzzleData.solution;
+      if (!solution?.edges) return { success: false, error: 'Hashi solution not available' };
+      const curMap = new Map();
+      for (const e of current.edges) {
+        const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+        curMap.set(`${a}-${b}`, e.bridges);
+      }
+      const numIslands = (puzzleData.islands || []).length;
+      const minLines = Math.max(1, Math.ceil(numIslands / 10));
+      toApply = [];
+      for (const e of solution.edges) {
+        const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+        if (curMap.get(`${a}-${b}`) !== e.bridges) {
+          toApply.push(e);
+          if (toApply.length >= minLines) break;
+        }
+      }
+    }
+    if (toApply.length === 0) return { success: true };
+    // Merge: start with current edges, swap in any toApply override that
+    // matches an existing edge by endpoint pair, push any remaining
+    // toApply entries that didn't appear in current.
+    const merged = current.edges.slice();
+    const overrideMap = new Map();
+    for (const e of toApply) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      overrideMap.set(`${a}-${b}`, e);
+    }
+    for (let i = 0; i < merged.length; i++) {
+      const a = Math.min(merged[i].a, merged[i].b);
+      const b = Math.max(merged[i].a, merged[i].b);
+      const key = `${a}-${b}`;
+      if (overrideMap.has(key)) {
+        merged[i] = overrideMap.get(key);
+        overrideMap.delete(key);
+      }
+    }
+    for (const remaining of overrideMap.values()) merged.push(remaining);
+    const ok = await callMainWorld('applyHashiState', [merged]);
+    return ok ? { success: true } : { success: false, error: 'Hashi hint apply failed' };
+  }
+
   // Hashi done-check helper: every solution edge's bridge count matches the
-  // current board state. Edge keys are min-max normalized so the comparison
-  // is direction-independent. readHashiState enumerates every neighbour pair
-  // (bridges=0 included), so curMap is fully populated and the strict
-  // equality on `bridges` catches both wrong-count and missing-edge cases.
+  // current board state AND no extra bridges exist on pairs absent from the
+  // solution. Edge keys are min-max normalized so the comparison is
+  // direction-independent. _emit() filters bridges=0 out of solution.edges,
+  // so iterating only solution.edges would miss user-drawn extras on
+  // solution-0 pairs — hence the second loop over currentState.edges.
   function hashiDoneCheck(currentState, solution) {
-    if (!currentState || !solution) return false;
+    if (!currentState || !solution || !solution.edges) return false;
+    const solMap = new Map();
+    for (const e of solution.edges) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      solMap.set(`${a}-${b}`, e.bridges);
+    }
     const curMap = new Map();
     for (const e of currentState.edges) {
       const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
       curMap.set(`${a}-${b}`, e.bridges);
     }
-    for (const e of solution.edges) {
-      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-      if (curMap.get(`${a}-${b}`) !== e.bridges) return false;
+    for (const [key, want] of solMap) {
+      if (curMap.get(key) !== want) return false;
+    }
+    for (const [key, have] of curMap) {
+      if (!have) continue; // 0 means "no bridge drawn" — not an extra
+      if (!solMap.has(key)) return false; // user drew a bridge on a solution-0 pair
     }
     return true;
   }
@@ -3249,50 +3341,8 @@ function makeWidget() {
         }
         ok = !!(await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]));
       } else if (puzzleData.type === 'hashi') {
-        // Same delta+merge shape as applyHintHandler's hashi arm: diff
-        // solution vs current, take a sized slice, overlay onto a copy of
-        // the current edge list, apply. runLoop's per-tick re-read picks
-        // up the new state for the next iteration.
-        const current = await callMainWorld('readHashiState', []);
-        const solution = puzzleData.solution;
-        if (!current || !solution) {
-          ok = false;
-        } else {
-          const curMap = new Map();
-          for (const e of current.edges) {
-            const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-            curMap.set(`${a}-${b}`, e.bridges);
-          }
-          const wantedDelta = [];
-          for (const e of solution.edges) {
-            const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-            if (curMap.get(`${a}-${b}`) !== e.bridges) wantedDelta.push(e);
-          }
-          if (wantedDelta.length === 0) {
-            ok = true;
-          } else {
-            const numIslands = (puzzleData.islands || []).length;
-            const minLines = Math.max(1, Math.ceil(numIslands / 10));
-            const toApply = wantedDelta.slice(0, minLines);
-            const merged = current.edges.slice();
-            const overrideMap = new Map();
-            for (const e of toApply) {
-              const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-              overrideMap.set(`${a}-${b}`, e);
-            }
-            for (let i = 0; i < merged.length; i++) {
-              const a = Math.min(merged[i].a, merged[i].b);
-              const b = Math.max(merged[i].a, merged[i].b);
-              const key = `${a}-${b}`;
-              if (overrideMap.has(key)) {
-                merged[i] = overrideMap.get(key);
-                overrideMap.delete(key);
-              }
-            }
-            for (const remaining of overrideMap.values()) merged.push(remaining);
-            ok = !!(await callMainWorld('applyHashiState', [merged]));
-          }
-        }
+        const r = await applyHashiHintEdges(puzzleData.pendingHint);
+        ok = !!r?.success;
       } else {
         const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
         ok = !!(await callMainWorld('applyHintCells', [hintCells]));
@@ -3502,12 +3552,13 @@ function makeWidget() {
     loopConfirming = false;
     solveBtn.textContent = 'Solve';
     loopBtn.textContent = 'Loop';
-    // Slitherlink's getHint propagates from the live board state without
-    // touching puzzleData.solution, so don't block on pendingAutoSolve —
-    // on hard 30×30 dailies that solve can take >30 s, while the
-    // propagation hint returns in ~1 ms. Other puzzle types still need
-    // the cached solution for mistake comparison.
-    if (puzzleData.type !== 'slitherlink' && !puzzleData.solution && pendingAutoSolve) {
+    // Slitherlink's getHint and Hashi's getStepwiseHint propagate from the
+    // live board state without touching puzzleData.solution, so don't block
+    // on pendingAutoSolve — on hard 30×30 dailies that solve can take >30 s,
+    // while the propagation hint returns in ~1 ms. Other puzzle types still
+    // need the cached solution for mistake comparison.
+    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi';
+    if (!skipAutoSolveGate && !puzzleData.solution && pendingAutoSolve) {
       setStatus('Solving...', 'info');
       await pendingAutoSolve;
     }
@@ -3556,57 +3607,7 @@ function makeWidget() {
       const ok = await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]);
       result = ok ? { success: true } : { success: false, error: 'Slitherlink hint apply failed' };
     } else if (puzzleData.type === 'hashi') {
-      // Edge-list apply: diff solution against current state, take a batched
-      // slice (sized to keep Loop ~10 s on any island count), merge into the
-      // full current edge list (current edges + overrides + extras), apply.
-      const current = await callMainWorld('readHashiState', []);
-      if (!current) {
-        result = { success: false, error: 'Hashi state read failed' };
-      } else {
-        const solution = puzzleData.solution; // { edges }
-        if (!solution) {
-          result = { success: false, error: 'Hashi solution not available' };
-        } else {
-          const curMap = new Map();
-          for (const e of current.edges) {
-            const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-            curMap.set(`${a}-${b}`, e.bridges);
-          }
-          const wantedDelta = [];
-          for (const e of solution.edges) {
-            const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-            if (curMap.get(`${a}-${b}`) !== e.bridges) wantedDelta.push(e);
-          }
-          if (wantedDelta.length === 0) {
-            result = { success: true };
-          } else {
-            const numIslands = (puzzleData.islands || []).length;
-            const minLines = Math.max(1, Math.ceil(numIslands / 10));
-            const toApply = wantedDelta.slice(0, minLines);
-            // Merge: start with current edges, swap in any toApply override
-            // that matches an existing edge by endpoint pair, then push any
-            // remaining toApply entries that didn't appear in current.
-            const merged = current.edges.slice();
-            const overrideMap = new Map();
-            for (const e of toApply) {
-              const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-              overrideMap.set(`${a}-${b}`, e);
-            }
-            for (let i = 0; i < merged.length; i++) {
-              const a = Math.min(merged[i].a, merged[i].b);
-              const b = Math.max(merged[i].a, merged[i].b);
-              const key = `${a}-${b}`;
-              if (overrideMap.has(key)) {
-                merged[i] = overrideMap.get(key);
-                overrideMap.delete(key);
-              }
-            }
-            for (const remaining of overrideMap.values()) merged.push(remaining);
-            const ok = await callMainWorld('applyHashiState', [merged]);
-            result = ok ? { success: true } : { success: false, error: 'Hashi hint apply failed' };
-          }
-        }
-      }
+      result = await applyHashiHintEdges(puzzleData.pendingHint);
     } else {
       const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
       const ok = await callMainWorld('applyHintCells', [hintCells]);
