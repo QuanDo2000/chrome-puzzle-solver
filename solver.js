@@ -6396,6 +6396,14 @@ class SlitherlinkSolver {
     // recovery (in the subsumed-all-current-level case) ensures the UIP is
     // always a current-level var with a valid trail entry — learned clauses
     // are always correct even when the raw conflict reason is over-approximate.
+    //
+    // NOTE: per-iteration lookahead is the dominant cost on large boards
+    // (~3 s per propagate on the 50×40 monthly, so CDCL accumulates only
+    // single-digit conflicts in 30 s). Disabling lookahead during search makes
+    // CDCL fast but the rules alone are too weak — known-solvable boards
+    // converge to a spurious UNSAT. Resolving this needs either a faster
+    // lookahead implementation or stronger non-probing rules; both are out of
+    // scope for the T1–T17 CDCL build.
 
     while (true) {
       if (this._budgetExceeded()) { return false; }
