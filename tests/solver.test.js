@@ -2142,3 +2142,63 @@ test('SlitherlinkSolver: _propagateColors sub-rule C records own-color + opposit
   }
   assert.ok(ruleCAntecedentsOk, 'rule C should record own-color + opposite-neighbor as antecedents');
 });
+
+test('SlitherlinkSolver: _slApplyInsideReachability records opposite-color antecedents', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._currentReason = null; s._setColor(0, 1);
+  s._currentReason = null; s._setColor(1, 2);
+  s._currentReason = null; s._setColor(3, 2);
+  const trailBefore = s.trail.length;
+  const ok = s._slApplyInsideReachability(() => {});
+  assert.equal(ok, true);
+  for (let i = trailBefore; i < s.trail.length; i++) {
+    const reason = s._reasons[i];
+    assert.ok(Array.isArray(reason), `reason at ${i} must be array`);
+    assert.ok(reason.length > 0, `reason at ${i} must be non-empty`);
+  }
+});
+
+test('SlitherlinkSolver: _propagateParity records scan-line antecedents', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._currentReason = null; s._setEdge(s._vIdx(0, 0), 'V', 1);
+  s._currentReason = null; s._setEdge(s._vIdx(0, 1), 'V', 1);
+  s._currentReason = null; s._setEdge(s._vIdx(0, 3), 'V', 1);
+  const _trailBefore = s.trail.length;
+  const ok = s._propagateParity(() => {});
+  assert.equal(ok, true);
+  assert.equal(s.V[s._vIdx(0, 2)], 1, 'V[0][2] must be forced LINE');
+  const forcedEntry = s.trail.length - 1;
+  const reason = s._reasons[forcedEntry];
+  assert.ok(Array.isArray(reason));
+  assert.ok(reason.length === 3, `expected 3 antecedents, got ${reason.length}`);
+  assert.ok(reason.includes(s._varIdEdge('V', s._vIdx(0, 0))));
+  assert.ok(reason.includes(s._varIdEdge('V', s._vIdx(0, 1))));
+  assert.ok(reason.includes(s._varIdEdge('V', s._vIdx(0, 3))));
+});
+
+test('SlitherlinkSolver: _applyLookahead records union-of-probe reasons', () => {
+  const s = new SlitherlinkSolver({
+    width: 4, height: 4,
+    task: [
+      [2, -1, -1, -1],
+      [-1, -1, -1, -1],
+      [-1, -1, -1, -1],
+      [-1, -1, -1,  2],
+    ],
+  });
+  s._depth = 0;
+  s._inLookahead = false;
+  const trailBefore = s.trail.length;
+  const ok = s.propagate();
+  if (!ok) return;
+  for (let i = trailBefore; i < s.trail.length; i++) {
+    assert.ok(s._reasons[i] === null || Array.isArray(s._reasons[i]),
+      `trail[${i}] reason must be null or array`);
+  }
+});

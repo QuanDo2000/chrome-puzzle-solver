@@ -5369,6 +5369,13 @@ class SlitherlinkSolver {
         if (m & 1) return false;
       } else if (n === 1) {
         const forced = (m & 1) ? 1 : 2;
+        const antecedents = [];
+        for (let c = 0; c <= W; c++) {
+          if (c === unknownC) continue;
+          const v = this.V[this._vIdx(R, c)];
+          if (v !== 0) antecedents.push(this._varIdEdge('V', this._vIdx(R, c)));
+        }
+        this._currentReason = antecedents;
         if (!this._setEdge(this._vIdx(R, unknownC), 'V', forced)) return false;
         onChange();
       }
@@ -5386,6 +5393,13 @@ class SlitherlinkSolver {
         if (m & 1) return false;
       } else if (n === 1) {
         const forced = (m & 1) ? 1 : 2;
+        const antecedents = [];
+        for (let r = 0; r <= H; r++) {
+          if (r === unknownR) continue;
+          const v = this.H[this._hIdx(r, C)];
+          if (v !== 0) antecedents.push(this._varIdEdge('H', this._hIdx(r, C)));
+        }
+        this._currentReason = antecedents;
         if (!this._setEdge(this._hIdx(unknownR, C), 'H', forced)) return false;
         onChange();
       }
@@ -5427,8 +5441,13 @@ class SlitherlinkSolver {
     if (reachedPlaced !== placedCount) return false;  // known-INSIDE cells are disconnected
 
     // Any UNKNOWN cell not in BFS can never be INSIDE (can't reach INSIDE cells).
+    const insideAntecedents = [];
+    for (let i = 0; i < N; i++) {
+      if (this.colors[i] === 1) insideAntecedents.push(this._varIdCell(i));
+    }
     for (let i = 0; i < N; i++) {
       if (this.colors[i] === 0 && !seen[i]) {
+        this._currentReason = insideAntecedents;
         if (!this._setColor(i, 2)) return false;
         onChange();
       }
@@ -5477,8 +5496,13 @@ class SlitherlinkSolver {
     if (reachedOutside !== totalOutside) return false;  // some OUTSIDE cell is interior-trapped
 
     // Any UNKNOWN cell not reachable from the exterior can never be OUTSIDE.
+    const outsideAntecedents = [];
+    for (let i = 0; i < N; i++) {
+      if (this.colors[i] === 2) outsideAntecedents.push(this._varIdCell(i));
+    }
     for (let i = 0; i < N; i++) {
       if (this.colors[i] === 0 && !seen[i]) {
+        this._currentReason = outsideAntecedents;
         if (!this._setColor(i, 1)) return false;
         onChange();
       }
@@ -5564,6 +5588,11 @@ class SlitherlinkSolver {
       if (this.colors[ap] !== 0) continue;  // not UNKNOWN
       // Check if removing this cell disconnects the known-color cells.
       if (!this._slColorConnected(color, ap)) {
+        const antecedents = [];
+        for (let i = 0; i < N; i++) {
+          if (this.colors[i] === color) antecedents.push(this._varIdCell(i));
+        }
+        this._currentReason = antecedents;
         if (!this._setColor(ap, color)) return false;
         onChange();
       }
@@ -5740,6 +5769,7 @@ class SlitherlinkSolver {
       if (arr[idx] !== 0) continue;  // already assigned during this lookahead pass
 
       let lineFails = false, emptyFails = false;
+      let lineContradictionReason = [], emptyContradictionReason = [];
 
       for (const probeVal of [1, 2]) {
         const mark = this.trail.length;
@@ -5750,9 +5780,15 @@ class SlitherlinkSolver {
           continue;
         }
         const ok = this.propagate();
+        const probeReasonVars = [];
+        for (let ti = mark; ti < this.trail.length; ti++) {
+          const r = this._reasons[ti];
+          if (Array.isArray(r)) for (const v of r) probeReasonVars.push(v);
+        }
         this._rollback(mark);
         if (!ok) {
-          if (probeVal === 1) lineFails = true; else emptyFails = true;
+          if (probeVal === 1) { lineFails = true; lineContradictionReason = probeReasonVars; }
+          else { emptyFails = true; emptyContradictionReason = probeReasonVars; }
         }
       }
 
@@ -5761,9 +5797,11 @@ class SlitherlinkSolver {
         return false;
       }
       if (lineFails) {
+        this._currentReason = [...new Set([...lineContradictionReason, ...emptyContradictionReason])];
         if (!this._setEdge(idx, kind, 2)) { this._inLookahead = false; return false; }
         onChange();
       } else if (emptyFails) {
+        this._currentReason = [...new Set([...lineContradictionReason, ...emptyContradictionReason])];
         if (!this._setEdge(idx, kind, 1)) { this._inLookahead = false; return false; }
         onChange();
       }
