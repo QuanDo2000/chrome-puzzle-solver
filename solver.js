@@ -8000,6 +8000,20 @@ class HeyawakeSolver {
     }
     return true;
   }
+
+  _propagate() {
+    let changedOverall = true;
+    while (changedOverall) {
+      if (this._timeUp()) return true;
+      changedOverall = false;
+      const mark = this.trail.length;
+      if (!this._applyRoomCounts()) return false;
+      if (!this._applyLineConstraints()) return false;
+      if (!this._applyConnectivity()) return false;
+      if (this.trail.length > mark) changedOverall = true;
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

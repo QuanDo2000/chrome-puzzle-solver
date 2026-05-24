@@ -299,3 +299,29 @@ test('HeyawakeSolver._applyConnectivity: articulation skipped inside lookahead',
   assert.equal(s._applyConnectivity(), true);
   assert.equal(s.cellStatus[4], 0, 'cell 4 must NOT be forced inside lookahead');
 });
+
+test('HeyawakeSolver._propagate: cascades rules to fixpoint', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 4,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }], target: 1 },
+      { cells: [{ r: 0, c: 2 }, { r: 0, c: 3 }], target: 0 },
+    ],
+  });
+  assert.equal(s._propagate(), true);
+  assert.equal(s.cellStatus[2], 2);
+  assert.equal(s.cellStatus[3], 2);
+  assert.equal(s.cellStatus[0], 0);
+  assert.equal(s.cellStatus[1], 0);
+});
+
+test('HeyawakeSolver._propagate: returns false on contradictory input', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 2,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }], target: 2 },
+    ],
+    initialState: [[2, 0]],
+  });
+  assert.equal(s._propagate(), false);
+});
