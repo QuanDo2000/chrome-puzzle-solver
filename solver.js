@@ -4766,9 +4766,15 @@ class SlitherlinkSolver {
   }
 
   _lubyNext(idx) {
-    for (let size = 1, seq = 1; ; seq++, size = 2 * size + 1) {
-      if (idx === size - 1) return 1 << (seq - 1);
-      if (size / 2 <= idx && idx < size) return this._lubyNext(idx - (size >> 1));
+    // Canonical Luby (0-indexed). Knuth, AofA Vol 4A §7.2.2.2.
+    // For 1-indexed k: if k == 2^n - 1 return 2^(n-1), else recurse on
+    // k - 2^(n-1) + 1 with the smallest n satisfying 2^n - 1 >= k.
+    let k = idx + 1;
+    for (;;) {
+      let n = 1;
+      while ((1 << n) - 1 < k) n++;
+      if (k === (1 << n) - 1) return 1 << (n - 1);
+      k = k - (1 << (n - 1)) + 1;
     }
   }
 

@@ -256,15 +256,19 @@ heuristics (`_pickCell` then `_pickEdge`) so we don't pick arbitrarily.
 
 ## 7. Restart policy
 
-Luby sequence `[1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 16, ...]`
-multiplied by `RESTART_UNIT = 100` conflicts. Implementation:
+Canonical Luby sequence (0-indexed):
+`[1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2, ...]`
+multiplied by `RESTART_UNIT = 100` conflicts. Implementation
+(Knuth, AofA Vol 4A §7.2.2.2; 1-indexed `k = idx + 1`):
 
 ```js
 _lubyNext(idx) {
-  // Standard Luby formula:
-  for (let size = 1, seq = 1; ; seq++, size = 2 * size + 1) {
-    if (idx === size - 1) return 1 << (seq - 1);
-    if (size / 2 <= idx && idx < size) return this._lubyNext(idx - size / 2);
+  let k = idx + 1;
+  for (;;) {
+    let n = 1;
+    while ((1 << n) - 1 < k) n++;
+    if (k === (1 << n) - 1) return 1 << (n - 1);
+    k = k - (1 << (n - 1)) + 1;
   }
 }
 ```

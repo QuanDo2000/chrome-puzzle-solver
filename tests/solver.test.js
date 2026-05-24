@@ -2516,7 +2516,8 @@ test('SlitherlinkSolver: _pickDecisionLiteral falls back when all scores zero', 
 
 test('SlitherlinkSolver: _lubyNext returns the correct first 18 Luby values', () => {
   const s = new SlitherlinkSolver({ width: 2, height: 2, task: [[-1,-1],[-1,-1]] });
-  const expected = [1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 16];
+  // Canonical 0-indexed Luby (Knuth, AofA Vol 4A §7.2.2.2).
+  const expected = [1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2];
   for (let i = 0; i < expected.length; i++) {
     assert.equal(s._lubyNext(i), expected[i], `_lubyNext(${i}) should be ${expected[i]}`);
   }
