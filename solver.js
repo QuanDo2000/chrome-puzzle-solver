@@ -4459,6 +4459,13 @@ class SlitherlinkSolver {
     this._depth = 0;
     this._inLookahead = false;
 
+    // CDCL variable counts. Must be set after width/height.
+    const _W = width, _H = height;
+    this.numH = (_H + 1) * _W;
+    this.numV = _H * (_W + 1);
+    this.cellCount = _H * _W;
+    this.totalVars = this.numH + this.numV + this.cellCount;
+
     const W = width, H = height;
     // (H+1) * W horizontal edge slots; H * (W+1) vertical edge slots.
     this.H = new Uint8Array((H + 1) * W);
@@ -4530,6 +4537,49 @@ class SlitherlinkSolver {
   _hIdx(r, c) { return r * this.width + c; }
   _vIdx(r, c) { return r * (this.width + 1) + c; }
   _dotId(r, c) { return r * (this.width + 1) + c; }
+
+  // ── CDCL variable encoding ───────────────────────────────────────────────
+  // Variable IDs: [0, numH) = H edges, [numH, numH+numV) = V edges,
+  // [numH+numV, totalVars) = cell colors (row-major).
+
+  /** @param {'H'|'V'} kind @param {number} idx @returns {number} */
+  _varIdEdge(kind, idx) {
+    return kind === 'H' ? idx : this.numH + idx;
+  }
+
+  /** @param {number} cellIdx  (r * width + c) @returns {number} */
+  _varIdCell(cellIdx) {
+    return this.numH + this.numV + cellIdx;
+  }
+
+  /** @param {number} varId @returns {{ kind: 'H'|'V'|'C', idx: number }} */
+  _decodeVar(varId) {
+    if (varId < this.numH) return { kind: 'H', idx: varId };
+    if (varId < this.numH + this.numV) return { kind: 'V', idx: varId - this.numH };
+    return { kind: 'C', idx: varId - this.numH - this.numV };
+  }
+
+  /**
+   * Current sign of variable `varId`:
+   *  +1 if true  (edge=LINE  or cell=INSIDE)
+   *  -1 if false (edge=EMPTY or cell=OUTSIDE)
+   *   0 if UNKNOWN
+   * @param {number} varId
+   * @returns {-1|0|1}
+   */
+  _varValue(varId) {
+    const d = this._decodeVar(varId);
+    if (d.kind === 'H') {
+      const v = this.H[d.idx];
+      return v === 0 ? 0 : v === 1 ? 1 : -1;
+    }
+    if (d.kind === 'V') {
+      const v = this.V[d.idx];
+      return v === 0 ? 0 : v === 1 ? 1 : -1;
+    }
+    const c = this.colors[d.idx];
+    return c === 0 ? 0 : c === 1 ? 1 : -1;
+  }
 
   // Returns [u, v] dot ids that an edge joins.
   _edgeEndpoints(kind, idx) {

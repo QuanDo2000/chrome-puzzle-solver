@@ -1846,3 +1846,83 @@ test('computePuzzleDiff: slitherlink flags wrong × (board=2 but solution=1)', (
   const diff = computePuzzleDiff('slitherlink', board, solution);
   assert.deepEqual(diff, [{ orientation: 'h', r: 0, c: 0 }]);
 });
+
+test('SlitherlinkSolver: _varIdEdge/_varIdCell/_decodeVar round-trip', () => {
+  const s = new SlitherlinkSolver({
+    width: 5, height: 5,
+    task: [[-1,-1,-1,-1,-1],[-1,-1,-1,-1,-1],[-1,-1,-1,-1,-1],[-1,-1,-1,-1,-1],[-1,-1,-1,-1,-1]],
+  });
+  assert.equal(s.numH, 30);
+  assert.equal(s.numV, 30);
+  assert.equal(s.cellCount, 25);
+  assert.equal(s.totalVars, 85);
+  const hId = s._varIdEdge('H', 7);
+  assert.equal(hId, 7);
+  const dH = s._decodeVar(hId);
+  assert.equal(dH.kind, 'H');
+  assert.equal(dH.idx, 7);
+  const vId = s._varIdEdge('V', 3);
+  assert.equal(vId, s.numH + 3);
+  const dV = s._decodeVar(vId);
+  assert.equal(dV.kind, 'V');
+  assert.equal(dV.idx, 3);
+  const cId = s._varIdCell(12);
+  assert.equal(cId, s.numH + s.numV + 12);
+  const dC = s._decodeVar(cId);
+  assert.equal(dC.kind, 'C');
+  assert.equal(dC.idx, 12);
+  for (let i = 0; i < s.totalVars; i++) {
+    const d = s._decodeVar(i);
+    if (d.kind === 'H') assert.equal(s._varIdEdge('H', d.idx), i);
+    else if (d.kind === 'V') assert.equal(s._varIdEdge('V', d.idx), i);
+    else assert.equal(s._varIdCell(d.idx), i);
+  }
+});
+
+test('SlitherlinkSolver: _varValue on initial state returns 0', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  for (let i = 0; i < s.totalVars; i++) {
+    assert.equal(s._varValue(i), 0, `var ${i} should be UNKNOWN initially`);
+  }
+});
+
+test('SlitherlinkSolver: _varValue after _setEdge LINE returns +1', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const idx = s._hIdx(0, 0);
+  s._setEdge(idx, 'H', 1);
+  assert.equal(s._varValue(s._varIdEdge('H', idx)), 1);
+});
+
+test('SlitherlinkSolver: _varValue after _setEdge EMPTY returns -1', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const idx = s._hIdx(0, 1);
+  s._setEdge(idx, 'H', 2);
+  assert.equal(s._varValue(s._varIdEdge('H', idx)), -1);
+});
+
+test('SlitherlinkSolver: _varValue after _setColor INSIDE returns +1', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._setColor(0, 1);
+  assert.equal(s._varValue(s._varIdCell(0)), 1);
+});
+
+test('SlitherlinkSolver: _varValue after _setColor OUTSIDE returns -1', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._setColor(1, 2);
+  assert.equal(s._varValue(s._varIdCell(1)), -1);
+});
