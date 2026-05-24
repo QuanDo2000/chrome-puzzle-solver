@@ -7733,6 +7733,65 @@ class HashiSolver {
   }
 }
 
+class HeyawakeSolver {
+  constructor(data) {
+    const { rows, cols, rooms, initialState, maxMs } = data;
+    this.rows = rows;
+    this.cols = cols;
+    this.K = rooms.length;
+    this.target = new Int32Array(this.K);
+    this.roomCells = [];
+    this.cellToRoom = new Int32Array(rows * cols).fill(-1);
+    for (let k = 0; k < this.K; k++) {
+      this.target[k] = rooms[k].target;
+      const cells = rooms[k].cells;
+      const arr = new Int32Array(cells.length);
+      for (let i = 0; i < cells.length; i++) {
+        const idx = cells[i].r * cols + cells[i].c;
+        arr[i] = idx;
+        this.cellToRoom[idx] = k;
+      }
+      this.roomCells.push(arr);
+    }
+    this.cellStatus = new Uint8Array(rows * cols);
+    if (initialState) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          this.cellStatus[r * cols + c] = initialState[r][c];
+        }
+      }
+    }
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this.maxMs = maxMs || 0;
+    this._startedAt = 0;
+  }
+
+  _set(idx, value) {
+    const old = this.cellStatus[idx];
+    if (old === value) return true;
+    if (old !== 0) return false;
+    this.trail.push(idx | (old << 24));
+    this.cellStatus[idx] = value;
+    return true;
+  }
+
+  _rollback(mark) {
+    while (this.trail.length > mark) {
+      const e = this.trail.pop();
+      const idx = e & 0xffffff;
+      const old = (e >>> 24) & 0xff;
+      this.cellStatus[idx] = old;
+    }
+  }
+
+  _timeUp() {
+    if (this.maxMs <= 0) return false;
+    return (Date.now() - this._startedAt) > this.maxMs;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, computePuzzleDiff };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, computePuzzleDiff };
 }
