@@ -301,6 +301,10 @@ test('HeyawakeSolver._applyConnectivity: articulation skipped inside lookahead',
 });
 
 test('HeyawakeSolver._propagate: cascades rules to fixpoint', () => {
+  // room2 target=0 forces cells 2,3 white via local rules.
+  // Lookahead then probes room1: cell 0=white would leave cells 2,3
+  // disconnected from cell 0 (connectivity contradiction), so cell 0 is
+  // forced black and cell 1 is forced white.
   const s = new HeyawakeSolver({
     rows: 1, cols: 4,
     rooms: [
@@ -311,8 +315,8 @@ test('HeyawakeSolver._propagate: cascades rules to fixpoint', () => {
   assert.equal(s._propagate(), true);
   assert.equal(s.cellStatus[2], 2);
   assert.equal(s.cellStatus[3], 2);
-  assert.equal(s.cellStatus[0], 0);
-  assert.equal(s.cellStatus[1], 0);
+  assert.equal(s.cellStatus[0], 1); // forced black by lookahead
+  assert.equal(s.cellStatus[1], 2); // forced white by adjacency
 });
 
 test('HeyawakeSolver._propagate: returns false on contradictory input', () => {
@@ -324,4 +328,22 @@ test('HeyawakeSolver._propagate: returns false on contradictory input', () => {
     initialState: [[2, 0]],
   });
   assert.equal(s._propagate(), false);
+});
+
+test('HeyawakeSolver._applyLookahead: probes force unique survivors', () => {
+  // 1x3, room1 cells [0,1] target=1, room2 cell [2] target=1.
+  // Probe cell 0 black → cell 1 white (adjacency), room1 saturated, room2
+  //   needs cell 2 black, but then cell 1 (white) adjacent to cell 2 (black) — ok.
+  // Probe cell 0 white → room1 needs cell 1 black, then cell 2 must be black,
+  //   but cell 1 (black) adjacent to cell 2 (black) → CONTRADICTION.
+  // Only black survives for cell 0.
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 3,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }], target: 1 },
+      { cells: [{ r: 0, c: 2 }], target: 1 },
+    ],
+  });
+  assert.equal(s._applyLookahead(), true);
+  assert.equal(s.cellStatus[0], 1, 'cell 0 must be forced black via lookahead');
 });
