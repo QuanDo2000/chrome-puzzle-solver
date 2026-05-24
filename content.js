@@ -1366,6 +1366,30 @@ function applyHintToGrid(grid, hint) {
     }
     return;
   }
+  if (hint?.type === 'hashi') {
+    // grid is { edges } from hashiHandler.readState. Each hint edge overrides
+    // the matching grid edge by min-max endpoint key; edges not present in the
+    // grid are pushed as new entries. Mirrors the merge in applyHintHandler /
+    // applyAndRunLoop, but mutates the in-memory grid (no MAIN-world apply)
+    // so callers can re-check completion off the merged shape.
+    if (!Array.isArray(grid.edges)) grid.edges = [];
+    const overrideMap = new Map();
+    for (const e of (hint.edges || [])) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      overrideMap.set(`${a}-${b}`, e);
+    }
+    for (let i = 0; i < grid.edges.length; i++) {
+      const a = Math.min(grid.edges[i].a, grid.edges[i].b);
+      const b = Math.max(grid.edges[i].a, grid.edges[i].b);
+      const key = `${a}-${b}`;
+      if (overrideMap.has(key)) {
+        grid.edges[i] = overrideMap.get(key);
+        overrideMap.delete(key);
+      }
+    }
+    for (const remaining of overrideMap.values()) grid.edges.push(remaining);
+    return;
+  }
   for (const cell of hintAbsoluteCells(hint)) {
     if (grid[cell.row] !== undefined) grid[cell.row][cell.col] = cell.value;
   }
@@ -1528,6 +1552,20 @@ async function getHint(request = {}) {
       if (!hint) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
+    } else if (detectedGrid.type === 'hashi') {
+      // grid here is { edges } from hashiHandler.readState. HashiSolver.getHint
+      // returns a plain array of forced edges (each { a, b, orientation,
+      // bridges }), or [] when nothing is deducible. Wrap into the hint
+      // envelope shape the rest of content.js expects so applyHintToGrid /
+      // applyHintHandler / setHintStatus can dispatch on type.
+      const solver = new HashiSolver({
+        rows, cols, islands: detectedGrid.islands,
+      });
+      const edges = solver.getHint(grid.edges || []);
+      if (!edges || edges.length === 0) {
+        return { success: false, error: 'No more bridges can be deduced from the current state. Click Solve to finish.' };
+      }
+      hint = { type: 'hashi', edges, count: edges.length };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1809,6 +1847,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...yinYangHintStatusNodes(h));
     } else if (puzzleData?.type === 'slitherlink') {
       setStatusNodes('info', prefix, ...slitherlinkHintStatusNodes(h));
+    } else if (puzzleData?.type === 'hashi') {
+      setStatusNodes('info', prefix, ...hashiHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -1871,6 +1911,33 @@ function makeWidget() {
       return ['Draw a line along ', bold(desc), '.'];
     }
     return [bold(String(total)), ' edges can be deduced'];
+  }
+
+  function hashiHintStatusNodes(h) {
+    // Hashi hints are an array of { a, b, orientation, bridges } edges; bridges
+    // is the deduced count (1 or 2, or 0 for "this connection is impossible").
+    // The endpoint indices refer to puzzleData.islands; resolve to coords when
+    // we can so the single-edge message points the user at the right pair.
+    const total = h?.edges?.length || 0;
+    if (total === 0) return ['No hint available'];
+    const islands = puzzleData?.islands || [];
+    const fmtIsland = (idx) => {
+      const isl = islands[idx];
+      if (!isl) return `island ${idx}`;
+      return `(row ${isl.row + 1}, col ${isl.col + 1})`;
+    };
+    if (total === 1) {
+      const e = h.edges[0];
+      const bridgeWord = e.bridges === 1 ? 'single bridge'
+        : e.bridges === 2 ? 'double bridge'
+        : `${e.bridges} bridges`;
+      return [
+        'Draw a ', bold(bridgeWord),
+        ' between ', bold(fmtIsland(e.a)),
+        ' and ', bold(fmtIsland(e.b)), '.',
+      ];
+    }
+    return [bold(String(total)), ' bridges can be deduced'];
   }
 
   // Status + preview after a freshly computed hint. Used by hintHandler,
@@ -3131,7 +3198,7 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && !hr.hint?.cells?.length) break;
+      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // getHint may lazily solve as a fallback (galaxies + aquarium);
