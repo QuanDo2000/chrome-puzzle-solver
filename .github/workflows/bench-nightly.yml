@@ -34,3 +34,4 @@ jobs:
       - run: node tests/bench-shikaku.js
       - run: node tests/bench-yinyang.js
       - run: node tests/bench-slitherlink.js
+      - run: node tests/bench-hashi.js
