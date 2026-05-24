@@ -4871,14 +4871,22 @@ class SlitherlinkSolver {
   // separately toward pathCount. This prevents spurious double-counting when
   // the conflict reason contains both an implied var and one of its antecedents.
   _analyzeConflict(conflictReason) {
+    // First-UIP conflict analysis with subsumed-variable shortcut.
+    // The conflict reason contains variable IDs (not literals) of the variables
+    // whose current assignments jointly caused the contradiction.
+    //
+    // The subsumed shortcut: if a current-level conflict var X's reason includes
+    // another current-level conflict var Y, then Y is "subsumed" by X — we do
+    // not count Y separately in pathCount. This effectively makes X the UIP
+    // candidate rather than resolving through Y. After finding the UIP, we
+    // transitively expand its reason chain to collect ALL earlier-level
+    // antecedents (including those reachable through subsumed variables).
     const learned = [];
     const seen = new Uint8Array(this.totalVars + 1);
     let pathCount = 0;
 
-    // Pre-pass: mark all conflict vars seen so reason-expansion won't
-    // re-add them, and collect vars that appear in the reasons of other
-    // current-level conflict vars (they are "subsumed" and won't be counted
-    // toward pathCount separately).
+    // Pre-pass: mark all conflict vars seen; for current-level vars, mark the
+    // vars in their reasons as subsumed (won't count toward pathCount).
     const subsumed = new Uint8Array(this.totalVars + 1);
     for (const varId of conflictReason) {
       if (varId < 0 || varId >= this.totalVars) continue;
@@ -4901,15 +4909,29 @@ class SlitherlinkSolver {
       if (value === 0) continue;
       const lvl = this._decisionLevelOf(varId);
       if (lvl === 0) continue;
-      const lit = value > 0 ? ~varId : varId;
       if (lvl < this._decisionLevel) {
-        learned.push(lit);
+        learned.push(value > 0 ? ~varId : varId);
       } else if (!subsumed[varId]) {
-        // Current-level var not subsumed by another conflict var's reason.
         pathCount++;
       }
-      // Subsumed current-level vars: seen is already set, so they won't be
-      // double-counted when encountered during reason expansion below.
+    }
+
+    // If all current-level conflict vars were subsumed, pathCount is 0 and the
+    // UIP walk below would never run — leaving the learned clause without any
+    // current-level literal. To avoid producing incorrect clauses in this case,
+    // find the most recently assigned current-level var in `seen` (even if
+    // subsumed) and treat it as the UIP by injecting pathCount=1 and clearing
+    // its subsumed flag.
+    if (pathCount === 0) {
+      for (let i = this.trail.length - 1; i >= 0; i--) {
+        const v = this._varAtTrailIndex(i);
+        if (v < 0 || !seen[v]) continue;
+        if (this._decisionLevels[i] !== this._decisionLevel) continue;
+        // Found the most recent current-level var — make it the UIP.
+        subsumed[v] = 0;
+        pathCount = 1;
+        break;
+      }
     }
 
     // Walk trail backward to find first UIP.
@@ -4917,27 +4939,45 @@ class SlitherlinkSolver {
       const varAtI = this._varAtTrailIndex(i);
       if (varAtI < 0 || !seen[varAtI]) continue;
       if (this._decisionLevels[i] !== this._decisionLevel) continue;
-      if (subsumed[varAtI]) continue;  // skip subsumed vars in the walk
+      if (subsumed[varAtI]) continue;
 
       pathCount--;
 
       const reason = this._reasons[i];
       if (pathCount === 0 || reason === null) {
-        // varAtI is the first UIP: the single remaining current-level variable.
+        // varAtI is the first UIP.
         const value = this._varValue(varAtI);
         learned.push(value > 0 ? ~varAtI : varAtI);
-        // Expand UIP's reason to capture any earlier-level antecedents that
-        // were subsumed during seeding and thus not yet in the learned clause.
+        // Expand UIP's reason transitively to capture ALL earlier-level
+        // antecedents — including those reachable through subsumed current-level
+        // vars whose antecedents were not counted in pathCount.
         if (reason) {
-          for (const av of reason) {
-            if (av < 0 || av >= this.totalVars) continue;
-            const aLvl = this._decisionLevelOf(av);
-            if (aLvl === 0 || aLvl >= this._decisionLevel) continue;
-            if (seen[av] && !subsumed[av]) continue;  // already in learned
-            const aVal = this._varValue(av);
-            if (aVal === 0) continue;
-            learned.push(aVal > 0 ? ~av : av);
-            seen[av] = 1;
+          const toExpand = [varAtI];
+          const expandedSeen = new Uint8Array(this.totalVars + 1);
+          expandedSeen[varAtI] = 1;
+          while (toExpand.length > 0) {
+            const cur = toExpand.pop();
+            const curTi = this._trailIndexOf(cur);
+            const curReason = curTi >= 0 ? this._reasons[curTi] : null;
+            if (!curReason) continue;
+            for (const av of curReason) {
+              if (av < 0 || av >= this.totalVars) continue;
+              if (expandedSeen[av]) continue;
+              expandedSeen[av] = 1;
+              const aLvl = this._decisionLevelOf(av);
+              if (aLvl === 0) continue;
+              if (aLvl >= this._decisionLevel) {
+                // Current-level antecedent: transitively expand its reason.
+                toExpand.push(av);
+                continue;
+              }
+              // Earlier-level antecedent: add to learned if not already there.
+              if (seen[av] && !subsumed[av]) continue;
+              const aVal = this._varValue(av);
+              if (aVal === 0) continue;
+              learned.push(aVal > 0 ? ~av : av);
+              seen[av] = 1;
+            }
           }
         }
         break;
@@ -4946,7 +4986,7 @@ class SlitherlinkSolver {
       // Resolve varAtI: replace it with its antecedents.
       for (const av of reason) {
         if (av < 0 || av >= this.totalVars) continue;
-        if (seen[av]) continue;  // already in working set
+        if (seen[av]) continue;
         seen[av] = 1;
         const aLvl = this._decisionLevelOf(av);
         if (aLvl === 0) continue;
@@ -6334,6 +6374,81 @@ class SlitherlinkSolver {
     return { horizontal, vertical };
   }
 
+  // Main CDCL search loop. Replaces _backtrack() in solve().
+  // Precondition: propagate() has already been called once (in solve()) and
+  // returned true; some edges may still be UNKNOWN.
+  // Returns true if a complete valid loop was found; false on contradiction
+  // or budget exceeded.
+  _cdclSearch() {
+    let conflictsSinceRestart = 0;
+    let lubyIdx = 0;
+    const RESTART_UNIT = 100;
+    let restartLimit = this._lubyNext(lubyIdx) * RESTART_UNIT;
+
+    // _depth stays at 0 so propagate() runs the 1-step lookahead, which
+    // provides strong deduction power. Lookahead conflict reasons may reference
+    // probe-internal "ghost" variables, but _analyzeConflict's pathCount=0
+    // recovery (in the subsumed-all-current-level case) ensures the UIP is
+    // always a current-level var with a valid trail entry — learned clauses
+    // are always correct even when the raw conflict reason is over-approximate.
+
+    while (true) {
+      if (this._budgetExceeded()) { return false; }
+
+      // Check completion before asking for a decision literal. This is the
+      // authoritative "done" test — _pickDecisionLiteral() returns 0 both when
+      // all vars are assigned (sentinel) AND when H-edge 0 is the best pick
+      // (valid literal), so we cannot distinguish the two cases from its return
+      // value alone. The caller comment on _pickDecisionLiteral says explicitly:
+      // "caller must check _allEdgesAssigned() separately".
+      if (this._allEdgesAssigned()) {
+        this._dsuRebuild();
+        return this._checkSingleLoopComplete();
+      }
+
+      // After _allEdgesAssigned() returned false, there are unassigned edges.
+      // _pickDecisionLiteral() is called to pick the best literal to branch on.
+      // Note: literal 0 is valid (H-edge 0, positive sense / LINE). The function
+      // only returns the "all assigned" sentinel (0 from best===-1) when every
+      // variable is assigned, which can't happen here. Proceed unconditionally.
+      const lit = this._pickDecisionLiteral();
+
+      this._decisionLevel++;
+      this._currentReason = null;
+      if (!this._forceLiteral(lit)) {
+        return false;
+      }
+
+      while (!this.propagate()) {
+        if (this._budgetExceeded()) { return false; }
+        conflictsSinceRestart++;
+        this._totalConflicts++;
+
+        if (this._decisionLevel === 0) { return false; }
+
+        const conflictReason = this._lastConflictReason;
+        const learned = this._analyzeConflict(conflictReason);
+        const backjumpLevel = this._computeBackjumpLevel(learned);
+
+        // Non-chronological backjump: jump back to the computed level.
+        // If the learned clause is empty (no antecedents), backjump to 0.
+        this._backjumpTo(backjumpLevel);
+        if (learned.length > 0) {
+          this._addLearnedClause(learned);
+        }
+        this._bumpVsids(learned);
+        this._decayVsidsIfDue();
+
+        if (conflictsSinceRestart >= restartLimit) {
+          this._restart();
+          conflictsSinceRestart = 0;
+          lubyIdx++;
+          restartLimit = this._lubyNext(lubyIdx) * RESTART_UNIT;
+        }
+      }
+    }
+  }
+
   _backtrack() {
     if (this._budgetExceeded()) return false;
     if (this._allEdgesAssigned()) {
@@ -6435,12 +6550,12 @@ class SlitherlinkSolver {
         error: 'fully-assigned grid is not a valid single loop',
       };
     }
-    if (this._backtrack()) {
+    if (this._cdclSearch()) {
       const out = this._emit();
       this._storeInCache(key, out);
       return { solved: true, horizontal: out.horizontal, vertical: out.vertical };
     }
-    // Backtrack failed or timed out. Trail-rollback restored the state to
+    // CDCL search failed or timed out. Trail-rollback restored the state to
     // the post-propagation snapshot (everything propagate() + lookahead
     // could deduce). Return that as a partial so callers can show the
     // user the deducible portion instead of nothing — meaningful on hard

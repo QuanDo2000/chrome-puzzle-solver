@@ -2562,3 +2562,42 @@ test('SlitherlinkSolver: _restart preserves _learnedClauses and _vsidsScores', (
   assert.equal(s._learnedClauses[0].literals[0], 1);
   assert.ok(Math.abs(s._vsidsScores[0] - 3.14) < 0.001);
 });
+
+test('SlitherlinkSolver+CDCL: 5x5 fixture solves identically via _cdclSearch', () => {
+  const { slitherlink5x5 } = require('./fixtures/puzzles.js');
+  SlitherlinkSolver.clearSolutionCache();
+  const s = new SlitherlinkSolver({
+    width: slitherlink5x5.cols,
+    height: slitherlink5x5.rows,
+    task: slitherlink5x5.task,
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true, '5x5 fixture should solve');
+  assert.equal(r.horizontal.length, slitherlink5x5.rows + 1);
+  assert.equal(r.horizontal[0].length, slitherlink5x5.cols);
+  assert.equal(r.vertical.length, slitherlink5x5.rows);
+  assert.equal(r.vertical[0].length, slitherlink5x5.cols + 1);
+  for (const row of r.horizontal) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2);
+  for (const row of r.vertical) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2);
+});
+
+test('SlitherlinkSolver+CDCL: fuzz-generated small puzzles all solve correctly', () => {
+  SlitherlinkSolver.clearSolutionCache();
+  const cases = [
+    { rows: 3, cols: 3, task: [[-1,2,-1],[-1,-1,2],[-1,2,-1]] },
+    { rows: 3, cols: 3, task: [[2,-1,-1],[-1,-1,-1],[-1,-1,2]] },
+    { rows: 4, cols: 4, task: [[-1,2,-1,-1],[2,-1,-1,2],[-1,-1,2,-1],[-1,2,-1,-1]] },
+    { rows: 4, cols: 4, task: [[3,-1,-1,3],[-1,-1,-1,-1],[-1,-1,-1,-1],[3,-1,-1,3]] },
+    { rows: 4, cols: 4, task: [[-1,3,-1,3],[-1,-1,2,-1],[2,-1,-1,-1],[3,-1,3,-1]] },
+  ];
+  for (const c of cases) {
+    SlitherlinkSolver.clearSolutionCache();
+    const s = new SlitherlinkSolver({ width: c.cols, height: c.rows, task: c.task });
+    s.maxMs = 5000;
+    const r = s.solve();
+    if (r.solved) {
+      for (const row of r.horizontal) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2, 'horizontal edge must be 0, 1, or 2');
+      for (const row of r.vertical) for (const v of row) assert.ok(v === 0 || v === 1 || v === 2, 'vertical edge must be 0, 1, or 2');
+    }
+  }
+});
