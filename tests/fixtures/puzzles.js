@@ -173,15 +173,15 @@ module.exports = {
     ],
   },
 
-  // Tiny 3x3 Hashi sanity puzzle with a unique solution: four corner islands
-  // forming a 1-2-2-1 cycle (single bridges around the loop).
+  // Tiny 3x3 Hashi sanity puzzle: four 2-islands at corners. Unique
+  // solution is the closed 4-edge rectangle with single bridges.
   hashi3x3Tiny: {
     rows: 3, cols: 3,
     islands: [
-      { index: 0, row: 0, col: 0, number: 1 },
+      { index: 0, row: 0, col: 0, number: 2 },
       { index: 1, row: 0, col: 2, number: 2 },
       { index: 2, row: 2, col: 0, number: 2 },
-      { index: 3, row: 2, col: 2, number: 1 },
+      { index: 3, row: 2, col: 2, number: 2 },
     ],
   },
 

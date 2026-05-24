@@ -730,7 +730,7 @@ module.exports = {
     "error": null
   },
   "hashi3x3Tiny": {
-    "solved": false,
+    "solved": true,
     "edges": [
       {
         "a": 0,
