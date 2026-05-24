@@ -2257,3 +2257,43 @@ test('SlitherlinkSolver: _propagateLearnedClauses contradiction sets _lastConfli
   assert.ok(s._lastConflictReason.includes(id1));
   assert.ok(s._lastConflictReason.includes(id2));
 });
+
+test('SlitherlinkSolver: clue rule contradiction sets _lastConflictReason', () => {
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[0, -1], [-1, -1]],
+  });
+  s._currentReason = []; s._setEdge(s._hIdx(0, 0), 'H', 1);
+  s._currentReason = []; s._setEdge(s._hIdx(1, 0), 'H', 1);
+  s._currentReason = []; s._setEdge(s._vIdx(0, 0), 'V', 1);
+  s._currentReason = null;
+  s._lastConflictReason = null;
+  const ok = s.propagate();
+  assert.equal(ok, false);
+  assert.ok(Array.isArray(s._lastConflictReason));
+  assert.ok(s._lastConflictReason.length > 0);
+  for (const v of s._lastConflictReason) {
+    assert.ok(v >= 0 && v < s.totalVars, `varId ${v} out of range`);
+  }
+});
+
+test('SlitherlinkSolver: vertex rule contradiction sets _lastConflictReason', () => {
+  // Give dot (1,1) three LINE edges to trigger the m > 2 contradiction.
+  // For width=2: hIdx(1,0)=2, hIdx(1,1)=3, vIdx(0,1)=1 all meet at dot(1,1).
+  const s = new SlitherlinkSolver({
+    width: 2, height: 2,
+    task: [[-1,-1],[-1,-1]],
+  });
+  s._currentReason = []; s._setEdge(s._hIdx(1, 0), 'H', 1);
+  s._currentReason = []; s._setEdge(s._hIdx(1, 1), 'H', 1);
+  s._currentReason = []; s._setEdge(s._vIdx(0, 1), 'V', 1);
+  s._currentReason = null;
+  s._lastConflictReason = null;
+  const ok = s.propagate();
+  assert.equal(ok, false);
+  assert.ok(Array.isArray(s._lastConflictReason));
+  assert.ok(s._lastConflictReason.length > 0);
+  for (const v of s._lastConflictReason) {
+    assert.ok(v >= 0 && v < s.totalVars, `varId ${v} out of range`);
+  }
+});

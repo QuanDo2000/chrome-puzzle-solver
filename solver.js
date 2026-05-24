@@ -4794,34 +4794,52 @@ class SlitherlinkSolver {
         const eVar = this._varIdEdge('H', this._hIdx(r, c));
         if (e === 1) {
           // LINE → colors must differ.
-          if (colorAbove !== 0 && colorBelow !== 0 && colorAbove === colorBelow) return false;
+          if (colorAbove !== 0 && colorBelow !== 0 && colorAbove === colorBelow) {
+            this._lastConflictReason = [eVar, ...(idxAbove >= 0 ? [this._varIdCell(idxAbove)] : []), ...(idxBelow >= 0 ? [this._varIdCell(idxBelow)] : [])];
+            return false;
+          }
           if (colorAbove !== 0 && colorBelow === 0) {
             // Force below to opposite.
             const forced = colorAbove === 1 ? 2 : 1;
             if (idxBelow >= 0) {
               this._currentReason = [eVar, ...(idxAbove >= 0 ? [this._varIdCell(idxAbove)] : [])];
               if (!this._setColor(idxBelow, forced)) return false; onChange();
-            } else if (forced !== 2) return false;  // out-of-grid must be OUTSIDE
+            } else if (forced !== 2) {
+              this._lastConflictReason = [eVar, ...(idxAbove >= 0 ? [this._varIdCell(idxAbove)] : [])];
+              return false;  // out-of-grid must be OUTSIDE
+            }
           } else if (colorBelow !== 0 && colorAbove === 0) {
             const forced = colorBelow === 1 ? 2 : 1;
             if (idxAbove >= 0) {
               this._currentReason = [eVar, ...(idxBelow >= 0 ? [this._varIdCell(idxBelow)] : [])];
               if (!this._setColor(idxAbove, forced)) return false; onChange();
-            } else if (forced !== 2) return false;
+            } else if (forced !== 2) {
+              this._lastConflictReason = [eVar, ...(idxBelow >= 0 ? [this._varIdCell(idxBelow)] : [])];
+              return false;
+            }
           }
         } else {
           // EMPTY → colors must be same.
-          if (colorAbove !== 0 && colorBelow !== 0 && colorAbove !== colorBelow) return false;
+          if (colorAbove !== 0 && colorBelow !== 0 && colorAbove !== colorBelow) {
+            this._lastConflictReason = [eVar, ...(idxAbove >= 0 ? [this._varIdCell(idxAbove)] : []), ...(idxBelow >= 0 ? [this._varIdCell(idxBelow)] : [])];
+            return false;
+          }
           if (colorAbove !== 0 && colorBelow === 0) {
             if (idxBelow >= 0) {
               this._currentReason = [eVar, ...(idxAbove >= 0 ? [this._varIdCell(idxAbove)] : [])];
               if (!this._setColor(idxBelow, colorAbove)) return false; onChange();
-            } else if (colorAbove !== 2) return false;
+            } else if (colorAbove !== 2) {
+              this._lastConflictReason = [eVar, ...(idxAbove >= 0 ? [this._varIdCell(idxAbove)] : [])];
+              return false;
+            }
           } else if (colorBelow !== 0 && colorAbove === 0) {
             if (idxAbove >= 0) {
               this._currentReason = [eVar, ...(idxBelow >= 0 ? [this._varIdCell(idxBelow)] : [])];
               if (!this._setColor(idxAbove, colorBelow)) return false; onChange();
-            } else if (colorBelow !== 2) return false;
+            } else if (colorBelow !== 2) {
+              this._lastConflictReason = [eVar, ...(idxBelow >= 0 ? [this._varIdCell(idxBelow)] : [])];
+              return false;
+            }
           }
         }
       }
@@ -4839,32 +4857,50 @@ class SlitherlinkSolver {
         const idxRight = c < W ? r * W + c : -1;
         const eVar = this._varIdEdge('V', this._vIdx(r, c));
         if (e === 1) {
-          if (colorLeft !== 0 && colorRight !== 0 && colorLeft === colorRight) return false;
+          if (colorLeft !== 0 && colorRight !== 0 && colorLeft === colorRight) {
+            this._lastConflictReason = [eVar, ...(idxLeft >= 0 ? [this._varIdCell(idxLeft)] : []), ...(idxRight >= 0 ? [this._varIdCell(idxRight)] : [])];
+            return false;
+          }
           if (colorLeft !== 0 && colorRight === 0) {
             const forced = colorLeft === 1 ? 2 : 1;
             if (idxRight >= 0) {
               this._currentReason = [eVar, ...(idxLeft >= 0 ? [this._varIdCell(idxLeft)] : [])];
               if (!this._setColor(idxRight, forced)) return false; onChange();
-            } else if (forced !== 2) return false;
+            } else if (forced !== 2) {
+              this._lastConflictReason = [eVar, ...(idxLeft >= 0 ? [this._varIdCell(idxLeft)] : [])];
+              return false;
+            }
           } else if (colorRight !== 0 && colorLeft === 0) {
             const forced = colorRight === 1 ? 2 : 1;
             if (idxLeft >= 0) {
               this._currentReason = [eVar, ...(idxRight >= 0 ? [this._varIdCell(idxRight)] : [])];
               if (!this._setColor(idxLeft, forced)) return false; onChange();
-            } else if (forced !== 2) return false;
+            } else if (forced !== 2) {
+              this._lastConflictReason = [eVar, ...(idxRight >= 0 ? [this._varIdCell(idxRight)] : [])];
+              return false;
+            }
           }
         } else {
-          if (colorLeft !== 0 && colorRight !== 0 && colorLeft !== colorRight) return false;
+          if (colorLeft !== 0 && colorRight !== 0 && colorLeft !== colorRight) {
+            this._lastConflictReason = [eVar, ...(idxLeft >= 0 ? [this._varIdCell(idxLeft)] : []), ...(idxRight >= 0 ? [this._varIdCell(idxRight)] : [])];
+            return false;
+          }
           if (colorLeft !== 0 && colorRight === 0) {
             if (idxRight >= 0) {
               this._currentReason = [eVar, ...(idxLeft >= 0 ? [this._varIdCell(idxLeft)] : [])];
               if (!this._setColor(idxRight, colorLeft)) return false; onChange();
-            } else if (colorLeft !== 2) return false;
+            } else if (colorLeft !== 2) {
+              this._lastConflictReason = [eVar, ...(idxLeft >= 0 ? [this._varIdCell(idxLeft)] : [])];
+              return false;
+            }
           } else if (colorRight !== 0 && colorLeft === 0) {
             if (idxLeft >= 0) {
               this._currentReason = [eVar, ...(idxRight >= 0 ? [this._varIdCell(idxRight)] : [])];
               if (!this._setColor(idxLeft, colorRight)) return false; onChange();
-            } else if (colorRight !== 2) return false;
+            } else if (colorRight !== 2) {
+              this._lastConflictReason = [eVar, ...(idxRight >= 0 ? [this._varIdCell(idxRight)] : [])];
+              return false;
+            }
           }
         }
       }
@@ -4933,8 +4969,14 @@ class SlitherlinkSolver {
             if (nr >= 0 && nr < H && nc >= 0 && nc < W) oppositeVars.push(this._varIdCell(nr * W + nc));
           } else if (nc2 === 0) u++;
         }
-        if (m > clue) return false;
-        if (m + u < clue) return false;
+        if (m > clue) {
+          this._lastConflictReason = [myVar, ...oppositeVars];
+          return false;
+        }
+        if (m + u < clue) {
+          this._lastConflictReason = [myVar, ...oppositeVars];
+          return false;
+        }
         if (m === clue && u > 0) {
           // Force all unknown neighbors to same color as myColor.
           const antecedents = [myVar, ...oppositeVars];
@@ -4989,8 +5031,18 @@ class SlitherlinkSolver {
       if (v === 1) m++;
       else if (v === 0) n++;
     }
-    if (m > clue) return false;
-    if (m + n < clue) return false;
+    if (m > clue) {
+      this._lastConflictReason = edges
+        .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] !== 0)
+        .map(e => this._varIdEdge(/** @type {'H'|'V'} */ (e.kind), e.idx));
+      return false;
+    }
+    if (m + n < clue) {
+      this._lastConflictReason = edges
+        .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] !== 0)
+        .map(e => this._varIdEdge(/** @type {'H'|'V'} */ (e.kind), e.idx));
+      return false;
+    }
     if (m === clue && n > 0) {
       // All UNKNOWN edges → EMPTY.
       const antecedents = edges
@@ -5050,8 +5102,18 @@ class SlitherlinkSolver {
     const dotId = this._dotId(r, c);
     const m = this.lineCount[dotId];
     const n = this.unknownCount[dotId];
-    if (m > 2) return false;
-    if (m === 1 && n === 0) return false;
+    if (m > 2) {
+      this._lastConflictReason = this._dotEdges(r, c)
+        .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] !== 0)
+        .map(e => this._varIdEdge(/** @type {'H'|'V'} */ (e.kind), e.idx));
+      return false;
+    }
+    if (m === 1 && n === 0) {
+      this._lastConflictReason = this._dotEdges(r, c)
+        .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] !== 0)
+        .map(e => this._varIdEdge(/** @type {'H'|'V'} */ (e.kind), e.idx));
+      return false;
+    }
     if (m === 2 && n > 0) {
       const antecedents = this._dotEdges(r, c)
         .filter(e => (e.kind === 'H' ? this.H : this.V)[e.idx] !== 0)
@@ -5434,7 +5496,15 @@ class SlitherlinkSolver {
         else if (v === 0) { n++; unknownC = c; }
       }
       if (n === 0) {
-        if (m & 1) return false;
+        if (m & 1) {
+          const reasonVars = [];
+          for (let c = 0; c <= W; c++) {
+            const v = this.V[this._vIdx(R, c)];
+            if (v !== 0) reasonVars.push(this._varIdEdge('V', this._vIdx(R, c)));
+          }
+          this._lastConflictReason = reasonVars;
+          return false;
+        }
       } else if (n === 1) {
         const forced = (m & 1) ? 1 : 2;
         const antecedents = [];
@@ -5458,7 +5528,15 @@ class SlitherlinkSolver {
         else if (v === 0) { n++; unknownR = r; }
       }
       if (n === 0) {
-        if (m & 1) return false;
+        if (m & 1) {
+          const reasonVars = [];
+          for (let r = 0; r <= H; r++) {
+            const v = this.H[this._hIdx(r, C)];
+            if (v !== 0) reasonVars.push(this._varIdEdge('H', this._hIdx(r, C)));
+          }
+          this._lastConflictReason = reasonVars;
+          return false;
+        }
       } else if (n === 1) {
         const forced = (m & 1) ? 1 : 2;
         const antecedents = [];
@@ -5506,7 +5584,15 @@ class SlitherlinkSolver {
       if (c + 1 < W) { const nb = cur + 1; if (!seen[nb] && this.colors[nb] !== 2) { seen[nb] = 1; if (this.colors[nb] === 1) reachedPlaced++; queue.push(nb); } }
     }
 
-    if (reachedPlaced !== placedCount) return false;  // known-INSIDE cells are disconnected
+    if (reachedPlaced !== placedCount) {
+      // known-INSIDE cells are disconnected — collect all known-INSIDE cell vars
+      const reasonVars = [];
+      for (let i = 0; i < N; i++) {
+        if (this.colors[i] === 1) reasonVars.push(this._varIdCell(i));
+      }
+      this._lastConflictReason = reasonVars;
+      return false;
+    }
 
     // Any UNKNOWN cell not in BFS can never be INSIDE (can't reach INSIDE cells).
     const insideAntecedents = [];
@@ -5561,7 +5647,15 @@ class SlitherlinkSolver {
     // All known-OUTSIDE cells must be reachable from the exterior.
     let totalOutside = 0;
     for (let i = 0; i < N; i++) if (this.colors[i] === 2) totalOutside++;
-    if (reachedOutside !== totalOutside) return false;  // some OUTSIDE cell is interior-trapped
+    if (reachedOutside !== totalOutside) {
+      // some OUTSIDE cell is interior-trapped — collect all known-OUTSIDE cell vars
+      const reasonVars = [];
+      for (let i = 0; i < N; i++) {
+        if (this.colors[i] === 2) reasonVars.push(this._varIdCell(i));
+      }
+      this._lastConflictReason = reasonVars;
+      return false;
+    }
 
     // Any UNKNOWN cell not reachable from the exterior can never be OUTSIDE.
     const outsideAntecedents = [];
@@ -5861,6 +5955,7 @@ class SlitherlinkSolver {
       }
 
       if (lineFails && emptyFails) {
+        this._lastConflictReason = [...new Set([...lineContradictionReason, ...emptyContradictionReason])];
         this._inLookahead = false;
         return false;
       }
