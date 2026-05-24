@@ -6945,6 +6945,89 @@ function computePuzzleDiff(type, grid, solution, stars) {
   return out;
 }
 
+class HashiSolver {
+  constructor(data) {
+    const { rows, cols, islands } = data;
+    this.rows = rows;
+    this.cols = cols;
+    // Copy islands into normalized {r, c, target} form, indexed by id.
+    this.islands = islands.map(i => ({
+      r: i.row, c: i.col, target: i.number,
+    }));
+    const K = this.islands.length;
+
+    // byPos[r*cols+c] → island id (or -1).
+    this.byPos = new Int32Array(rows * cols).fill(-1);
+    for (let id = 0; id < K; id++) {
+      const { r, c } = this.islands[id];
+      this.byPos[r * cols + c] = id;
+    }
+
+    // Enumerate edges: for each island, find nearest right neighbour and
+    // nearest bottom neighbour (mirrors page's `right`/`bottom` ownership).
+    this.edges = [];
+    this.incident = Array.from({ length: K }, () => []);
+    for (let id = 0; id < K; id++) {
+      const { r, c } = this.islands[id];
+      // Right neighbour
+      for (let c2 = c + 1; c2 < cols; c2++) {
+        const nid = this.byPos[r * cols + c2];
+        if (nid >= 0) {
+          const e = { a: id, b: nid, orientation: 'H', r, c1: c, c2 };
+          const ei = this.edges.length;
+          this.edges.push(e);
+          this.incident[id].push(ei);
+          this.incident[nid].push(ei);
+          break;
+        }
+      }
+      // Bottom neighbour
+      for (let r2 = r + 1; r2 < rows; r2++) {
+        const nid = this.byPos[r2 * cols + c];
+        if (nid >= 0) {
+          const e = { a: id, b: nid, orientation: 'V', c, r1: r, r2 };
+          const ei = this.edges.length;
+          this.edges.push(e);
+          this.incident[id].push(ei);
+          this.incident[nid].push(ei);
+          break;
+        }
+      }
+    }
+
+    const E = this.edges.length;
+    this.lo = new Int8Array(E); // all 0
+    this.hi = new Int8Array(E);
+    for (let i = 0; i < E; i++) {
+      const e = this.edges[i];
+      this.hi[i] = Math.min(2, this.islands[e.a].target, this.islands[e.b].target);
+    }
+
+    // Precompute crossings: an H edge at row r spanning [c1+1, c2-1]
+    // crosses a V edge at col c spanning [r1+1, r2-1] iff
+    // c1 < c < c2 AND r1 < r < r2.
+    this.crosses = Array.from({ length: E }, () => []);
+    for (let i = 0; i < E; i++) {
+      const ei = this.edges[i];
+      if (ei.orientation !== 'H') continue;
+      for (let j = 0; j < E; j++) {
+        const ej = this.edges[j];
+        if (ej.orientation !== 'V') continue;
+        if (ei.c1 < ej.c && ej.c < ei.c2 && ej.r1 < ei.r && ei.r < ej.r2) {
+          this.crosses[i].push(j);
+          this.crosses[j].push(i);
+        }
+      }
+    }
+
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this.maxMs = data.maxMs || 0;
+    this._startedAt = 0;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, computePuzzleDiff };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, computePuzzleDiff };
 }
