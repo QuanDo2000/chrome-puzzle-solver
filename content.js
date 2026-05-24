@@ -2942,6 +2942,25 @@ function makeWidget() {
     drawPreview({ horizontal: result.horizontal, vertical: result.vertical });
   }
 
+  // Hashi done-check helper: every solution edge's bridge count matches the
+  // current board state. Edge keys are min-max normalized so the comparison
+  // is direction-independent. readHashiState enumerates every neighbour pair
+  // (bridges=0 included), so curMap is fully populated and the strict
+  // equality on `bridges` catches both wrong-count and missing-edge cases.
+  function hashiDoneCheck(currentState, solution) {
+    if (!currentState || !solution) return false;
+    const curMap = new Map();
+    for (const e of currentState.edges) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      curMap.set(`${a}-${b}`, e.bridges);
+    }
+    for (const e of solution.edges) {
+      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+      if (curMap.get(`${a}-${b}`) !== e.bridges) return false;
+    }
+    return true;
+  }
+
   // The Loop button cycles through three states. loopHandler dispatches; the
   // per-state work lives in dedicated helpers below.
   async function loopHandler() {
@@ -3001,6 +3020,51 @@ function makeWidget() {
           else if (e.orientation === 'v' && vertical[e.r]) vertical[e.r][e.c] = 1;
         }
         ok = !!(await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]));
+      } else if (puzzleData.type === 'hashi') {
+        // Same delta+merge shape as applyHintHandler's hashi arm: diff
+        // solution vs current, take a sized slice, overlay onto a copy of
+        // the current edge list, apply. runLoop's per-tick re-read picks
+        // up the new state for the next iteration.
+        const current = await callMainWorld('readHashiState', []);
+        const solution = puzzleData.solution;
+        if (!current || !solution) {
+          ok = false;
+        } else {
+          const curMap = new Map();
+          for (const e of current.edges) {
+            const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+            curMap.set(`${a}-${b}`, e.bridges);
+          }
+          const wantedDelta = [];
+          for (const e of solution.edges) {
+            const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+            if (curMap.get(`${a}-${b}`) !== e.bridges) wantedDelta.push(e);
+          }
+          if (wantedDelta.length === 0) {
+            ok = true;
+          } else {
+            const numIslands = (puzzleData.islands || []).length;
+            const minLines = Math.max(1, Math.ceil(numIslands / 10));
+            const toApply = wantedDelta.slice(0, minLines);
+            const merged = current.edges.slice();
+            const overrideMap = new Map();
+            for (const e of toApply) {
+              const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+              overrideMap.set(`${a}-${b}`, e);
+            }
+            for (let i = 0; i < merged.length; i++) {
+              const a = Math.min(merged[i].a, merged[i].b);
+              const b = Math.max(merged[i].a, merged[i].b);
+              const key = `${a}-${b}`;
+              if (overrideMap.has(key)) {
+                merged[i] = overrideMap.get(key);
+                overrideMap.delete(key);
+              }
+            }
+            for (const remaining of overrideMap.values()) merged.push(remaining);
+            ok = !!(await callMainWorld('applyHashiState', [merged]));
+          }
+        }
       } else {
         const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
         ok = !!(await callMainWorld('applyHintCells', [hintCells]));
@@ -3055,6 +3119,11 @@ function makeWidget() {
         }
       } else if (puzzleData.type === 'shikaku') {
         gsComplete = gs.grid.every(row => row.every(c => c !== -1));
+      } else if (puzzleData.type === 'hashi') {
+        // gs.grid for hashi is { edges } from hashiHandler.readState, not a
+        // 2D cell array; route through hashiDoneCheck (matches the post-loop
+        // endComplete check below).
+        gsComplete = hashiDoneCheck(gs.grid, puzzleData.solution);
       } else {
         gsComplete = gs.grid.every(row => row.every(c => c !== 0));
       }
@@ -3125,7 +3194,9 @@ function makeWidget() {
         } else {
           endComplete = puzzleData.type === 'shikaku'
             ? end.grid.every(row => row.every(c => c !== -1))
-            : end.grid.every(row => row.every(c => c !== 0));
+            : puzzleData.type === 'hashi'
+              ? hashiDoneCheck(end.grid, puzzleData.solution)
+              : end.grid.every(row => row.every(c => c !== 0));
         }
       }
       const done = end?.grid && puzzleData.type !== 'galaxies' && endComplete;
@@ -3256,6 +3327,58 @@ function makeWidget() {
       }
       const ok = await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]);
       result = ok ? { success: true } : { success: false, error: 'Slitherlink hint apply failed' };
+    } else if (puzzleData.type === 'hashi') {
+      // Edge-list apply: diff solution against current state, take a batched
+      // slice (sized to keep Loop ~10 s on any island count), merge into the
+      // full current edge list (current edges + overrides + extras), apply.
+      const current = await callMainWorld('readHashiState', []);
+      if (!current) {
+        result = { success: false, error: 'Hashi state read failed' };
+      } else {
+        const solution = puzzleData.solution; // { edges }
+        if (!solution) {
+          result = { success: false, error: 'Hashi solution not available' };
+        } else {
+          const curMap = new Map();
+          for (const e of current.edges) {
+            const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+            curMap.set(`${a}-${b}`, e.bridges);
+          }
+          const wantedDelta = [];
+          for (const e of solution.edges) {
+            const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+            if (curMap.get(`${a}-${b}`) !== e.bridges) wantedDelta.push(e);
+          }
+          if (wantedDelta.length === 0) {
+            result = { success: true };
+          } else {
+            const numIslands = (puzzleData.islands || []).length;
+            const minLines = Math.max(1, Math.ceil(numIslands / 10));
+            const toApply = wantedDelta.slice(0, minLines);
+            // Merge: start with current edges, swap in any toApply override
+            // that matches an existing edge by endpoint pair, then push any
+            // remaining toApply entries that didn't appear in current.
+            const merged = current.edges.slice();
+            const overrideMap = new Map();
+            for (const e of toApply) {
+              const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+              overrideMap.set(`${a}-${b}`, e);
+            }
+            for (let i = 0; i < merged.length; i++) {
+              const a = Math.min(merged[i].a, merged[i].b);
+              const b = Math.max(merged[i].a, merged[i].b);
+              const key = `${a}-${b}`;
+              if (overrideMap.has(key)) {
+                merged[i] = overrideMap.get(key);
+                overrideMap.delete(key);
+              }
+            }
+            for (const remaining of overrideMap.values()) merged.push(remaining);
+            const ok = await callMainWorld('applyHashiState', [merged]);
+            result = ok ? { success: true } : { success: false, error: 'Hashi hint apply failed' };
+          }
+        }
+      }
     } else {
       const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
       const ok = await callMainWorld('applyHintCells', [hintCells]);
