@@ -4542,6 +4542,8 @@ class SlitherlinkSolver {
         }
       }
       this.trail.length = 0;  // baseline — never roll back through it
+      this._reasons.length = 0;
+      this._decisionLevels.length = 0;
     }
   }
 
@@ -4619,6 +4621,9 @@ class SlitherlinkSolver {
     if (old !== 0) return false;  // attempted to overwrite an existing value
     const kindBit = kind === 'H' ? 0 : 1;
     this.trail.push((kindBit << 24) | idx);
+    this._reasons.push(this._currentReason);
+    this._decisionLevels.push(this._decisionLevel);
+    this._currentReason = null;
     arr[idx] = val;
     // Update endpoint counters.
     const [u, v] = this._edgeEndpoints(kind, idx);
@@ -4634,6 +4639,8 @@ class SlitherlinkSolver {
   _rollback(mark) {
     while (this.trail.length > mark) {
       const e = this.trail.pop();
+      this._reasons.pop();
+      this._decisionLevels.pop();
       const idx = e & 0xFFFFFF;
       const kind = (e >> 24) & 3;  // 2-bit kind: 0=H, 1=V, 2=color
       if (kind === 2) {
@@ -4672,6 +4679,9 @@ class SlitherlinkSolver {
     if (old === color) return true;
     if (old !== 0) return false;  // conflict
     this.trail.push((old << 26) | (2 << 24) | idx);
+    this._reasons.push(this._currentReason);
+    this._decisionLevels.push(this._decisionLevel);
+    this._currentReason = null;
     this.colors[idx] = color;
     return true;
   }

@@ -1939,3 +1939,68 @@ test('SlitherlinkSolver: reason structures initialized correctly after construct
   assert.equal(s._decisionLevel, 0);
   assert.equal(s._currentReason, null);
 });
+
+test('SlitherlinkSolver: _setEdge captures _currentReason into _reasons', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const idx = s._hIdx(0, 0);
+  const fakeReason = [42, 13];
+  s._currentReason = fakeReason;
+  s._setEdge(idx, 'H', 1);
+  const trailLen = s.trail.length;
+  assert.ok(trailLen >= 1);
+  assert.deepEqual(s._reasons[trailLen - 1], fakeReason);
+  assert.equal(s._decisionLevels[trailLen - 1], 0);
+  assert.equal(s._currentReason, null);
+  assert.equal(s._reasons.length, s.trail.length);
+  assert.equal(s._decisionLevels.length, s.trail.length);
+});
+
+test('SlitherlinkSolver: _setEdge with null _currentReason records null reason (decision)', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const idx = s._vIdx(0, 0);
+  s._currentReason = null;
+  s._setEdge(idx, 'V', 2);
+  const trailLen = s.trail.length;
+  assert.equal(s._reasons[trailLen - 1], null);
+  assert.equal(s._decisionLevels[trailLen - 1], 0);
+});
+
+test('SlitherlinkSolver: _setColor captures _currentReason', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const cellIdx = 4;
+  const fakeReason = [s._varIdCell(0)];
+  s._currentReason = fakeReason;
+  s._setColor(cellIdx, 1);
+  const trailLen = s.trail.length;
+  assert.ok(trailLen >= 1);
+  assert.deepEqual(s._reasons[trailLen - 1], fakeReason);
+  assert.equal(s._currentReason, null);
+});
+
+test('SlitherlinkSolver: _rollback pops _reasons and _decisionLevels in sync', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const mark = s.trail.length;
+  s._currentReason = [5];
+  s._setEdge(s._hIdx(0, 0), 'H', 1);
+  s._currentReason = [6, 7];
+  s._setEdge(s._hIdx(0, 1), 'H', 2);
+  assert.equal(s.trail.length, mark + 2);
+  assert.equal(s._reasons.length, mark + 2);
+  assert.equal(s._decisionLevels.length, mark + 2);
+  s._rollback(mark);
+  assert.equal(s.trail.length, mark);
+  assert.equal(s._reasons.length, mark);
+  assert.equal(s._decisionLevels.length, mark);
+});
