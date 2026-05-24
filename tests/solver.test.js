@@ -2202,3 +2202,58 @@ test('SlitherlinkSolver: _applyLookahead records union-of-probe reasons', () => 
       `trail[${i}] reason must be null or array`);
   }
 });
+
+test('SlitherlinkSolver: _propagateLearnedClauses no-op on empty clause set', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  let changed = false;
+  const onChange = () => { changed = true; };
+  const result = s._propagateLearnedClauses(onChange);
+  assert.equal(result, true);
+  assert.equal(changed, false);
+});
+
+test('SlitherlinkSolver: _propagateLearnedClauses forces unit clause', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._currentReason = [];
+  s._setEdge(0, 'H', 2);
+  s._currentReason = [];
+  s._setEdge(1, 'H', 2);
+  s._currentReason = null;
+  const id0 = s._varIdEdge('H', 0);
+  const id1 = s._varIdEdge('H', 1);
+  const id2 = s._varIdEdge('H', 2);
+  s._learnedClauses = [{ literals: [id0, id1, id2], activity: 1 }];
+  let forced = false;
+  const result = s._propagateLearnedClauses(() => { forced = true; });
+  assert.equal(result, true);
+  assert.equal(forced, true);
+  assert.equal(s.H[2], 1);
+  assert.equal(s._learnedClauses[0].activity, 2);
+});
+
+test('SlitherlinkSolver: _propagateLearnedClauses contradiction sets _lastConflictReason', () => {
+  const s = new SlitherlinkSolver({
+    width: 3, height: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s._currentReason = []; s._setEdge(0, 'H', 2);
+  s._currentReason = []; s._setEdge(1, 'H', 2);
+  s._currentReason = []; s._setEdge(2, 'H', 2);
+  s._currentReason = null;
+  const id0 = s._varIdEdge('H', 0);
+  const id1 = s._varIdEdge('H', 1);
+  const id2 = s._varIdEdge('H', 2);
+  s._learnedClauses = [{ literals: [id0, id1, id2], activity: 1 }];
+  const result = s._propagateLearnedClauses(() => {});
+  assert.equal(result, false);
+  assert.ok(Array.isArray(s._lastConflictReason));
+  assert.ok(s._lastConflictReason.includes(id0));
+  assert.ok(s._lastConflictReason.includes(id1));
+  assert.ok(s._lastConflictReason.includes(id2));
+});

@@ -4495,6 +4495,11 @@ class SlitherlinkSolver {
     // setters can capture the reason. Decisions set it to null explicitly.
     this._currentReason = null;
 
+    // Learned clause storage (CDCL).
+    this._learnedClauses = [];       // [{ literals: int[], activity: number }]
+    this._maxLearnedClauses = 5000;
+    this._lastConflictReason = null; // set by any rule that returns false
+
     // Scratch arrays for connectivity propagation (_propagateConnectivity).
     const N = H * W;
     this._slSeen = new Uint8Array(N);
@@ -4683,6 +4688,69 @@ class SlitherlinkSolver {
     this._decisionLevels.push(this._decisionLevel);
     this._currentReason = null;
     this.colors[idx] = color;
+    return true;
+  }
+
+  // Maps a SAT literal to the corresponding _setEdge / _setColor call.
+  // Literal encoding: lit >= 0 means positive (LINE/INSIDE = 1), lit < 0 means
+  // negative (EMPTY/OUTSIDE = 2). Variable IDs are non-negative; negation is
+  // represented as ~varId (bitwise NOT, always negative).
+  // Returns false on conflict (same contract as _setEdge/_setColor).
+  _forceLiteral(lit) {
+    const varId = lit >= 0 ? lit : ~lit;
+    const decoded = this._decodeVar(varId);
+    const positive = lit >= 0;
+    if (decoded.kind === 'H') {
+      return this._setEdge(decoded.idx, 'H', positive ? 1 : 2);
+    }
+    if (decoded.kind === 'V') {
+      return this._setEdge(decoded.idx, 'V', positive ? 1 : 2);
+    }
+    return this._setColor(decoded.idx, positive ? 1 : 2);
+  }
+
+  // Propagates all learned clauses as unit-propagation rules.
+  // Literal encoding: lit >= 0 = positive (LINE/INSIDE), lit < 0 = negative
+  // (EMPTY/OUTSIDE), varId = lit >= 0 ? lit : ~lit.
+  // For each clause:
+  //   - already satisfied → skip
+  //   - all literals false (conflict) → set _lastConflictReason, return false
+  //   - exactly one literal unassigned (unit) → force it, bump activity
+  // Returns true iff no contradiction was found.
+  _propagateLearnedClauses(onChange) {
+    for (const clause of this._learnedClauses) {
+      let unassignedCount = 0;
+      let unassignedLit = 0;
+      let satisfied = false;
+      for (const lit of clause.literals) {
+        const varId = lit >= 0 ? lit : ~lit;
+        const v = this._varValue(varId);
+        const positive = lit >= 0;
+        if (v === 0) {
+          unassignedCount++;
+          unassignedLit = lit;
+        } else if ((v > 0) === positive) {
+          satisfied = true;
+          break;
+        }
+      }
+      if (satisfied) continue;
+      if (unassignedCount === 0) {
+        this._lastConflictReason = clause.literals.map(l => l >= 0 ? l : ~l);
+        return false;
+      }
+      if (unassignedCount === 1) {
+        this._currentReason = clause.literals
+          .filter(l => l !== unassignedLit)
+          .map(l => l >= 0 ? l : ~l);
+        if (!this._forceLiteral(unassignedLit)) {
+          this._lastConflictReason = clause.literals.map(l => l >= 0 ? l : ~l);
+          return false;
+        }
+        onChange();
+        clause.activity += 1;
+      }
+    }
     return true;
   }
 
@@ -5841,6 +5909,7 @@ class SlitherlinkSolver {
         if (!this._inLookahead && !this._propagateAdvanced(onLocalChange)) return false;
         if (!this._propagateColors(onLocalChange)) return false;
         if (!this._propagateParity(onLocalChange)) return false;
+        if (!this._propagateLearnedClauses(onLocalChange)) return false;
         if (!this._inLookahead && !this._propagateConnectivity(onLocalChange)) return false;
       }
 
