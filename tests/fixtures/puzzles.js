@@ -244,4 +244,19 @@ module.exports = {
     rowClues: [2, 7, 9, 6],
     colClues: [4, 8, 9, 5],
   },
+
+  // 5x5 Kurodoko: recon fixture with clues at [1,3], [1,4], [3,4], [4,3].
+  // Clues: 6, 7, 8, 5, 5.
+  kurodoko5x5Easy: {
+    type: 'kurodoko',
+    rows: 5,
+    cols: 5,
+    task: [
+      [-1,-1,-1,6,-1],
+      [-1,4,-1,7,-1],
+      [-1,-1,-1,-1,-1],
+      [-1,5,-1,8,-1],
+      [-1,5,-1,-1,-1],
+    ],
+  },
 };
