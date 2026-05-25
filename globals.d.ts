@@ -45,6 +45,9 @@ type MainWorldFn =
   | 'readHashiData'
   | 'readHashiState'
   | 'applyHashiState'
+  | 'readHeyawakeData'
+  | 'readHeyawakeState'
+  | 'applyHeyawakeState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
