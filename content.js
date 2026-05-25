@@ -1598,6 +1598,20 @@ async function getHint(request = {}) {
         rule: step.rule,
         description: step.description,
       };
+    } else if (detectedGrid.type === 'heyawake') {
+      if (solution && firstMismatch(grid, solution)) {
+        return { success: false, error: 'Current game state is wrong.' };
+      }
+      const rooms = detectedGrid.rooms;
+      const solver = new HeyawakeSolver({ rows, cols, rooms });
+      const hintCells = solver.getHint(grid);
+      if (!hintCells || hintCells.length === 0) {
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+      }
+      // hintCells is [{row, col, value}, ...] — absolute coordinates.
+      // Pack as extraCells so hintAbsoluteCells passes them through unchanged
+      // (hint.cells uses row/col index arithmetic that breaks for absolute shapes).
+      hint = { type: 'heyawake', extraCells: hintCells, count: hintCells.length };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -3188,6 +3202,12 @@ function makeWidget() {
         applyHashiPartialResult(result);
         return;
       }
+      // Generic 2D-grid partial: any cell-state puzzle (heyawake first)
+      // that emits {partial:true, grid:[...]} on timeout.
+      if (result?.partial && puzzleData?.type === 'heyawake' && Array.isArray(result.grid)) {
+        applyGridPartialResult(result);
+        return;
+      }
       if (result?.partialGrid) {
         cachePartial(puzzleData, result.partialGrid, result.partialFilled);
       } else if (result?.error === 'partial state exhausted') {
@@ -3332,6 +3352,27 @@ function makeWidget() {
       'info',
     );
     drawPreview({ edges: result.edges });
+  }
+
+  // Generic 2D-grid partial result handler. Heyawake is the first caller;
+  // any future cell-state puzzle that supports partials can use it.
+  // Deliberately does NOT call recordSolveSuccess (matches the slitherlink/
+  // hashi precedent — caching a partial would mis-trigger Loop done-check
+  // and the mistake overlay).
+  function applyGridPartialResult(result) {
+    loopConfirming = false;
+    clearPendingHint();
+    solveBtn.textContent = 'Confirm';
+    confirming = true;
+    let filled = 0;
+    for (const row of result.grid) {
+      for (const v of row) if (v !== 0) filled++;
+    }
+    setStatus(
+      `Partial only: ${filled} cells deduced (board too hard for full solve). Apply, then finish manually.`,
+      'info',
+    );
+    drawPreview(result.grid);
   }
 
   // Apply a hashi hint by merging its edges into the live board and calling
