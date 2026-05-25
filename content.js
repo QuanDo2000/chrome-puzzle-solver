@@ -1743,6 +1743,18 @@ async function getHint(request = {}) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
       hint = { type: 'mosaic', extraCells: hintCells, count: hintCells.length };
+    } else if (detectedGrid.type === 'norinori') {
+      if (solution && firstMismatch(grid, solution)) {
+        return { success: false, error: 'Current game state is wrong.' };
+      }
+      const solver = new NorinoriSolver({
+        rows, cols, rooms: detectedGrid.rooms,
+      });
+      const hintCells = solver.getHint(grid);
+      if (!hintCells || hintCells.length === 0) {
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+      }
+      hint = { type: 'norinori', extraCells: hintCells, count: hintCells.length };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -2043,6 +2055,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...kurodokoHintStatusNodes(h));
     } else if (puzzleData?.type === 'mosaic') {
       setStatusNodes('info', prefix, ...mosaicHintStatusNodes(h));
+    } else if (puzzleData?.type === 'norinori') {
+      setStatusNodes('info', prefix, ...norinoriHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -2133,6 +2147,22 @@ function makeWidget() {
   // Mosaic hints carry absolute cells in extraCells.
   // cellStatus 1 = shaded (black), 2 = unshaded (white).
   function mosaicHintStatusNodes(h) {
+    const cells = h.extraCells || [];
+    if (cells.length === 0) return ['No hint available'];
+    if (cells.length === 1) {
+      const cell = cells[0];
+      const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
+      return [
+        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
+        ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(cells.length)), ' cells can be deduced'];
+  }
+
+  // Norinori hints carry absolute cells in extraCells.
+  // cellStatus 1 = shaded (black), 2 = unshaded (white).
+  function norinoriHintStatusNodes(h) {
     const cells = h.extraCells || [];
     if (cells.length === 0) return ['No hint available'];
     if (cells.length === 1) {
@@ -3727,6 +3757,10 @@ function makeWidget() {
         return;
       }
       if (result?.partial && puzzleData?.type === 'mosaic' && Array.isArray(result.grid)) {
+        applyGridPartialResult(result);
+        return;
+      }
+      if (result?.partial && puzzleData?.type === 'norinori' && Array.isArray(result.grid)) {
         applyGridPartialResult(result);
         return;
       }
