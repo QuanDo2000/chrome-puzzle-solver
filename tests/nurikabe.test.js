@@ -268,3 +268,23 @@ test('computePuzzleDiff nurikabe: flags wrong-color non-clue cells', () => {
   assert.equal(diff.length, 1);
   assert.deepEqual(diff[0], { row: 0, col: 1, expected: 1, actual: 2 });
 });
+
+test('NurikabeSolver.getHint: 1x2 clue 2 yields the other white as a hint', () => {
+  NurikabeSolver.clearSolutionCache();
+  const s = new NurikabeSolver({
+    rows: 1, cols: 2,
+    task: [[2, -1]],
+  });
+  const hint = s.getHint([[2, 0]]);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.some(h => h.row === 0 && h.col === 1 && h.value === 2));
+});
+
+test('NurikabeSolver.getHint: null on already-solved board', () => {
+  NurikabeSolver.clearSolutionCache();
+  const s = new NurikabeSolver({
+    rows: 1, cols: 2,
+    task: [[2, -1]],
+  });
+  assert.equal(s.getHint([[2, 2]]), null);
+});
