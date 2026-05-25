@@ -410,6 +410,82 @@ test('HeyawakeSolver.getHint: returns forced cells on an empty solvable board', 
   assert.equal(c2.value, 1);
 });
 
+test('HeyawakeSolver.getHint: stepwise — returns one rule firing at a time, not the whole cascade', () => {
+  // A puzzle with 3 target=0 rooms (forces 9 white cells via Rule 1 alone)
+  // and a 4th room with target=1 (needs lookahead). Pre-stepwise getHint
+  // would return all forced cells from propagate-to-fixpoint+lookahead at
+  // once — sometimes the entire board. Stepwise should return ≤ one
+  // room's worth of cells per call (≤ 4 here, since the largest target=0
+  // room has 4 cells).
+  HeyawakeSolver.clearSolutionCache();
+  const areas = [
+    [0, 0, 1, 1, 2, 2],
+    [0, 0, 1, 1, 3, 4],
+    [5, 6, 7, 8, 8, 4],
+    [5, 6, 7, 9, 9, 10],
+    [5, 6, 7, 11, 12, 10],
+    [13, 13, 13, 13, 12, 10],
+  ];
+  const areaTask = [-1, 0, -1, -1, 1, -1, -1, -1, 0, -1, 0, -1, -1, -1];
+  const cellsPerRoom = {};
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 6; c++) {
+      const k = areas[r][c];
+      if (!cellsPerRoom[k]) cellsPerRoom[k] = [];
+      cellsPerRoom[k].push({ r, c });
+    }
+  }
+  const rooms = areaTask.map((t, k) => ({ cells: cellsPerRoom[k], target: t }));
+  const s = new HeyawakeSolver({ rows: 6, cols: 6, rooms });
+  const empty = Array.from({ length: 6 }, () => new Array(6).fill(0));
+  const hint = s.getHint(empty);
+  assert.ok(Array.isArray(hint), 'expected hint array');
+  assert.ok(hint.length >= 1, 'expected at least one cell');
+  assert.ok(hint.length <= 4, `expected stepwise hint <= 4 cells; got ${hint.length}`);
+});
+
+test('HeyawakeSolver.getHint: stepwise — repeated calls eventually solve the board', () => {
+  // Apply hints one at a time, simulating Loop. The 6x6 should converge
+  // in ≤ 20 steps without exceeding 4 cells per step.
+  HeyawakeSolver.clearSolutionCache();
+  const areas = [
+    [0, 0, 1, 1, 2, 2],
+    [0, 0, 1, 1, 3, 4],
+    [5, 6, 7, 8, 8, 4],
+    [5, 6, 7, 9, 9, 10],
+    [5, 6, 7, 11, 12, 10],
+    [13, 13, 13, 13, 12, 10],
+  ];
+  const areaTask = [-1, 0, -1, -1, 1, -1, -1, -1, 0, -1, 0, -1, -1, -1];
+  const cellsPerRoom = {};
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 6; c++) {
+      const k = areas[r][c];
+      if (!cellsPerRoom[k]) cellsPerRoom[k] = [];
+      cellsPerRoom[k].push({ r, c });
+    }
+  }
+  const rooms = areaTask.map((t, k) => ({ cells: cellsPerRoom[k], target: t }));
+  const current = Array.from({ length: 6 }, () => new Array(6).fill(0));
+  let steps = 0;
+  while (steps < 30) {
+    HeyawakeSolver.clearSolutionCache();
+    const s = new HeyawakeSolver({ rows: 6, cols: 6, rooms });
+    const h = s.getHint(current);
+    if (!h) break;
+    steps++;
+    assert.ok(h.length <= 4, `step ${steps} returned ${h.length} cells; want ≤ 4`);
+    for (const cell of h) current[cell.row][cell.col] = cell.value;
+  }
+  assert.ok(steps >= 5 && steps <= 20, `expected 5-20 steps, got ${steps}`);
+  // Every cell determined.
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 6; c++) {
+      assert.notEqual(current[r][c], 0, `cell (${r},${c}) still unknown after ${steps} steps`);
+    }
+  }
+});
+
 test('HeyawakeSolver.getHint: returns null when state is already fully solved', () => {
   HeyawakeSolver.clearSolutionCache();
   const s = new HeyawakeSolver({

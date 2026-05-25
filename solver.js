@@ -8175,6 +8175,24 @@ class HeyawakeSolver {
     HeyawakeSolver._partialCache.clear();
   }
 
+  // Stepwise hint: returns the cells deduced by ONE rule firing, not the
+  // whole propagation-to-fixpoint cascade. Each click surfaces a single
+  // logical step so the user can follow the deduction:
+  //
+  //   1. Room saturation — per room: if blacks==target force unknowns white,
+  //      if blacks+unknowns==target force unknowns black. Stop at the first
+  //      room that yields positives. Adjacency cascades (via _set) from the
+  //      same step count as part of that step.
+  //   2. Line constraint — per minimal 3-rooms span: if blacks==0 and one
+  //      unknown remains, force it black. Stop at the first span that fires.
+  //   3. Connectivity — BFS-then-articulation; whatever the rule forces in
+  //      a single _applyConnectivity pass is one step (articulation
+  //      analysis as a whole is one logical deduction).
+  //   4. 1-step lookahead — probe one undecided cell at a time; if exactly
+  //      one value survives, force it and stop.
+  //
+  // Returns [{row, col, value}, ...] (always positive value) or null when
+  // nothing further can be deduced / the state is contradictory.
   getHint(initialState) {
     const total = this.rows * this.cols;
     for (let r = 0; r < this.rows; r++) {
@@ -8188,16 +8206,101 @@ class HeyawakeSolver {
     this._depth = 0;
     this._inLookahead = false;
     this._startedAt = Date.now();
-    if (!this._propagate()) return null;
-    const hints = [];
-    for (let i = 0; i < total; i++) {
-      if (before[i] === 0 && this.cellStatus[i] !== 0) {
-        const r = (i / this.cols) | 0;
-        const c = i - r * this.cols;
-        hints.push({ row: r, col: c, value: this.cellStatus[i] });
+
+    const collectChanged = () => {
+      const out = [];
+      for (let i = 0; i < total; i++) {
+        if (before[i] === 0 && this.cellStatus[i] !== 0) {
+          const r = (i / this.cols) | 0;
+          const c = i - r * this.cols;
+          out.push({ row: r, col: c, value: this.cellStatus[i] });
+        }
+      }
+      return out;
+    };
+
+    // Rule 1: per-room saturation. Stop at the first room that yields a write.
+    for (let k = 0; k < this.K; k++) {
+      if (this.target[k] < 0) continue;
+      const cells = this.roomCells[k];
+      let nB = 0, nU = 0;
+      for (let i = 0; i < cells.length; i++) {
+        const v = this.cellStatus[cells[i]];
+        if (v === 1) nB++;
+        else if (v === 0) nU++;
+      }
+      if (nB > this.target[k]) return null;
+      if (nB + nU < this.target[k]) return null;
+      if (nB === this.target[k] && nU > 0) {
+        for (let i = 0; i < cells.length; i++) {
+          if (this.cellStatus[cells[i]] === 0) {
+            if (!this._set(cells[i], 2)) return null;
+          }
+        }
+        const hints = collectChanged();
+        if (hints.length) return hints;
+      } else if (nB + nU === this.target[k] && nU > 0) {
+        for (let i = 0; i < cells.length; i++) {
+          if (this.cellStatus[cells[i]] === 0) {
+            if (!this._set(cells[i], 1)) return null;
+          }
+        }
+        const hints = collectChanged();
+        if (hints.length) return hints;
       }
     }
-    return hints.length ? hints : null;
+
+    // Rule 3: per line-constraint, force black if only one unknown remains.
+    // (Rule 2, no-adjacent-blacks, is eager inside _set so it can't fire
+    //  independently — it cascades from any black write above.)
+    for (let i = 0; i < this.lineConstraints.length; i++) {
+      const cells = this.lineConstraints[i];
+      let nB = 0, nU = 0, uIdx = -1;
+      for (let j = 0; j < cells.length; j++) {
+        const v = this.cellStatus[cells[j]];
+        if (v === 1) nB++;
+        else if (v === 0) { nU++; uIdx = cells[j]; }
+      }
+      if (nB === 0 && nU === 0) return null;
+      if (nB === 0 && nU === 1) {
+        if (!this._set(uIdx, 1)) return null;
+        const hints = collectChanged();
+        if (hints.length) return hints;
+      }
+    }
+
+    // Rule 4: connectivity (BFS for contradiction + articulation forcing).
+    // _applyConnectivity already encapsulates "one connectivity deduction".
+    if (!this._applyConnectivity()) return null;
+    {
+      const hints = collectChanged();
+      if (hints.length) return hints;
+    }
+
+    // Rule 5: 1-step lookahead — probe each unknown cell with each value;
+    // force the survivor if exactly one passes. Stop at first force.
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const survivors = [];
+      for (const v of [1, 2]) {
+        const probeMark = this.trail.length;
+        this._inLookahead = true;
+        const okSet = this._set(i, v);
+        const ok = okSet && this._propagate();
+        this._rollback(probeMark);
+        this._inLookahead = false;
+        if (ok) survivors.push(v);
+        if (survivors.length > 1) break;
+      }
+      if (survivors.length === 0) return null;
+      if (survivors.length === 1) {
+        if (!this._set(i, survivors[0])) return null;
+        const hints = collectChanged();
+        if (hints.length) return hints;
+      }
+    }
+
+    return null;
   }
 
   _cacheKey() {
