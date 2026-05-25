@@ -451,4 +451,13 @@ module.exports = {
     ],
     areaTask: [1, -1, -1, 2, 1, -1, 0, -1, 3, 1, -1],
   },
+
+  // 4x4 Kakurasu easy, captured from puzzles-mobile.com/kakurasu/random/4x4-easy.
+  kakurasu4x4EasyReal: {
+    type: 'kakurasu',
+    rows: 4,
+    cols: 4,
+    rowClues: [2, 7, 9, 6],
+    colClues: [4, 8, 9, 5],
+  },
 };

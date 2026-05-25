@@ -1434,6 +1434,21 @@ function dumpPuzzleForBench() {
       return { type: 'hitori', rows: hiRows, cols: hiCols, task: hiTask, path: path };
     }
 
+    if (path.indexOf('/kakurasu/') !== -1 || g.slug === 'kakurasu') {
+      // INLINE — no readKakurasuData call (serialized via fn.toString()).
+      if (!g.task || !g.task.horizontal || !g.task.vertical
+          || !g.puzzleWidth || !g.puzzleHeight) {
+        return { error: 'kakurasu: missing task/dims', diagnostic: diagnostic(g), path: path };
+      }
+      var kaRows = g.puzzleHeight, kaCols = g.puzzleWidth;
+      var rowClues = [];
+      for (var kr = 0; kr < kaRows; kr++) rowClues.push(g.task.horizontal[kr] || 0);
+      var colClues = [];
+      for (var kc = 0; kc < kaCols; kc++) colClues.push(g.task.vertical[kc] || 0);
+      return { type: 'kakurasu', rows: kaRows, cols: kaCols,
+               rowClues: rowClues, colClues: colClues, path: path };
+    }
+
     if (path.indexOf('/heyawake/') !== -1 || g.slug === 'heyawake') {
       // Inline extraction: dumpPuzzleForBench is serialized via fn.toString()
       // and run in MAIN world where it can't see readHeyawakeData. Pull the
