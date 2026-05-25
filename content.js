@@ -2624,13 +2624,43 @@ function makeWidget() {
   // Cell-border lattice — batched into one Path2D so the offscreen build is
   // O(rows + cols) strokes instead of the rows*cols strokeRects the old
   // per-tick code did.
-  function buildLatticeLayer(rows, cols, cellSize, w, h) {
+  function buildLatticeLayer(rows, cols, cellSize, w, h, pd) {
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
     const ctx = c.getContext('2d');
     ctx.strokeStyle = '#d1d5db';
     ctx.lineWidth = 0.5;
+    // Nurikabe boards can have wall cells (task[r][c] === -2) — off-board
+    // regions that the page renders blank. Draw per-edge so wall areas have
+    // no grid lines through them; edges between a wall and a real cell are
+    // still drawn (showing the board boundary).
+    const isWall = (r, cc) =>
+      pd?.type === 'nurikabe' &&
+      r >= 0 && r < rows && cc >= 0 && cc < cols &&
+      pd.task?.[r]?.[cc] === -2;
+    if (pd?.type === 'nurikabe') {
+      ctx.beginPath();
+      for (let r = 0; r < rows; r++) {
+        for (let cc = 0; cc < cols; cc++) {
+          if (isWall(r, cc)) continue;
+          const x = cc * cellSize;
+          const y = r * cellSize;
+          // Top edge: draw if cell above is wall or out of bounds, OR always
+          // draw (the neighbouring non-wall cell will also draw it — overlap
+          // is harmless).
+          ctx.moveTo(x, y); ctx.lineTo(x + cellSize, y);
+          // Left edge.
+          ctx.moveTo(x, y); ctx.lineTo(x, y + cellSize);
+          // Bottom edge.
+          ctx.moveTo(x, y + cellSize); ctx.lineTo(x + cellSize, y + cellSize);
+          // Right edge.
+          ctx.moveTo(x + cellSize, y); ctx.lineTo(x + cellSize, y + cellSize);
+        }
+      }
+      ctx.stroke();
+      return c;
+    }
     ctx.beginPath();
     for (let r = 0; r <= rows; r++) {
       ctx.moveTo(0, r * cellSize);
@@ -3050,7 +3080,7 @@ function makeWidget() {
                       '|nn=' + norinoriAreasSig(pd?.type === 'norinori' ? pd.areas : null) +
                       '|nu=' + nurikabeTaskSig(pd?.type === 'nurikabe' ? pd.task : null);
     if (staticSig !== staticLayerSig) {
-      latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull);
+      latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull, pd);
       staticLayer = buildStaticLayer(rows, cols, cellSize, wFull, hFull, pd);
       staticLayerSig = staticSig;
     }
