@@ -526,6 +526,7 @@ const heyawakeHandler = {
       type: 'heyawake',
       rows: data.rows,
       cols: data.cols,
+      areas: data.areas,
       rooms: data.rooms,
       rowClues: [],
       colClues: [],

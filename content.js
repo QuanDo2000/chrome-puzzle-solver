@@ -954,6 +954,13 @@ function solveExtraData() {
       failedPartials: getFailedGalaxiesPartials(data),
     };
   }
+  if (data.type === 'heyawake') {
+    return {
+      rows: data.rows,
+      cols: data.cols,
+      rooms: data.rooms,
+    };
+  }
   return null;
 }
 
@@ -1179,6 +1186,22 @@ function slitherlinkCacheKey(data) {
   return 'slitherlink-solution:' + (h >>> 0).toString(16);
 }
 
+function heyawakeCacheKey(data) {
+  if (data?.type !== 'heyawake') return null;
+  // FNV-1a over (nameplate, rows, cols, flattened areas 2-D room-ID map).
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x57); // 'W' nameplate (heWawake) so heyawake keys can't collide
+  mix(data.rows | 0);
+  mix(data.cols | 0);
+  const areas = data.areas || [];
+  for (let r = 0; r < data.rows; r++) {
+    const row = areas[r] || [];
+    for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 1);
+  }
+  return 'heyawake-solution:' + (h >>> 0).toString(16);
+}
+
 function getCachedGridSolution(data) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
@@ -1187,6 +1210,7 @@ function getCachedGridSolution(data) {
     : data?.type === 'yinyang' ? yinYangCacheKey(data)
     : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
     : data?.type === 'hashi' ? hashiCacheKey(data)
+    : data?.type === 'heyawake' ? heyawakeCacheKey(data)
     : null;
   if (!key) return null;
   try {
@@ -1223,6 +1247,7 @@ function cacheGridSolution(data, grid) {
     : data?.type === 'yinyang' ? yinYangCacheKey(data)
     : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
     : data?.type === 'hashi' ? hashiCacheKey(data)
+    : data?.type === 'heyawake' ? heyawakeCacheKey(data)
     : null;
   if (!key) return;
   try {
@@ -2294,6 +2319,9 @@ function makeWidget() {
         }
       }
     }
+    if (pd?.type === 'heyawake' && Array.isArray(pd.areas)) {
+      drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, pd.rooms);
+    }
     return c;
   }
 
@@ -2379,6 +2407,73 @@ function makeWidget() {
     ctx.restore();
   }
 
+  // Thick black borders between distinct room IDs + room-target clue numbers
+  // for heyawake. Drawn once into the cached static layer; reused until the
+  // puzzle shape changes.  `areas` is the 2-D room-ID map; `rooms` is the
+  // parallel array of { cells, target } metadata indexed by room ID.
+  function drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, areas, rooms) {
+    if (!areas) return;
+    ctx.save();
+
+    // Outer border — thick black frame around the entire grid.
+    const borderW = Math.max(2, Math.floor(cellSize / 5));
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = borderW;
+    ctx.lineCap = 'square';
+    ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
+
+    // Interior room borders: draw on the shared edge whenever the two
+    // adjacent cells belong to different rooms.
+    ctx.lineWidth = borderW;
+    ctx.beginPath();
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const id = (areas[r] || [])[c] || 0;
+        // right neighbour
+        if (c + 1 < cols && ((areas[r] || [])[c + 1] || 0) !== id) {
+          const x = (c + 1) * cellSize;
+          const y = r * cellSize;
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, y + cellSize);
+        }
+        // bottom neighbour
+        if (r + 1 < rows && ((areas[r + 1] || [])[c] || 0) !== id) {
+          const x = c * cellSize;
+          const y = (r + 1) * cellSize;
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + cellSize, y);
+        }
+      }
+    }
+    ctx.stroke();
+
+    // Clue numbers: one per room, at the top-left cell of the room (the
+    // first cell encountered in row-major order whose room has target >= 0).
+    const fontSize = Math.max(8, Math.floor(cellSize * 0.5));
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const seen = new Set();
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const id = (areas[r] || [])[c] || 0;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const room = Array.isArray(rooms) ? rooms[id] : null;
+        if (!room || room.target < 0) continue;
+        const pad = Math.max(1, Math.floor(cellSize * 0.1));
+        // White stroke for legibility on dark/filled cells.
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 8));
+        ctx.strokeText(String(room.target), c * cellSize + pad, r * cellSize + pad);
+        ctx.fillStyle = '#1f2937';
+        ctx.fillText(String(room.target), c * cellSize + pad, r * cellSize + pad);
+      }
+    }
+
+    ctx.restore();
+  }
+
   function drawRegionBordersOn(ctx, rows, cols, cellSize, rm) {
     if (!rm) return;
     ctx.save();
@@ -2427,7 +2522,7 @@ function makeWidget() {
   }
 
   function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi') return;
+    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi' || pd?.type === 'heyawake') return;
     ctx.save();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -2709,6 +2804,20 @@ function makeWidget() {
           } else if (puzzleData?.type === 'galaxies' && v > 0) {
             ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
             ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+          } else if (puzzleData?.type === 'heyawake') {
+            // cellStatus 1 = black cell; 2 = white-marked (not black, confirmed
+            // empty). Render black as a solid dark fill; white-marker as a small
+            // grey dot at the cell centre so the player can see deduced empties.
+            if (v === 1) {
+              ctx.fillStyle = '#1f2937';
+              ctx.fillRect(x, y, cellSize, cellSize);
+            } else if (v === 2) {
+              const dotR = Math.max(2, Math.floor(cellSize * 0.15));
+              ctx.fillStyle = '#9ca3af';
+              ctx.beginPath();
+              ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
+              ctx.fill();
+            }
           } else if (v === 1) {
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(x, y, cellSize, cellSize);
@@ -2810,6 +2919,9 @@ function makeWidget() {
       } else if (puzzleData?.type === 'shikaku') {
         // Shikaku hints reveal a rectangle, not a row/column — skip the
         // band highlight; the per-cell loop below paints each hint cell.
+      } else if (puzzleData?.type === 'heyawake') {
+        // Heyawake hints are absolute cells (extraCells) — no row/column
+        // band; the per-cell loop below paints each hint cell.
       } else if (hint.type === 'hashi') {
         // Hashi hint edges are already merged into grid.edges by
         // applyHintToGrid and painted by the dynamic-bridges branch above.
@@ -2842,6 +2954,17 @@ function makeWidget() {
           const side = cellSize - 2 * inset;
           const sx = cx + inset, sy = cy + inset;
           ctx.fillStyle = cell.value === 1 ? '#fff' : '#1f2937';
+          ctx.fillRect(sx, sy, side, side);
+          ctx.strokeStyle = '#2e86de';
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+          ctx.strokeRect(sx, sy, side, side);
+        } else if (puzzleData?.type === 'heyawake' && (cell.value === 1 || cell.value === 2)) {
+          // Heyawake hint: value 1 = must be black (dark fill + blue ring),
+          // value 2 = must be white/empty (translucent overlay + blue ring).
+          const inset = Math.max(1, Math.floor(cellSize * 0.1));
+          const side = cellSize - 2 * inset;
+          const sx = cx + inset, sy = cy + inset;
+          ctx.fillStyle = cell.value === 1 ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255,255,255,0.5)';
           ctx.fillRect(sx, sy, side, side);
           ctx.strokeStyle = '#2e86de';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
