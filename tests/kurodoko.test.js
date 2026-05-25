@@ -99,3 +99,27 @@ test('KurodokoSolver._applyConnectivity: articulation unknown forced white', () 
   assert.equal(s._applyConnectivity(), true);
   assert.equal(s.cellStatus[4], 2);
 });
+
+test('KurodokoSolver._propagate: returns true on the recon 5x5', () => {
+  const s = new KurodokoSolver({
+    rows: 5, cols: 5,
+    task: [
+      [-1,-1,-1,6,-1],
+      [-1,4,-1,7,-1],
+      [-1,-1,-1,-1,-1],
+      [-1,5,-1,8,-1],
+      [-1,5,-1,-1,-1],
+    ],
+  });
+  assert.equal(s._propagate(), true);
+});
+
+test('KurodokoSolver._propagate: contradictory input', () => {
+  // 2x2 with clue=4 at (0,0): max visibility = 1 + 1 + 0 + 0 + 1 = 3 (self + right + down).
+  // K=4 impossible → contradiction.
+  const s = new KurodokoSolver({
+    rows: 2, cols: 2,
+    task: [[4,-1],[-1,-1]],
+  });
+  assert.equal(s._propagate(), false);
+});
