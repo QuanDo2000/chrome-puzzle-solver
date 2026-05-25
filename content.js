@@ -1660,6 +1660,20 @@ async function getHint(request = {}) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
       hint = { type: 'hitori', extraCells: hintCells, count: hintCells.length };
+    } else if (detectedGrid.type === 'kakurasu') {
+      if (solution && firstMismatch(grid, solution)) {
+        return { success: false, error: 'Current game state is wrong.' };
+      }
+      const solver = new KakurasuSolver({
+        rows, cols,
+        rowClues: detectedGrid.rowClues,
+        colClues: detectedGrid.colClues,
+      });
+      const hintCells = solver.getHint(grid);
+      if (!hintCells || hintCells.length === 0) {
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+      }
+      hint = { type: 'kakurasu', extraCells: hintCells, count: hintCells.length };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1951,6 +1965,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...heyawakeHintStatusNodes(h));
     } else if (puzzleData?.type === 'hitori') {
       setStatusNodes('info', prefix, ...hitoriHintStatusNodes(h));
+    } else if (puzzleData?.type === 'kakurasu') {
+      setStatusNodes('info', prefix, ...kakurasuHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -1998,6 +2014,22 @@ function makeWidget() {
     if (cells.length === 1) {
       const cell = cells[0];
       const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
+      return [
+        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
+        ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(cells.length)), ' cells can be deduced'];
+  }
+
+  // Kakurasu hints carry absolute cells in extraCells.
+  // cellStatus 1 = filled (black), 2 = empty (white).
+  function kakurasuHintStatusNodes(h) {
+    const cells = h.extraCells || [];
+    if (cells.length === 0) return ['No hint available'];
+    if (cells.length === 1) {
+      const cell = cells[0];
+      const valueStr = cell.value === 1 ? 'filled' : 'empty';
       return [
         'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
         ' must be ', bold(valueStr),
@@ -3420,6 +3452,10 @@ function makeWidget() {
         applyGridPartialResult(result);
         return;
       }
+      if (result?.partial && puzzleData?.type === 'kakurasu' && Array.isArray(result.grid)) {
+        applyGridPartialResult(result);
+        return;
+      }
       if (result?.partialGrid) {
         cachePartial(puzzleData, result.partialGrid, result.partialFilled);
       } else if (result?.error === 'partial state exhausted') {
@@ -3799,7 +3835,7 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && !hr.hint?.cells?.length) break;
+      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // getHint may lazily solve as a fallback (galaxies + aquarium);
