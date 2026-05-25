@@ -11280,7 +11280,6 @@ class NurikabeSolver {
   _shapeIsValid(clue) {
     const cols = this.cols, rows = this.rows;
     const inShape = this._shapeInShape;
-    const isWall = this.isWall;
     const cellStatus = this.cellStatus;
     const claimedBy = this._claimedBy;
     const stack = this._shapeStack;
@@ -11291,69 +11290,21 @@ class NurikabeSolver {
       const idx = stack[s];
       const r = (idx / cols) | 0;
       const c = idx - r * cols;
-      if (cellStatus[idx] === 0) {
-        const check = (ni) => {
-          if (cellStatus[ni] === 2 && claimedBy[ni] !== -1 && claimedBy[ni] !== clue.idx) {
-            return false;
-          }
-          return true;
-        };
-        if (r > 0 && !check(idx - cols)) return false;
-        if (r < rows - 1 && !check(idx + cols)) return false;
-        if (c > 0 && !check(idx - 1)) return false;
-        if (c < cols - 1 && !check(idx + 1)) return false;
-      }
-    }
-    const wouldBlack = this._bfsVisited;
-    wouldBlack.fill(0);
-    for (let s = 0; s < stackTop; s++) {
-      const idx = stack[s];
-      const r = (idx / cols) | 0;
-      const c = idx - r * cols;
-      const addB = (ni) => {
-        if (inShape[ni]) return;
-        if (isWall[ni]) return;
-        if (cellStatus[ni] === 0) wouldBlack[ni] = 1;
-      };
-      if (r > 0) addB(idx - cols);
-      if (r < rows - 1) addB(idx + cols);
-      if (c > 0) addB(idx - 1);
-      if (c < cols - 1) addB(idx + 1);
-    }
-    let minR = rows, minC = cols, maxR = -1, maxC = -1;
-    for (let s = 0; s < stackTop; s++) {
-      const idx = stack[s];
-      const r = (idx / cols) | 0;
-      const c = idx - r * cols;
-      if (r < minR) minR = r;
-      if (r > maxR) maxR = r;
-      if (c < minC) minC = c;
-      if (c > maxC) maxC = c;
-    }
-    const r0 = Math.max(0, minR - 1);
-    const c0 = Math.max(0, minC - 1);
-    const r1 = Math.min(rows - 2, maxR);
-    const c1 = Math.min(cols - 2, maxC);
-    for (let r = r0; r <= r1; r++) {
-      for (let c = c0; c <= c1; c++) {
-        const a = r * cols + c;
-        const b = a + 1;
-        const d = a + cols;
-        const e = d + 1;
-        const isBlack = (ii) => {
-          if (inShape[ii]) return false;
-          if (isWall[ii]) return false;
-          if (cellStatus[ii] === 1) return true;
-          if (wouldBlack[ii]) return true;
-          return false;
-        };
-        if (isBlack(a) && isBlack(b) && isBlack(d) && isBlack(e)) {
-          wouldBlack.fill(0);
+      if (cellStatus[idx] !== 0) continue;
+      // No-merge: an UNKNOWN cell in the shape may not be 4-adjacent to a
+      // WHITE cell claimed by a different clue (placing this cell WHITE
+      // would extend our island into the other clue's component).
+      const check = (ni) => {
+        if (cellStatus[ni] === 2 && claimedBy[ni] !== -1 && claimedBy[ni] !== clue.idx) {
           return false;
         }
-      }
+        return true;
+      };
+      if (r > 0 && !check(idx - cols)) return false;
+      if (r < rows - 1 && !check(idx + cols)) return false;
+      if (c > 0 && !check(idx - 1)) return false;
+      if (c < cols - 1 && !check(idx + 1)) return false;
     }
-    wouldBlack.fill(0);
     return true;
   }
 
@@ -11365,13 +11316,21 @@ class NurikabeSolver {
     this._dirtyShape = false;
     const couldBeWhite = this._shapeCouldBeWhite;
     couldBeWhite.fill(0);
-    for (const clue of this.clues) {
+    // Track which clues contribute usable cross-exclusion signal. A clue
+    // is "useful" iff size ≤ cap AND its enumeration did NOT hit the
+    // per-clue shape cap. Capped / oversized clues have an incomplete (or
+    // empty) catalog, so we must NOT exclude cells in their Manhattan
+    // reach from couldBeWhite — doing so would force them BLACK unsoundly.
+    const clueUseful = new Uint8Array(this.clues.length);
+    for (let ci = 0; ci < this.clues.length; ci++) {
+      const clue = this.clues[ci];
       if (this._timeUp()) return true;
       if (clue.size > NurikabeSolver.MAX_ENUMERATED_CLUE_SIZE) continue;
       const { count, capped, infeasible } = this._enumerateClueShapes(clue);
       if (capped) continue;
       if (infeasible) return false;
       if (count === 0) continue;
+      clueUseful[ci] = 1;
       for (let i = 0; i < this.N; i++) {
         if (this._shapeInAll[i] && this.cellStatus[i] === 0) {
           if (!this._set(i, 2)) return false;
@@ -11390,23 +11349,28 @@ class NurikabeSolver {
       if (this.isWall[i]) continue;
       if (!reachUnion[i]) continue;
       if (couldBeWhite[i]) continue;
-      // Skip when the cell is only in the reach of clues we couldn't
-      // enumerate (over MAX_ENUMERATED_CLUE_SIZE). For those, our shape
-      // catalog is empty, so couldBeWhite is empty by construction even
-      // though the cell could legitimately end up WHITE.
-      let hasReachableEnumerable = false;
       const r = (i / this.cols) | 0;
       const c = i - r * this.cols;
-      for (const clue of this.clues) {
-        if (clue.size > NurikabeSolver.MAX_ENUMERATED_CLUE_SIZE) continue;
+      // Force BLACK only if every clue whose Manhattan reach includes this
+      // cell contributed usable cross-exclusion signal. If any
+      // unenumerable or capped clue can reach the cell, its shape catalog
+      // is empty or incomplete, so we can't conclude the cell isn't in
+      // its island.
+      let hasReachableUseful = false;
+      let hasReachableUnusable = false;
+      for (let cj = 0; cj < this.clues.length; cj++) {
+        const clue = this.clues[cj];
         const cr = (clue.idx / this.cols) | 0;
         const cc = clue.idx - cr * this.cols;
-        if (Math.abs(cr - r) + Math.abs(cc - c) <= clue.size - 1) {
-          hasReachableEnumerable = true;
+        if (Math.abs(cr - r) + Math.abs(cc - c) > clue.size - 1) continue;
+        if (!clueUseful[cj]) {
+          hasReachableUnusable = true;
           break;
         }
+        hasReachableUseful = true;
       }
-      if (!hasReachableEnumerable) continue;
+      if (hasReachableUnusable) continue;
+      if (!hasReachableUseful) continue;
       if (!this._set(i, 1)) return false;
     }
     return true;
