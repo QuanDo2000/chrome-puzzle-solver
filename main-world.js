@@ -1273,6 +1273,74 @@ function applyMosaicState(grid) {
   }
 }
 
+function readNorinoriData() {
+  try {
+    var G = window.Game;
+    if (!G || !G.areas || !G.areaPoints) return null;
+    if (!G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth;
+    var areas = [];
+    for (var r = 0; r < rows; r++) {
+      var row = G.areas[r] || [];
+      var arr = new Array(cols);
+      for (var c = 0; c < cols; c++) arr[c] = row[c] || 0;
+      areas.push(arr);
+    }
+    var rooms = [];
+    for (var k = 0; k < G.areaPoints.length; k++) {
+      var pts = G.areaPoints[k] || [];
+      var cells = [];
+      for (var i = 0; i < pts.length; i++) {
+        cells.push({r: pts[i].row, c: pts[i].col});
+      }
+      rooms.push({cells: cells});
+    }
+    return { rows: rows, cols: cols, areas: areas, rooms: rooms };
+  } catch (e) {
+    return null;
+  }
+}
+
+function readNorinoriState(rows, cols) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return null;
+    var cs = G.currentState.cellStatus;
+    var grid = [];
+    for (var r = 0; r < rows; r++) {
+      var row = cs[r] || [];
+      var arr = new Array(cols);
+      for (var c = 0; c < cols; c++) arr[c] = row[c] || 0;
+      grid.push(arr);
+    }
+    return grid;
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyNorinoriState(grid) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    var cs = G.currentState.cellStatus;
+    for (var r = 0; r < grid.length; r++) {
+      if (!cs[r]) cs[r] = [];
+      for (var c = 0; c < grid[r].length; c++) {
+        cs[r][c] = grid[r][c];
+      }
+    }
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    if (typeof G.render === 'function') G.render();
+    if (typeof G.redraw === 'function') G.redraw();
+    return true;
+  } catch (e) {
+    console.warn('Norinori apply failed:', e);
+    return false;
+  }
+}
+
 function readHeyawakeData() {
   try {
     var G = window.Game;

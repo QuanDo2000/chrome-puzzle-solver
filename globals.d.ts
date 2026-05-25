@@ -23,6 +23,7 @@ declare const HitoriSolver: any;
 declare const KakurasuSolver: any;
 declare const KurodokoSolver: any;
 declare const MosaicSolver: any;
+declare const NorinoriSolver: any;
 
 // Helpers from handler.js.
 // MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in
@@ -65,6 +66,9 @@ type MainWorldFn =
   | 'readMosaicData'
   | 'readMosaicState'
   | 'applyMosaicState'
+  | 'readNorinoriData'
+  | 'readNorinoriState'
+  | 'applyNorinoriState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
