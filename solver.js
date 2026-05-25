@@ -11233,6 +11233,58 @@ class NurikabeSolver {
     return true;
   }
 
+  _applyFrontierForce() {
+    const visited = this._bfsVisited;
+    const queue = this._bfsQueue;
+    const claimedBy = this._claimedBy;
+    const isWall = this.isWall;
+    const cellStatus = this.cellStatus;
+    const task = this.task;
+    const cols = this.cols, rows = this.rows;
+    for (const clue of this.clues) {
+      visited.fill(0);
+      let qHead = 0, qTail = 0;
+      visited[clue.idx] = 1;
+      queue[qTail++] = clue.idx;
+      let size = 1;
+      let frontierCount = 0;
+      let frontierIdx = -1;
+      while (qHead < qTail) {
+        const idx = queue[qHead++];
+        const r = (idx / cols) | 0;
+        const c = idx - r * cols;
+        const visitN = (ni) => {
+          if (visited[ni]) return;
+          if (isWall[ni]) return;
+          const v = cellStatus[ni];
+          if (v === 1) return;
+          if (task[ni] > 0 && ni !== clue.idx) return;
+          const o = claimedBy[ni];
+          if (o !== -1 && o !== clue.idx) return;
+          if (v === 2) {
+            visited[ni] = 1;
+            size++;
+            queue[qTail++] = ni;
+          } else {
+            visited[ni] = 2;
+            if (frontierCount === 0) frontierIdx = ni;
+            frontierCount++;
+          }
+        };
+        if (r > 0) visitN(idx - cols);
+        if (r < rows - 1) visitN(idx + cols);
+        if (c > 0) visitN(idx - 1);
+        if (c < cols - 1) visitN(idx + 1);
+      }
+      if (size >= clue.size) continue;
+      if (frontierCount === 0) return false;
+      if (frontierCount === 1) {
+        if (!this._set(frontierIdx, 2)) return false;
+      }
+    }
+    return true;
+  }
+
   _applySeaConnectivity() {
     if (this._inLookahead) return true;
     let firstBlack = -1, blackCount = 0;
@@ -11300,6 +11352,7 @@ class NurikabeSolver {
       if (!this._applyClueAdjacency()) return false;
       if (!this._buildClaimedBy()) return false;
       if (!this._applyIslandMerge()) return false;
+      if (!this._applyFrontierForce()) return false;
       if (!this._applyUnreachable()) return false;
       if (!this._applyIslandComplete()) return false;
       if (!this._apply2x2()) return false;
@@ -11492,6 +11545,7 @@ class NurikabeSolver {
     const rules = [
       () => this._applyClueAdjacency(),
       () => { return this._buildClaimedBy() && this._applyIslandMerge(); },
+      () => this._applyFrontierForce(),
       () => this._applyUnreachable(),
       () => this._applyIslandComplete(),
       () => this._apply2x2(),

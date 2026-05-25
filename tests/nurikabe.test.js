@@ -325,3 +325,35 @@ test('NurikabeSolver: walls block BFS reach', () => {
   });
   assert.equal(s.contradiction, true);
 });
+
+test('NurikabeSolver._applyFrontierForce: single frontier cell forces WHITE', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 4,
+    task: [[2, -1, -1, -1]],
+    initialState: [[2, 0, 1, 0]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyFrontierForce(), true);
+  assert.equal(s.cellStatus[1], 2);
+});
+
+test('NurikabeSolver._applyFrontierForce: empty frontier with unfinished island → contradiction', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[2, -1, -1]],
+    initialState: [[2, 1, 0]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyFrontierForce(), false);
+});
+
+test('NurikabeSolver._applyFrontierForce: multiple frontier cells → no forcing', () => {
+  const s = new NurikabeSolver({
+    rows: 2, cols: 2,
+    task: [[2, -1], [-1, -1]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyFrontierForce(), true);
+  assert.equal(s.cellStatus[1], 0);
+  assert.equal(s.cellStatus[2], 0);
+});
