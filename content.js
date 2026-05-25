@@ -968,7 +968,7 @@ function solveExtraData() {
 //     localStorage quota (~5 MB per origin).
 const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SOLUTION_CACHE_MAX = 50;
-const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:', 'hashi-solution:'];
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:', 'hashi-solution:', 'heyawake-solution:'];
 
 function isSolutionCacheKey(key) {
   return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
@@ -1655,6 +1655,7 @@ const SUPPORTED_PUZZLES = [
   { name: 'Binairo Plus', url: 'https://www.puzzles-mobile.com/binairo-plus/' },
   { name: 'Galaxies',     url: 'https://www.puzzles-mobile.com/galaxies/' },
   { name: 'Hashi',        url: 'https://www.puzzles-mobile.com/hashi/' },
+  { name: 'Heyawake',    url: 'https://www.puzzles-mobile.com/heyawake/' },
   { name: 'Nonogram',     url: 'https://www.puzzles-mobile.com/nonograms/' },
   { name: 'Shikaku',      url: 'https://www.puzzles-mobile.com/shikaku/' },
   { name: 'Slitherlink',  url: 'https://www.puzzles-mobile.com/loop/' },
@@ -2147,6 +2148,18 @@ function makeWidget() {
     return (h >>> 0).toString(36);
   }
 
+  // Room-boundary (areas) stable signature for the heyawake static layer.
+  function heyawakeAreasSig(areas) {
+    if (!Array.isArray(areas) || areas.length === 0) return '0';
+    let h = 0x811c9dc5;
+    for (const row of areas) {
+      for (const v of row) {
+        h ^= (v + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+      }
+    }
+    return (h >>> 0).toString(36);
+  }
+
   function gridDataSig(grid) {
     // Hashi grids: { edges: [...] }. No 2D state — bridges encode everything
     // visible. (No .horizontal/.vertical, so test before the slitherlink arm.)
@@ -2492,7 +2505,8 @@ function makeWidget() {
                       '|cc=' + comparisonCluesSig(pd?.comparisonClues) +
                       '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
-                      '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null);
+                      '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
+                      '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
       staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
@@ -3557,7 +3571,7 @@ function makeWidget() {
     // on pendingAutoSolve — on hard 30×30 dailies that solve can take >30 s,
     // while the propagation hint returns in ~1 ms. Other puzzle types still
     // need the cached solution for mistake comparison.
-    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi';
+    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi' || puzzleData.type === 'heyawake';
     if (!skipAutoSolveGate && !puzzleData.solution && pendingAutoSolve) {
       setStatus('Solving...', 'info');
       await pendingAutoSolve;
