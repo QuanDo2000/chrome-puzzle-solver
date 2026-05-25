@@ -1352,7 +1352,10 @@ function readNurikabeData() {
       var arr = new Array(cols);
       for (var c = 0; c < cols; c++) {
         var v = row[c];
-        arr[c] = (typeof v === 'number' && v >= 0) ? v : -1;
+        // -2 marks a wall (cell removed from board); -1 is a regular blank;
+        // positive ints are clue values. Preserve all three.
+        if (typeof v === 'number' && v >= -2) arr[c] = v;
+        else arr[c] = -1;
       }
       task.push(arr);
     }
@@ -1391,7 +1394,9 @@ function applyNurikabeState(grid) {
       if (!cs[r]) cs[r] = [];
       for (var c = 0; c < cols; c++) {
         var t = (G.task[r] && G.task[r][c] !== undefined) ? G.task[r][c] : -1;
-        if (typeof t === 'number' && t > 0) continue;
+        // Skip clue cells (page renders them separately) and wall cells
+        // (off-board; the page treats them as inert).
+        if (typeof t === 'number' && (t > 0 || t === -2)) continue;
         cs[r][c] = grid[r][c];
       }
     }
@@ -1823,7 +1828,9 @@ function dumpPuzzleForBench() {
         var nkDst = new Array(nkCols);
         for (var nkc = 0; nkc < nkCols; nkc++) {
           var nkv = nkSrc[nkc];
-          nkDst[nkc] = (typeof nkv === 'number' && nkv >= 0) ? nkv : -1;
+          // -2 = wall (out of board), -1 = blank, positive = clue. Preserve all.
+          if (typeof nkv === 'number' && nkv >= -2) nkDst[nkc] = nkv;
+          else nkDst[nkc] = -1;
         }
         nkTask.push(nkDst);
       }

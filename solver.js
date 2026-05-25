@@ -10728,13 +10728,21 @@ class NurikabeSolver {
         this.task[r * cols + c] = task[r][c];
       }
     }
+    // task[i]: positive = clue value; -1 = blank cell; -2 = wall (cell not
+    // on the board, treated as a permanent blocker for BFS, never counted
+    // toward black totals or 2x2 violations).
+    this.isWall = new Uint8Array(this.N);
+    let wallCount = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (this.task[i] === -2) { this.isWall[i] = 1; wallCount++; }
+    }
     this.clues = [];
     let sum = 0;
     for (let i = 0; i < this.N; i++) {
       const v = this.task[i];
       if (v > 0) { this.clues.push({ idx: i, size: v }); sum += v; }
     }
-    this.expectedBlacks = this.N - sum;
+    this.expectedBlacks = this.N - wallCount - sum;
     this.cellStatus = new Uint8Array(this.N);
     if (initialState) {
       for (let r = 0; r < rows; r++) {
@@ -10793,6 +10801,7 @@ class NurikabeSolver {
       if (c < this.cols - 1) ns.push(idx + 1);
       for (const ni of ns) {
         if (visited[ni]) continue;
+        if (this.isWall[ni]) continue;
         if (this.cellStatus[ni] === 1) continue;
         if (ni !== startIdx && this.task[ni] > 0) continue;
         visited[ni] = 1;
@@ -10829,6 +10838,7 @@ class NurikabeSolver {
 
   _applyClueAdjacency() {
     for (let i = 0; i < this.N; i++) {
+      if (this.isWall[i]) continue;
       if (this.cellStatus[i] !== 0) continue;
       const r = (i / this.cols) | 0;
       const c = i - r * this.cols;
@@ -10862,6 +10872,7 @@ class NurikabeSolver {
         if (c < this.cols - 1) ns.push(idx + 1);
         for (const ni of ns) {
           if (reach[ni]) continue;
+          if (this.isWall[ni]) continue;
           if (this.cellStatus[ni] === 1) continue;
           if (ni !== clue.idx && this.task[ni] > 0) continue;
           reach[ni] = 1;
@@ -10881,6 +10892,7 @@ class NurikabeSolver {
       for (let i = 0; i < this.N; i++) if (r[i]) union[i] = 1;
     }
     for (let i = 0; i < this.N; i++) {
+      if (this.isWall[i]) continue;
       if (this.cellStatus[i] !== 0) continue;
       if (!union[i]) {
         if (!this._set(i, 1)) return false;
@@ -10907,6 +10919,7 @@ class NurikabeSolver {
       if (c < this.cols - 1) ns.push(idx + 1);
       for (const ni of ns) {
         if (members[ni]) continue;
+        if (this.isWall[ni]) continue;
         const v = this.cellStatus[ni];
         if (v === 1) continue;
         if (this.task[ni] > 0 && ni !== startIdx) continue;
@@ -10945,6 +10958,7 @@ class NurikabeSolver {
       if (c < this.cols - 1) ns.push(idx + 1);
       for (const ni of ns) {
         if (visited[ni]) continue;
+        if (this.isWall[ni]) continue;
         const v = this.cellStatus[ni];
         if (v === 1) continue;
         if (this.task[ni] > 0 && ni !== startIdx) continue;
@@ -10986,6 +11000,11 @@ class NurikabeSolver {
       for (let c = 0; c + 1 < this.cols; c++) {
         const a = r * this.cols + c;
         const cells = [a, a + 1, a + this.cols, a + this.cols + 1];
+        // Any wall in the 2x2 disables the constraint (the rule requires 4
+        // black on-board cells; walls are off-board).
+        let hasWall = false;
+        for (const ci of cells) if (this.isWall[ci]) { hasWall = true; break; }
+        if (hasWall) continue;
         let nB = 0, nU = 0;
         for (const ci of cells) {
           if (this.cellStatus[ci] === 1) nB++;
@@ -11007,6 +11026,7 @@ class NurikabeSolver {
   _applyBlackCount() {
     let nB = 0, nU = 0;
     for (let i = 0; i < this.N; i++) {
+      if (this.isWall[i]) continue;
       if (this.cellStatus[i] === 1) nB++;
       else if (this.cellStatus[i] === 0) nU++;
     }
@@ -11014,12 +11034,14 @@ class NurikabeSolver {
     if (nB + nU < this.expectedBlacks) return false;
     if (nB === this.expectedBlacks && nU > 0) {
       for (let i = 0; i < this.N; i++) {
+        if (this.isWall[i]) continue;
         if (this.cellStatus[i] === 0) {
           if (!this._set(i, 2)) return false;
         }
       }
     } else if (nB + nU === this.expectedBlacks && nU > 0) {
       for (let i = 0; i < this.N; i++) {
+        if (this.isWall[i]) continue;
         if (this.cellStatus[i] === 0) {
           if (!this._set(i, 1)) return false;
         }
@@ -11047,6 +11069,7 @@ class NurikabeSolver {
       if (c < this.cols - 1) ns.push(idx + 1);
       for (const ni of ns) {
         if (visited[ni]) continue;
+        if (this.isWall[ni]) continue;
         const v = this.cellStatus[ni];
         if (v === 2) continue;
         visited[ni] = 1;
@@ -11083,6 +11106,7 @@ class NurikabeSolver {
       if (this._timeUp()) return true;
       changed = false;
       for (let i = 0; i < this.N; i++) {
+        if (this.isWall[i]) continue;
         if (this.cellStatus[i] !== 0) continue;
         const survivors = [];
         for (const v of [1, 2]) {
@@ -11109,7 +11133,10 @@ class NurikabeSolver {
   }
 
   _isComplete() {
-    for (let i = 0; i < this.N; i++) if (this.cellStatus[i] === 0) return false;
+    for (let i = 0; i < this.N; i++) {
+      if (this.isWall[i]) continue;
+      if (this.cellStatus[i] === 0) return false;
+    }
     return true;
   }
 
@@ -11126,14 +11153,15 @@ class NurikabeSolver {
   _pickBestUnknown() {
     let bestIdx = -1, bestScore = -1;
     for (let i = 0; i < this.N; i++) {
+      if (this.isWall[i]) continue;
       if (this.cellStatus[i] !== 0) continue;
       const r = (i / this.cols) | 0;
       const c = i - r * this.cols;
       let score = 0;
-      if (r > 0 && this.cellStatus[i - this.cols] !== 0) score++;
-      if (r < this.rows - 1 && this.cellStatus[i + this.cols] !== 0) score++;
-      if (c > 0 && this.cellStatus[i - 1] !== 0) score++;
-      if (c < this.cols - 1 && this.cellStatus[i + 1] !== 0) score++;
+      if (r > 0 && (this.isWall[i - this.cols] || this.cellStatus[i - this.cols] !== 0)) score++;
+      if (r < this.rows - 1 && (this.isWall[i + this.cols] || this.cellStatus[i + this.cols] !== 0)) score++;
+      if (c > 0 && (this.isWall[i - 1] || this.cellStatus[i - 1] !== 0)) score++;
+      if (c < this.cols - 1 && (this.isWall[i + 1] || this.cellStatus[i + 1] !== 0)) score++;
       if (score > bestScore) { bestScore = score; bestIdx = i; }
     }
     return bestIdx;
@@ -11263,6 +11291,7 @@ class NurikabeSolver {
     }
 
     for (let i = 0; i < this.N; i++) {
+      if (this.isWall[i]) continue;
       if (this.cellStatus[i] !== 0) continue;
       const survivors = [];
       for (const v of [1, 2]) {

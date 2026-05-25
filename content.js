@@ -3387,9 +3387,10 @@ function makeWidget() {
             }
           } else if (isNurikabe) {
             // Skip clue cells — page renders them as their own DOM node.
+            // Skip wall cells (task === -2) — off-board, page renders them inert.
             const taskVal = puzzleData?.task?.[r]?.[c];
-            if (typeof taskVal === 'number' && taskVal > 0) {
-              // leave page's clue cell visible
+            if (typeof taskVal === 'number' && (taskVal > 0 || taskVal === -2)) {
+              // leave page's clue/wall cell visible (no overdraw)
             } else if (v === 1) {
               const pad = Math.max(2, Math.floor(cellSize * 0.1));
               ctx.fillStyle = '#1f2937';

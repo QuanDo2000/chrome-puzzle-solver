@@ -288,3 +288,40 @@ test('NurikabeSolver.getHint: null on already-solved board', () => {
   });
   assert.equal(s.getHint([[2, 2]]), null);
 });
+
+test('NurikabeSolver: wall cells (task=-2) are off-board, excluded from expectedBlacks', () => {
+  // 2x2: top-left clue size 2, top-right wall, bottom both blank.
+  // Board cells: 3 (excluding the wall). Clue value = 2. So expectedBlacks = 3 - 2 = 1.
+  const s = new NurikabeSolver({
+    rows: 2, cols: 2,
+    task: [[2, -2], [-1, -1]],
+  });
+  assert.equal(s.contradiction, false);
+  assert.equal(s.isWall[1], 1);
+  assert.equal(s.isWall[0], 0);
+  assert.equal(s.expectedBlacks, 1);
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  // Wall stays 0; clue stays WHITE; one more WHITE; one BLACK.
+  assert.equal(r.grid[0][1], 0);
+});
+
+test('NurikabeSolver: walls disable 2x2 black violation', () => {
+  // 2x2 with a wall at top-right. Force the other 3 cells BLACK — shouldn't be a violation.
+  const s = new NurikabeSolver({
+    rows: 2, cols: 2,
+    task: [[-1, -2], [-1, -1]],
+    initialState: [[1, 0], [1, 1]],
+  });
+  assert.equal(s._apply2x2(), true);
+});
+
+test('NurikabeSolver: walls block BFS reach', () => {
+  // 1x4 with clue 2 at (0,0), wall at (0,1), blanks at (0,2)(0,3).
+  // Clue's reach = just itself (wall blocks). Capacity < 2 → contradiction.
+  const s = new NurikabeSolver({
+    rows: 1, cols: 4,
+    task: [[2, -2, -1, -1]],
+  });
+  assert.equal(s.contradiction, true);
+});
