@@ -4,7 +4,7 @@
 // For each puzzle, runs 5 solves, reports min / median / max plus solver type,
 // solved flag, and search-node count where applicable.
 
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver } = require('../solver.js');
 const fixtures = require('./fixtures/real-puzzles.js');
 
 function heyawakeRoomsFromFixture(p) {
@@ -52,6 +52,7 @@ function buildSolver(p) {
     const rooms = Object.keys(cellsByRoom).sort((a, b) => +a - +b).map(k => ({ cells: cellsByRoom[k] }));
     return new NorinoriSolver({ rows: p.rows, cols: p.cols, rooms });
   }
+  if (p.type === 'nurikabe') return new NurikabeSolver({ rows: p.rows, cols: p.cols, task: p.task });
   return null;
 }
 
@@ -72,6 +73,7 @@ for (const name of Object.keys(fixtures)) {
     KurodokoSolver.clearSolutionCache();
     MosaicSolver.clearSolutionCache();
     NorinoriSolver.clearSolutionCache();
+    NurikabeSolver.clearSolutionCache();
     buildSolver(p).solve(null);
   }
   const times = [];
@@ -90,6 +92,7 @@ for (const name of Object.keys(fixtures)) {
     KurodokoSolver.clearSolutionCache();
     MosaicSolver.clearSolutionCache();
     NorinoriSolver.clearSolutionCache();
+    NurikabeSolver.clearSolutionCache();
     const s = buildSolver(p);
     const t0 = process.hrtime.bigint();
     const r = s.solve(null);

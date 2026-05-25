@@ -1812,6 +1812,41 @@ function dumpPuzzleForBench() {
       };
     }
 
+    if (path.indexOf('/nurikabe/') !== -1 || g.slug === 'nurikabe') {
+      if (!g.task || !g.puzzleWidth || !g.puzzleHeight) {
+        return { error: 'nurikabe: missing task/dims', diagnostic: diagnostic(g), path: path };
+      }
+      var nkRows = g.puzzleHeight, nkCols = g.puzzleWidth;
+      var nkTask = [];
+      for (var nkr = 0; nkr < nkRows; nkr++) {
+        var nkSrc = g.task[nkr] || [];
+        var nkDst = new Array(nkCols);
+        for (var nkc = 0; nkc < nkCols; nkc++) {
+          var nkv = nkSrc[nkc];
+          nkDst[nkc] = (typeof nkv === 'number' && nkv >= 0) ? nkv : -1;
+        }
+        nkTask.push(nkDst);
+      }
+      var nkCellStatus = null;
+      if (g.currentState && g.currentState.cellStatus) {
+        nkCellStatus = [];
+        for (var nkcr = 0; nkcr < nkRows; nkcr++) {
+          var nkcsRow = g.currentState.cellStatus[nkcr] || [];
+          var nkcsOut = new Array(nkCols);
+          for (var nkcc = 0; nkcc < nkCols; nkcc++) nkcsOut[nkcc] = nkcsRow[nkcc] || 0;
+          nkCellStatus.push(nkcsOut);
+        }
+      }
+      return {
+        type: 'nurikabe',
+        rows: nkRows,
+        cols: nkCols,
+        task: nkTask,
+        cellStatus: nkCellStatus,
+        path: path,
+      };
+    }
+
     // Hashi: islands list, no grid clues. g.task is a flat array of island
     // descriptors, not a 2D grid — must come before any generic-fallback
     // 2D-grid path or the shape-walkers below will trip on it.
