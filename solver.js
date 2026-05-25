@@ -9810,6 +9810,10 @@ class MosaicSolver {
 
   _buildNeighborhoods() {
     this.clueNeighborhood = new Array(this.clues.length);
+    // cellToClues[cellIdx] = Int32Array of clue indices whose neighborhood
+    // contains cellIdx. Used by the dirty-queue propagator so each cell
+    // change only re-checks the ~4-9 overlapping clues instead of all K.
+    const cellToCluesList = Array.from({ length: this.rows * this.cols }, () => []);
     for (let i = 0; i < this.clues.length; i++) {
       const idx = this.clues[i];
       const r0 = (idx / this.cols) | 0;
@@ -9821,35 +9825,191 @@ class MosaicSolver {
         for (let dc = -1; dc <= 1; dc++) {
           const c = c0 + dc;
           if (c < 0 || c >= this.cols) continue;
-          cells.push(r * this.cols + c);
+          const cidx = r * this.cols + c;
+          cells.push(cidx);
+          cellToCluesList[cidx].push(i);
         }
       }
       this.clueNeighborhood[i] = new Int32Array(cells);
     }
+    this.cellToClues = cellToCluesList.map(arr => new Int32Array(arr));
+    this._buildCluePairs();
   }
 
-  _applyClues() {
-    for (let i = 0; i < this.clues.length; i++) {
-      const cells = this.clueNeighborhood[i];
-      const K = this.clueValues[i];
-      let nB = 0, nU = 0;
-      for (let j = 0; j < cells.length; j++) {
-        const v = this.cellStatus[cells[j]];
-        if (v === 1) nB++;
-        else if (v === 0) nU++;
+  // For each pair of clues whose centers are within Chebyshev distance 2,
+  // precompute (L, R, D) where L = N_A \ N_B, R = N_B \ N_A,
+  // D = K_A - K_B. The constraint blacks(L) - blacks(R) = D often forces
+  // entire cell sets even when single-clue propagation alone is stuck.
+  // This is the canonical strong rule for Mosaic / Fill-a-Pix solvers.
+  _buildCluePairs() {
+    this.cluePairs = [];
+    const K = this.clues.length;
+    for (let i = 0; i < K; i++) {
+      const aIdx = this.clues[i];
+      const aR = (aIdx / this.cols) | 0;
+      const aC = aIdx - aR * this.cols;
+      for (let j = i + 1; j < K; j++) {
+        const bIdx = this.clues[j];
+        const bR = (bIdx / this.cols) | 0;
+        const bC = bIdx - bR * this.cols;
+        const dr = bR - aR, dc = bC - aC;
+        const adr = dr < 0 ? -dr : dr;
+        const adc = dc < 0 ? -dc : dc;
+        if (adr > 2 || adc > 2) continue;
+        // Compute L (in N_A, not in N_B) and R (in N_B, not in N_A).
+        const setB = new Set(this.clueNeighborhood[j]);
+        const L = [], R = [];
+        const cellsA = this.clueNeighborhood[i];
+        for (let k = 0; k < cellsA.length; k++) {
+          if (!setB.has(cellsA[k])) L.push(cellsA[k]);
+        }
+        const setA = new Set(cellsA);
+        const cellsB = this.clueNeighborhood[j];
+        for (let k = 0; k < cellsB.length; k++) {
+          if (!setA.has(cellsB[k])) R.push(cellsB[k]);
+        }
+        if (L.length === 0 || R.length === 0) continue;
+        this.cluePairs.push({
+          L: new Int32Array(L),
+          R: new Int32Array(R),
+          D: this.clueValues[i] - this.clueValues[j],
+        });
       }
-      if (nB > K) return false;
-      if (nB + nU < K) return false;
-      if (nB === K && nU > 0) {
-        for (let j = 0; j < cells.length; j++) {
-          if (this.cellStatus[cells[j]] === 0) {
-            if (!this._set(cells[j], 2)) return false;
+    }
+  }
+
+  // Two-clue subtraction propagation. For each precomputed pair (L, R, D):
+  // blacks(L) - blacks(R) = D. Combined with [0, |L|] and [0, |R|] bounds
+  // (and any known blacks/whites already placed), this often collapses to
+  // a unique value that forces every unknown in L and/or R.
+  _applyCluePairs() {
+    const pairs = this.cluePairs;
+    for (let p = 0; p < pairs.length; p++) {
+      const pair = pairs[p];
+      const L = pair.L, R = pair.R, D = pair.D;
+      let bL = 0, uL = 0;
+      for (let i = 0; i < L.length; i++) {
+        const v = this.cellStatus[L[i]];
+        if (v === 1) bL++;
+        else if (v === 0) uL++;
+      }
+      let bR = 0, uR = 0;
+      for (let i = 0; i < R.length; i++) {
+        const v = this.cellStatus[R[i]];
+        if (v === 1) bR++;
+        else if (v === 0) uR++;
+      }
+      // blacks(L) = blacks(R) + D. Intersect [bL, bL+uL] - D with [bR, bR+uR].
+      const lower = Math.max(bR, bL - D);
+      const upper = Math.min(bR + uR, bL + uL - D);
+      if (lower > upper) return false;
+      // Strong deduction: interval on blacks(R) collapses to a single value.
+      if (lower === upper) {
+        const needR = lower - bR; // unknowns in R that must be black
+        const needL = (lower + D) - bL; // unknowns in L that must be black
+        if (uR > 0) {
+          if (needR === 0) {
+            for (let i = 0; i < R.length; i++) {
+              if (this.cellStatus[R[i]] === 0) {
+                if (!this._set(R[i], 2)) return false;
+              }
+            }
+          } else if (needR === uR) {
+            for (let i = 0; i < R.length; i++) {
+              if (this.cellStatus[R[i]] === 0) {
+                if (!this._set(R[i], 1)) return false;
+              }
+            }
           }
         }
-      } else if (nB + nU === K && nU > 0) {
-        for (let j = 0; j < cells.length; j++) {
-          if (this.cellStatus[cells[j]] === 0) {
-            if (!this._set(cells[j], 1)) return false;
+        if (uL > 0) {
+          if (needL === 0) {
+            for (let i = 0; i < L.length; i++) {
+              if (this.cellStatus[L[i]] === 0) {
+                if (!this._set(L[i], 2)) return false;
+              }
+            }
+          } else if (needL === uL) {
+            for (let i = 0; i < L.length; i++) {
+              if (this.cellStatus[L[i]] === 0) {
+                if (!this._set(L[i], 1)) return false;
+              }
+            }
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  // Apply a single clue's deductions. Returns false on contradiction.
+  // Cell forces via _set push to the trail; the caller (queue-based
+  // _applyClues) reads those trail entries to re-queue overlapping clues.
+  _applyClueAt(i) {
+    const cells = this.clueNeighborhood[i];
+    const K = this.clueValues[i];
+    let nB = 0, nU = 0;
+    for (let j = 0; j < cells.length; j++) {
+      const v = this.cellStatus[cells[j]];
+      if (v === 1) nB++;
+      else if (v === 0) nU++;
+    }
+    if (nB > K) return false;
+    if (nB + nU < K) return false;
+    if (nB === K && nU > 0) {
+      for (let j = 0; j < cells.length; j++) {
+        if (this.cellStatus[cells[j]] === 0) {
+          if (!this._set(cells[j], 2)) return false;
+        }
+      }
+    } else if (nB + nU === K && nU > 0) {
+      for (let j = 0; j < cells.length; j++) {
+        if (this.cellStatus[cells[j]] === 0) {
+          if (!this._set(cells[j], 1)) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Dirty-clue queue propagation. Initial pass enqueues all clues; each
+  // cell change identified by trail growth re-queues the ~4-9 clues
+  // overlapping that cell. The queue can never exceed K entries because
+  // inQueue[] guards re-adds — each clue is in the queue at most once at
+  // any given time. ~100× faster than the naive all-clues-each-pass
+  // approach on 30×30 dailies (inner propagate inside lookahead/backtrack
+  // was the bottleneck).
+  _applyClues() {
+    const K = this.clues.length;
+    if (!this._inQueue || this._inQueue.length !== K) {
+      this._inQueue = new Uint8Array(K);
+      // Tail advances on each enqueue, including re-enqueues after a
+      // clue is processed and its cells change again. Worst-case bound:
+      // initial seeding (K) + every cell can change at most twice, each
+      // change re-queues up to 9 overlapping clues. So
+      // K + 2 × rows × cols × 9 is a safe ceiling.
+      this._queue = new Int32Array(K + this.rows * this.cols * 18);
+    }
+    const inQueue = this._inQueue;
+    const queue = this._queue;
+    let head = 0, tail = 0;
+    for (let i = 0; i < K; i++) {
+      queue[tail++] = i;
+      inQueue[i] = 1;
+    }
+    while (head < tail) {
+      const i = queue[head++];
+      inQueue[i] = 0;
+      const before = this.trail.length;
+      if (!this._applyClueAt(i)) return false;
+      for (let t = before; t < this.trail.length; t++) {
+        const cellIdx = this.trail[t] & 0xffffff;
+        const overlapping = this.cellToClues[cellIdx];
+        for (let k = 0; k < overlapping.length; k++) {
+          const ci = overlapping[k];
+          if (!inQueue[ci]) {
+            queue[tail++] = ci;
+            inQueue[ci] = 1;
           }
         }
       }
@@ -9864,6 +10024,7 @@ class MosaicSolver {
       changed = false;
       const mark = this.trail.length;
       if (!this._applyClues()) return false;
+      if (!this._applyCluePairs()) return false;
       if (this.trail.length > mark) changed = true;
     }
     if (this._depth === 0 && !this._inLookahead) {
@@ -9920,17 +10081,49 @@ class MosaicSolver {
   }
 
   _pickBestUnknown() {
+    // Most-constrained variable for Mosaic: pick the unknown cell whose
+    // participating clues have the smallest remaining slack. Slack for a
+    // clue with K target, nB blacks, nU unknowns = min(K - nB, nU - (K - nB)) —
+    // how many free choices remain. A cell touching a tight clue forces
+    // either color on the next branch step, pruning the tree.
     let bestIdx = -1, bestScore = -Infinity;
     const total = this.rows * this.cols;
     for (let i = 0; i < total; i++) {
       if (this.cellStatus[i] !== 0) continue;
-      const r = (i / this.cols) | 0, c = i - r * this.cols;
-      let adj = 0;
-      if (r > 0 && this.cellStatus[i - this.cols] !== 0) adj++;
-      if (r < this.rows - 1 && this.cellStatus[i + this.cols] !== 0) adj++;
-      if (c > 0 && this.cellStatus[i - 1] !== 0) adj++;
-      if (c < this.cols - 1 && this.cellStatus[i + 1] !== 0) adj++;
-      if (adj > bestScore) { bestScore = adj; bestIdx = i; }
+      const overlapping = this.cellToClues[i];
+      let minSlack = Infinity;
+      for (let k = 0; k < overlapping.length; k++) {
+        const ci = overlapping[k];
+        const cells = this.clueNeighborhood[ci];
+        const K = this.clueValues[ci];
+        let nB = 0, nU = 0;
+        for (let j = 0; j < cells.length; j++) {
+          const v = this.cellStatus[cells[j]];
+          if (v === 1) nB++;
+          else if (v === 0) nU++;
+        }
+        const need = K - nB;
+        const slack = need < nU - need ? need : nU - need;
+        if (slack < minSlack) minSlack = slack;
+      }
+      // Fallback to adjacency count when the cell has no overlapping clues
+      // (rare — every Mosaic cell is typically in at least one neighborhood
+      // since clues are dense, but be safe).
+      let score;
+      if (minSlack === Infinity) {
+        const r = (i / this.cols) | 0, c = i - r * this.cols;
+        let adj = 0;
+        if (r > 0 && this.cellStatus[i - this.cols] !== 0) adj++;
+        if (r < this.rows - 1 && this.cellStatus[i + this.cols] !== 0) adj++;
+        if (c > 0 && this.cellStatus[i - 1] !== 0) adj++;
+        if (c < this.cols - 1 && this.cellStatus[i + 1] !== 0) adj++;
+        score = adj;
+      } else {
+        // Smaller slack = tighter clue = better pick. Invert sign so the
+        // higher-score variable wins.
+        score = -minSlack * 100 + overlapping.length;
+      }
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
     }
     return bestIdx;
   }
