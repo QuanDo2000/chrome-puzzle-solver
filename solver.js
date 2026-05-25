@@ -9781,6 +9781,7 @@ class MosaicSolver {
     this._depth = 0;
     this._inLookahead = false;
     this.maxMs = maxMs || 0;
+    this._buildNeighborhoods();
     this._startedAt = 0;
   }
 
@@ -9805,6 +9806,26 @@ class MosaicSolver {
   _timeUp() {
     if (this.maxMs <= 0) return false;
     return (Date.now() - this._startedAt) > this.maxMs;
+  }
+
+  _buildNeighborhoods() {
+    this.clueNeighborhood = new Array(this.clues.length);
+    for (let i = 0; i < this.clues.length; i++) {
+      const idx = this.clues[i];
+      const r0 = (idx / this.cols) | 0;
+      const c0 = idx - r0 * this.cols;
+      const cells = [];
+      for (let dr = -1; dr <= 1; dr++) {
+        const r = r0 + dr;
+        if (r < 0 || r >= this.rows) continue;
+        for (let dc = -1; dc <= 1; dc++) {
+          const c = c0 + dc;
+          if (c < 0 || c >= this.cols) continue;
+          cells.push(r * this.cols + c);
+        }
+      }
+      this.clueNeighborhood[i] = new Int32Array(cells);
+    }
   }
 }
 

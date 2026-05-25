@@ -39,3 +39,31 @@ test('MosaicSolver: _set / _rollback round-trip', () => {
   s._rollback(mark);
   assert.equal(s.cellStatus[0], 0);
 });
+
+test('MosaicSolver._buildNeighborhoods: interior clue has 9 cells', () => {
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[-1,-1,-1],[-1,5,-1],[-1,-1,-1]],
+  });
+  assert.equal(s.clueNeighborhood[0].length, 9);
+  const set = new Set(Array.from(s.clueNeighborhood[0]));
+  for (let i = 0; i < 9; i++) assert.ok(set.has(i));
+});
+
+test('MosaicSolver._buildNeighborhoods: corner clue has 4 cells', () => {
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[2,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  assert.equal(s.clueNeighborhood[0].length, 4);
+  assert.deepEqual(Array.from(s.clueNeighborhood[0]).sort((a,b)=>a-b), [0, 1, 3, 4]);
+});
+
+test('MosaicSolver._buildNeighborhoods: edge clue has 6 cells', () => {
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[-1,4,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  assert.equal(s.clueNeighborhood[0].length, 6);
+  assert.deepEqual(Array.from(s.clueNeighborhood[0]).sort((a,b)=>a-b), [0, 1, 2, 3, 4, 5]);
+});
