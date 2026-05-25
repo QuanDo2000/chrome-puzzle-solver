@@ -376,3 +376,19 @@ test('HeyawakeSolver.solve: returns {solved:false, grid:null} on unsat', () => {
   assert.equal(r.solved, false);
   assert.equal(r.grid, null);
 });
+
+test('HeyawakeSolver._solutionCache: cache hit returns a deep copy', () => {
+  HeyawakeSolver.clearSolutionCache();
+  const data = {
+    rows: 2, cols: 2,
+    rooms: [{ cells: [
+      { r: 0, c: 0 }, { r: 0, c: 1 }, { r: 1, c: 0 }, { r: 1, c: 1 },
+    ], target: 1 }],
+  };
+  const a = new HeyawakeSolver(data).solve();
+  assert.equal(a.solved, true);
+  a.grid[0][0] = 99;
+  const b = new HeyawakeSolver(data).solve();
+  assert.equal(b.solved, true);
+  assert.notEqual(b.grid[0][0], 99);
+});

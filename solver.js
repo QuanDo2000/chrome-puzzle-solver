@@ -8127,18 +8127,64 @@ class HeyawakeSolver {
   }
 
   solve() {
+    const key = this._cacheKey();
+    const cached = HeyawakeSolver._solutionCache.get(key) || HeyawakeSolver._partialCache.get(key);
+    if (cached) return this._cloneResult(cached);
     this._startedAt = Date.now();
+    let result;
     if (!this._propagate()) {
       this._rollback(0);
-      return { solved: false, grid: null };
+      result = { solved: false, grid: null };
+    } else if (this._isComplete()) {
+      result = { solved: true, grid: this._emit() };
+    } else if (this._backtrack()) {
+      result = { solved: true, grid: this._emit() };
+    } else {
+      const partial = this._emit();
+      result = this._timeUp()
+        ? { solved: false, grid: partial, error: 'timed out', partial: true }
+        : { solved: false, grid: null };
     }
-    if (this._isComplete()) return { solved: true, grid: this._emit() };
-    if (this._backtrack()) return { solved: true, grid: this._emit() };
-    const partial = this._emit();
-    if (this._timeUp()) {
-      return { solved: false, grid: partial, error: 'timed out', partial: true };
+    if (result.solved || result.partial) this._storeInCache(key, result);
+    return result;
+  }
+
+  static _solutionCache = new Map();
+  static _maxSolutionCache = 50;
+  static _partialCache = new Map();
+  static _maxPartialCache = 20;
+
+  static clearSolutionCache() {
+    HeyawakeSolver._solutionCache.clear();
+    HeyawakeSolver._partialCache.clear();
+  }
+
+  _cacheKey() {
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(this.rows); mix(this.cols); mix(this.K);
+    for (let k = 0; k < this.K; k++) mix(this.target[k] + 1);
+    for (let i = 0; i < this.rows * this.cols; i++) mix(this.cellToRoom[i]);
+    return h >>> 0;
+  }
+
+  _cloneResult(r) {
+    return {
+      solved: r.solved,
+      grid: r.grid ? r.grid.map(row => row.slice()) : null,
+      ...(r.error !== undefined ? { error: r.error } : {}),
+      ...(r.partial !== undefined ? { partial: r.partial } : {}),
+    };
+  }
+
+  _storeInCache(key, result) {
+    const m = result.partial ? HeyawakeSolver._partialCache : HeyawakeSolver._solutionCache;
+    const max = result.partial ? HeyawakeSolver._maxPartialCache : HeyawakeSolver._maxSolutionCache;
+    if (m.size >= max) {
+      const first = m.keys().next().value;
+      m.delete(first);
     }
-    return { solved: false, grid: null };
+    m.set(key, this._cloneResult(result));
   }
 }
 
