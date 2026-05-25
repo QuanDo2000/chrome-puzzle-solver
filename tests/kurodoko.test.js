@@ -139,13 +139,11 @@ test('KurodokoSolver.solve: solves the recon 5x5', () => {
   });
   const r = s.solve();
   assert.equal(r.solved, true);
-  let blacks = 0, whites = 0, zeros = 0;
+  // 6 clue cells (the non-`-1` positions in task); clue cells emit 0.
+  let zeros = 0;
   for (const row of r.grid) for (const v of row) {
-    if (v === 1) blacks++;
-    else if (v === 2) whites++;
-    else if (v === 0) zeros++;
+    if (v === 0) zeros++;
   }
-  // 6 clue cells (the -1 positions in task are non-clue); clue cells emit 0.
   assert.equal(zeros, 6, `expected 6 zero (clue) cells; got ${zeros}`);
 });
 
