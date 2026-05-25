@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, computePuzzleDiff } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, computePuzzleDiff } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -2823,4 +2823,46 @@ test('NorinoriSolver: norinori6x6Normal fixture solves to a valid grid', () => {
   assert.equal(r.solved, true);
   const err = validateNorinoriSolution(r.grid, rooms);
   assert.equal(err, null, `solution invalid: ${err}`);
+});
+
+test('NurikabeSolver: nurikabe5x5Easy fixture solves to a valid grid', () => {
+  const fixture = fixtures.nurikabe5x5Easy;
+  NurikabeSolver.clearSolutionCache();
+  const s = new NurikabeSolver({
+    rows: fixture.rows,
+    cols: fixture.cols,
+    task: fixture.task,
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  const N = fixture.rows * fixture.cols;
+  const visited = new Uint8Array(N);
+  for (let row = 0; row < fixture.rows; row++) for (let col = 0; col < fixture.cols; col++) {
+    if (fixture.task[row][col] <= 0) continue;
+    assert.equal(r.grid[row][col], 2);
+    const queue = [[row, col]];
+    visited[row * fixture.cols + col] = 1;
+    let size = 1, cluesInside = 1;
+    while (queue.length) {
+      const [cr, cc] = queue.shift();
+      for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr = cr + dr, nc = cc + dc;
+        if (nr < 0 || nr >= fixture.rows || nc < 0 || nc >= fixture.cols) continue;
+        const ni = nr * fixture.cols + nc;
+        if (visited[ni]) continue;
+        if (r.grid[nr][nc] !== 2) continue;
+        visited[ni] = 1;
+        if (fixture.task[nr][nc] > 0) cluesInside++;
+        size++;
+        queue.push([nr, nc]);
+      }
+    }
+    assert.equal(cluesInside, 1, `island at (${row},${col}) clues=${cluesInside}`);
+    assert.equal(size, fixture.task[row][col], `island size at (${row},${col})`);
+  }
+  for (let row = 0; row + 1 < fixture.rows; row++)
+    for (let col = 0; col + 1 < fixture.cols; col++)
+      assert.ok(!(r.grid[row][col] === 1 && r.grid[row][col+1] === 1 &&
+                  r.grid[row+1][col] === 1 && r.grid[row+1][col+1] === 1),
+        `2x2 black at (${row},${col})`);
 });
