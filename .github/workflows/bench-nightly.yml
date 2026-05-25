@@ -41,3 +41,5 @@ jobs:
       - run: node tests/bench-kurodoko.js
       - name: Bench Mosaic
         run: node tests/bench-mosaic.js
+      - name: Bench Norinori
+        run: node tests/bench-norinori.js
