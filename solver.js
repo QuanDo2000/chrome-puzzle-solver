@@ -10391,12 +10391,11 @@ class NorinoriSolver {
   _applyDominoes() {
     for (let k = 0; k < this.K; k++) {
       const cells = this.roomCells[k];
-      let nB = 0, nU = 0;
+      let nB = 0;
       const blacks = [];
       for (let i = 0; i < cells.length; i++) {
         const v = this.cellStatus[cells[i]];
         if (v === 1) { nB++; blacks.push(cells[i]); }
-        else if (v === 0) nU++;
       }
       if (nB > 2) return false;
       if (nB === 2) {
