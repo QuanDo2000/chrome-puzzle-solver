@@ -970,6 +970,9 @@ function solveExtraData() {
   if (data.type === 'kurodoko') {
     return { rows: data.rows, cols: data.cols, task: data.task };
   }
+  if (data.type === 'mosaic') {
+    return { rows: data.rows, cols: data.cols, task: data.task };
+  }
   return null;
 }
 
@@ -984,7 +987,7 @@ function solveExtraData() {
 //     localStorage quota (~5 MB per origin).
 const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SOLUTION_CACHE_MAX = 50;
-const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:', 'hashi-solution:', 'heyawake-solution:', 'hitori-solution:', 'kakurasu-solution:', 'kurodoko-solution:'];
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:', 'hashi-solution:', 'heyawake-solution:', 'hitori-solution:', 'kakurasu-solution:', 'kurodoko-solution:', 'mosaic-solution:'];
 
 function isSolutionCacheKey(key) {
   return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
@@ -1249,6 +1252,16 @@ function kurodokoCacheKey(data) {
   return 'kurodoko-solution:' + (h >>> 0).toString(16);
 }
 
+function mosaicCacheKey(data) {
+  if (data?.type !== 'mosaic' || !data.task) return null;
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x4D); // 'M' nameplate
+  mix(data.rows); mix(data.cols);
+  for (const row of data.task) for (const v of row) mix(v + 1);
+  return 'mosaic-solution:' + (h >>> 0).toString(16);
+}
+
 function getCachedGridSolution(data) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
@@ -1261,6 +1274,7 @@ function getCachedGridSolution(data) {
     : data?.type === 'hitori' ? hitoriCacheKey(data)
     : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
     : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
+    : data?.type === 'mosaic' ? mosaicCacheKey(data)
     : null;
   if (!key) return null;
   try {
@@ -1301,6 +1315,7 @@ function cacheGridSolution(data, grid) {
     : data?.type === 'hitori' ? hitoriCacheKey(data)
     : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
     : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
+    : data?.type === 'mosaic' ? mosaicCacheKey(data)
     : null;
   if (!key) return;
   try {
@@ -1787,6 +1802,7 @@ const SUPPORTED_PUZZLES = [
   { name: 'Hitori',       url: 'https://www.puzzles-mobile.com/hitori/' },
   { name: 'Kakurasu',     url: 'https://www.puzzles-mobile.com/kakurasu/' },
   { name: 'Kurodoko',     url: 'https://www.puzzles-mobile.com/kurodoko/' },
+  { name: 'Mosaic',       url: 'https://www.puzzles-mobile.com/mosaic/' },
   { name: 'Nonogram',     url: 'https://www.puzzles-mobile.com/nonograms/' },
   { name: 'Shikaku',      url: 'https://www.puzzles-mobile.com/shikaku/' },
   { name: 'Slitherlink',  url: 'https://www.puzzles-mobile.com/loop/' },
@@ -2378,6 +2394,15 @@ function makeWidget() {
     return (h >>> 0).toString(16);
   }
 
+  function mosaicTaskSig(task) {
+    if (!task) return '0';
+    let h = 0x811c9dc5;
+    for (const row of task) for (const v of row) {
+      h ^= (v + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return (h >>> 0).toString(16);
+  }
+
   // Room-boundary (areas) + target-numbers stable signature for the heyawake static layer.
   function heyawakeAreasSig(areas, rooms) {
     if (!Array.isArray(areas) || areas.length === 0) return '0';
@@ -2776,7 +2801,7 @@ function makeWidget() {
   }
 
   function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi' || pd?.type === 'heyawake' || pd?.type === 'hitori' || pd?.type === 'kakurasu' || pd?.type === 'kurodoko') return;
+    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi' || pd?.type === 'heyawake' || pd?.type === 'hitori' || pd?.type === 'kakurasu' || pd?.type === 'kurodoko' || pd?.type === 'mosaic') return;
     ctx.save();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -2865,7 +2890,8 @@ function makeWidget() {
                       '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
                       '|hi=' + hitoriTaskSig(pd?.type === 'hitori' ? pd.task : null) +
                       '|ka=' + kakurasuCluesSig(pd?.type === 'kakurasu' ? pd.rowClues : null, pd?.type === 'kakurasu' ? pd.colClues : null) +
-                      '|kd=' + kurodokoTaskSig(pd?.type === 'kurodoko' ? pd.task : null);
+                      '|kd=' + kurodokoTaskSig(pd?.type === 'kurodoko' ? pd.task : null) +
+                      '|mc=' + mosaicTaskSig(pd?.type === 'mosaic' ? pd.task : null);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull);
       staticLayer = buildStaticLayer(rows, cols, cellSize, wFull, hFull, pd);
@@ -4096,7 +4122,7 @@ function makeWidget() {
     // on pendingAutoSolve — on hard 30×30 dailies that solve can take >30 s,
     // while the propagation hint returns in ~1 ms. Other puzzle types still
     // need the cached solution for mistake comparison.
-    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi' || puzzleData.type === 'heyawake' || puzzleData.type === 'hitori' || puzzleData.type === 'kakurasu' || puzzleData.type === 'kurodoko';
+    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi' || puzzleData.type === 'heyawake' || puzzleData.type === 'hitori' || puzzleData.type === 'kakurasu' || puzzleData.type === 'kurodoko' || puzzleData.type === 'mosaic';
     if (!skipAutoSolveGate && !puzzleData.solution && pendingAutoSolve) {
       setStatus('Solving...', 'info');
       await pendingAutoSolve;
