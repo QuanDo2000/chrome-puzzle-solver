@@ -191,3 +191,21 @@ test('NurikabeSolver._applyBlackCount: nB + nU == expected → all unknowns BLAC
   assert.equal(s._applyBlackCount(), true);
   assert.equal(s.cellStatus[1], 1);
 });
+
+test('NurikabeSolver._applySeaConnectivity: two BLACKs separated only by all-WHITE → contradiction', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[-1, 1, -1]],
+    initialState: [[1, 2, 1]],
+  });
+  assert.equal(s._applySeaConnectivity(), false);
+});
+
+test('NurikabeSolver._applySeaConnectivity: connected via UNKNOWN is fine', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[-1, -1, -1]],
+    initialState: [[1, 0, 1]],
+  });
+  assert.equal(s._applySeaConnectivity(), true);
+});

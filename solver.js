@@ -11027,6 +11027,35 @@ class NurikabeSolver {
     }
     return true;
   }
+
+  _applySeaConnectivity() {
+    if (this._inLookahead) return true;
+    const blacks = [];
+    for (let i = 0; i < this.N; i++) if (this.cellStatus[i] === 1) blacks.push(i);
+    if (blacks.length === 0) return true;
+    const visited = new Uint8Array(this.N);
+    const queue = [blacks[0]];
+    visited[blacks[0]] = 1;
+    while (queue.length) {
+      const idx = queue.shift();
+      const r = (idx / this.cols) | 0;
+      const c = idx - r * this.cols;
+      const ns = [];
+      if (r > 0) ns.push(idx - this.cols);
+      if (r < this.rows - 1) ns.push(idx + this.cols);
+      if (c > 0) ns.push(idx - 1);
+      if (c < this.cols - 1) ns.push(idx + 1);
+      for (const ni of ns) {
+        if (visited[ni]) continue;
+        const v = this.cellStatus[ni];
+        if (v === 2) continue;
+        visited[ni] = 1;
+        queue.push(ni);
+      }
+    }
+    for (const b of blacks) if (!visited[b]) return false;
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
