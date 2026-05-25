@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -88,6 +88,15 @@ self.onmessage = function (e) {
         rows: extraData.rows,
         cols: extraData.cols,
         rooms: extraData.rooms,
+        initialState: initialGrid || null,
+        maxMs: 30000,
+      });
+      result = s.solve();
+    } else if (type === 'hitori' && extraData) {
+      const s = new HitoriSolver({
+        rows: extraData.rows,
+        cols: extraData.cols,
+        task: extraData.task,
         initialState: initialGrid || null,
         maxMs: 30000,
       });

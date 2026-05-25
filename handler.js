@@ -551,6 +551,53 @@ const heyawakeHandler = {
 
 registerHandler(heyawakeHandler);
 
+// ── Hitori handler (puzzles-mobile.com/hitori/) ──────────────
+
+const hitoriHandler = {
+  name: 'puzzles-mobile-hitori',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/hitori/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readHitoriData', []);
+    if (!data) return { ...result, error: 'No Hitori task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'hitori',
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readHitoriState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyHitoriState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Hitori apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(hitoriHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
