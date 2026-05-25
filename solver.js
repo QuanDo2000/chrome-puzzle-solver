@@ -10757,6 +10757,14 @@ class NurikabeSolver {
     this.maxMs = maxMs || 0;
     this._startedAt = 0;
     this.contradiction = false;
+    // Reused BFS scratch buffers to avoid per-call Uint8Array allocation.
+    this._bfsVisited = new Uint8Array(this.N);
+    this._bfsQueue = new Int32Array(this.N);
+    this._bfsMembers = new Uint8Array(this.N);
+    this._bfsReachable = new Uint8Array(this.N);
+    this._bfsReachList = new Int32Array(this.N);
+    this._bfsMembersList = new Int32Array(this.N);
+    this._bfsFrontierList = new Int32Array(this.N);
 
     // Force clue cells WHITE.
     for (const clue of this.clues) {
@@ -10786,28 +10794,49 @@ class NurikabeSolver {
   }
 
   _reachableFromCell(startIdx, cap) {
-    const visited = new Uint8Array(this.N);
+    const visited = this._bfsVisited;
+    visited.fill(0);
+    const queue = this._bfsQueue;
+    let qHead = 0, qTail = 0;
     visited[startIdx] = 1;
-    const queue = [startIdx];
+    queue[qTail++] = startIdx;
     let count = 1;
-    while (queue.length && count < cap + 1) {
-      const idx = queue.shift();
-      const r = (idx / this.cols) | 0;
-      const c = idx - r * this.cols;
-      const ns = [];
-      if (r > 0) ns.push(idx - this.cols);
-      if (r < this.rows - 1) ns.push(idx + this.cols);
-      if (c > 0) ns.push(idx - 1);
-      if (c < this.cols - 1) ns.push(idx + 1);
-      for (const ni of ns) {
-        if (visited[ni]) continue;
-        if (this.isWall[ni]) continue;
-        if (this.cellStatus[ni] === 1) continue;
-        if (ni !== startIdx && this.task[ni] > 0) continue;
-        visited[ni] = 1;
-        count++;
-        if (count >= cap + 1) break;
-        queue.push(ni);
+    const cols = this.cols, rows = this.rows;
+    while (qHead < qTail && count < cap + 1) {
+      const idx = queue[qHead++];
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      if (r > 0) {
+        const ni = idx - cols;
+        if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 1 && (ni === startIdx || this.task[ni] <= 0)) {
+          visited[ni] = 1; count++;
+          if (count >= cap + 1) break;
+          queue[qTail++] = ni;
+        }
+      }
+      if (r < rows - 1) {
+        const ni = idx + cols;
+        if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 1 && (ni === startIdx || this.task[ni] <= 0)) {
+          visited[ni] = 1; count++;
+          if (count >= cap + 1) break;
+          queue[qTail++] = ni;
+        }
+      }
+      if (c > 0) {
+        const ni = idx - 1;
+        if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 1 && (ni === startIdx || this.task[ni] <= 0)) {
+          visited[ni] = 1; count++;
+          if (count >= cap + 1) break;
+          queue[qTail++] = ni;
+        }
+      }
+      if (c < cols - 1) {
+        const ni = idx + 1;
+        if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 1 && (ni === startIdx || this.task[ni] <= 0)) {
+          visited[ni] = 1; count++;
+          if (count >= cap + 1) break;
+          queue[qTail++] = ni;
+        }
       }
     }
     return count;
@@ -10856,41 +10885,60 @@ class NurikabeSolver {
     return true;
   }
 
-  _bfsClueReach(clue) {
-    const reach = new Uint8Array(this.N);
-    reach[clue.idx] = 1;
-    let frontier = [clue.idx];
+  // Mark cells reachable from clue.idx within (clue.size - 1) steps into
+  // `union`, skipping BLACK, walls, and other clue cells. Step-wise BFS via
+  // the shared scratch queue.
+  _bfsClueReachInto(clue, union) {
+    const visited = this._bfsVisited;
+    visited.fill(0);
+    const queue = this._bfsQueue;
+    let qHead = 0, qTail = 0;
+    visited[clue.idx] = 1;
+    union[clue.idx] = 1;
+    queue[qTail++] = clue.idx;
+    const cols = this.cols, rows = this.rows;
+    // Step-wise: track frontier boundary in queue using level markers.
+    let stepEnd = qTail;
     for (let step = 1; step < clue.size; step++) {
-      const next = [];
-      for (const idx of frontier) {
-        const r = (idx / this.cols) | 0;
-        const c = idx - r * this.cols;
-        const ns = [];
-        if (r > 0) ns.push(idx - this.cols);
-        if (r < this.rows - 1) ns.push(idx + this.cols);
-        if (c > 0) ns.push(idx - 1);
-        if (c < this.cols - 1) ns.push(idx + 1);
-        for (const ni of ns) {
-          if (reach[ni]) continue;
-          if (this.isWall[ni]) continue;
-          if (this.cellStatus[ni] === 1) continue;
-          if (ni !== clue.idx && this.task[ni] > 0) continue;
-          reach[ni] = 1;
-          next.push(ni);
+      const nextStart = qTail;
+      while (qHead < stepEnd) {
+        const idx = queue[qHead++];
+        const r = (idx / cols) | 0;
+        const c = idx - r * cols;
+        if (r > 0) {
+          const ni = idx - cols;
+          if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 1 && (ni === clue.idx || this.task[ni] <= 0)) {
+            visited[ni] = 1; union[ni] = 1; queue[qTail++] = ni;
+          }
+        }
+        if (r < rows - 1) {
+          const ni = idx + cols;
+          if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 1 && (ni === clue.idx || this.task[ni] <= 0)) {
+            visited[ni] = 1; union[ni] = 1; queue[qTail++] = ni;
+          }
+        }
+        if (c > 0) {
+          const ni = idx - 1;
+          if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 1 && (ni === clue.idx || this.task[ni] <= 0)) {
+            visited[ni] = 1; union[ni] = 1; queue[qTail++] = ni;
+          }
+        }
+        if (c < cols - 1) {
+          const ni = idx + 1;
+          if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 1 && (ni === clue.idx || this.task[ni] <= 0)) {
+            visited[ni] = 1; union[ni] = 1; queue[qTail++] = ni;
+          }
         }
       }
-      frontier = next;
-      if (!frontier.length) break;
+      if (nextStart === qTail) break;
+      stepEnd = qTail;
     }
-    return reach;
   }
 
   _applyUnreachable() {
-    const union = new Uint8Array(this.N);
-    for (const clue of this.clues) {
-      const r = this._bfsClueReach(clue);
-      for (let i = 0; i < this.N; i++) if (r[i]) union[i] = 1;
-    }
+    const union = this._bfsReachable;
+    union.fill(0);
+    for (const clue of this.clues) this._bfsClueReachInto(clue, union);
     for (let i = 0; i < this.N; i++) {
       if (this.isWall[i]) continue;
       if (this.cellStatus[i] !== 0) continue;
@@ -10901,92 +10949,150 @@ class NurikabeSolver {
     return true;
   }
 
-  _bfsWhiteComponent(startIdx) {
-    const members = new Uint8Array(this.N);
-    members[startIdx] = 1;
-    const queue = [startIdx];
-    const frontier = [];
-    const seenFrontier = new Uint8Array(this.N);
-    let size = 1;
-    while (queue.length) {
-      const idx = queue.shift();
-      const r = (idx / this.cols) | 0;
-      const c = idx - r * this.cols;
-      const ns = [];
-      if (r > 0) ns.push(idx - this.cols);
-      if (r < this.rows - 1) ns.push(idx + this.cols);
-      if (c > 0) ns.push(idx - 1);
-      if (c < this.cols - 1) ns.push(idx + 1);
-      for (const ni of ns) {
-        if (members[ni]) continue;
-        if (this.isWall[ni]) continue;
-        const v = this.cellStatus[ni];
-        if (v === 1) continue;
-        if (this.task[ni] > 0 && ni !== startIdx) continue;
-        if (v === 2) {
-          members[ni] = 1;
-          size++;
-          queue.push(ni);
-        } else if (v === 0) {
-          if (!seenFrontier[ni]) {
-            seenFrontier[ni] = 1;
-            frontier.push(ni);
+  // Single BFS that produces both the WHITE-connected component (`members`)
+  // AND the WHITE-or-UNKNOWN reachable closure (`reachable`) for a clue.
+  // BFS through {non-BLACK, non-wall, not another clue}. members[i] is set
+  // only for cells reached through an all-WHITE path; reachable[i] also
+  // marks cells whose closest ancestor in the BFS first crossed an UNKNOWN.
+  // Returns {size, capacity}. Members & reachable are stored in the shared
+  // scratch buffers `_bfsMembers` / `_bfsReachable` (reset by this call).
+  // Single BFS from a clue producing:
+  //   - membersList[0..membersCount): cells reachable via an all-WHITE path
+  //   - reachList[0..reachCount): cells reachable via WHITE-or-UNKNOWN
+  // (each list packs indices densely, so iteration is O(set size) not O(N)).
+  // Returns {size: membersCount, capacity: reachCount}. Buffers are
+  // overwritten on each call; caller must consume before the next call.
+  _bfsClueIsland(clue) {
+    const reachable = this._bfsReachable;
+    const reachList = this._bfsReachList;
+    const membersList = this._bfsMembersList;
+    // Clear only the cells we touched on the previous call: reachable[i] is
+    // set iff reachList contains i, so we'd need to track that. Easier
+    // safe-and-cheap: fill(0).
+    reachable.fill(0);
+    reachable[clue.idx] = 1;
+    let reachCount = 1, membersCount = 1;
+    reachList[0] = clue.idx;
+    membersList[0] = clue.idx;
+    const queue = this._bfsQueue;
+    // Pack "all-WHITE path so far" into bit 30 of the queue entry.
+    const WHITE_BIT = 1 << 30;
+    let qHead = 0, qTail = 0;
+    queue[qTail++] = clue.idx | WHITE_BIT;
+    const cols = this.cols, rows = this.rows;
+    const clueIdx = clue.idx;
+    const isWall = this.isWall;
+    const cellStatus = this.cellStatus;
+    const task = this.task;
+    while (qHead < qTail) {
+      const entry = queue[qHead++];
+      const idx = entry & ~WHITE_BIT;
+      const whiteSoFar = (entry & WHITE_BIT) !== 0;
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      if (r > 0) {
+        const ni = idx - cols;
+        if (!reachable[ni] && !isWall[ni]) {
+          const v = cellStatus[ni];
+          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx)) {
+            reachable[ni] = 1;
+            reachList[reachCount++] = ni;
+            const stillWhite = whiteSoFar && v === 2;
+            if (stillWhite) membersList[membersCount++] = ni;
+            queue[qTail++] = stillWhite ? (ni | WHITE_BIT) : ni;
+          }
+        }
+      }
+      if (r < rows - 1) {
+        const ni = idx + cols;
+        if (!reachable[ni] && !isWall[ni]) {
+          const v = cellStatus[ni];
+          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx)) {
+            reachable[ni] = 1;
+            reachList[reachCount++] = ni;
+            const stillWhite = whiteSoFar && v === 2;
+            if (stillWhite) membersList[membersCount++] = ni;
+            queue[qTail++] = stillWhite ? (ni | WHITE_BIT) : ni;
+          }
+        }
+      }
+      if (c > 0) {
+        const ni = idx - 1;
+        if (!reachable[ni] && !isWall[ni]) {
+          const v = cellStatus[ni];
+          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx)) {
+            reachable[ni] = 1;
+            reachList[reachCount++] = ni;
+            const stillWhite = whiteSoFar && v === 2;
+            if (stillWhite) membersList[membersCount++] = ni;
+            queue[qTail++] = stillWhite ? (ni | WHITE_BIT) : ni;
+          }
+        }
+      }
+      if (c < cols - 1) {
+        const ni = idx + 1;
+        if (!reachable[ni] && !isWall[ni]) {
+          const v = cellStatus[ni];
+          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx)) {
+            reachable[ni] = 1;
+            reachList[reachCount++] = ni;
+            const stillWhite = whiteSoFar && v === 2;
+            if (stillWhite) membersList[membersCount++] = ni;
+            queue[qTail++] = stillWhite ? (ni | WHITE_BIT) : ni;
           }
         }
       }
     }
-    return { size, members, frontier };
-  }
-
-  _islandCapacity(startIdx, members) {
-    const visited = new Uint8Array(this.N);
-    const queue = [];
-    let count = 0;
-    for (let i = 0; i < this.N; i++) {
-      if (members[i]) { visited[i] = 1; queue.push(i); count++; }
-    }
-    const reachable = new Uint8Array(this.N);
-    for (let i = 0; i < this.N; i++) if (members[i]) reachable[i] = 1;
-    while (queue.length) {
-      const idx = queue.shift();
-      const r = (idx / this.cols) | 0;
-      const c = idx - r * this.cols;
-      const ns = [];
-      if (r > 0) ns.push(idx - this.cols);
-      if (r < this.rows - 1) ns.push(idx + this.cols);
-      if (c > 0) ns.push(idx - 1);
-      if (c < this.cols - 1) ns.push(idx + 1);
-      for (const ni of ns) {
-        if (visited[ni]) continue;
-        if (this.isWall[ni]) continue;
-        const v = this.cellStatus[ni];
-        if (v === 1) continue;
-        if (this.task[ni] > 0 && ni !== startIdx) continue;
-        visited[ni] = 1;
-        reachable[ni] = 1;
-        count++;
-        queue.push(ni);
-      }
-    }
-    return { capacity: count, reachable };
+    return { size: membersCount, capacity: reachCount };
   }
 
   _applyIslandComplete() {
+    const reachList = this._bfsReachList;
+    const membersList = this._bfsMembersList;
+    const cols = this.cols, rows = this.rows;
     for (const clue of this.clues) {
-      const { size, members, frontier } = this._bfsWhiteComponent(clue.idx);
+      const { size, capacity } = this._bfsClueIsland(clue);
       if (size > clue.size) return false;
-      const { capacity, reachable } = this._islandCapacity(clue.idx, members);
       if (capacity < clue.size) return false;
       if (size === clue.size) {
-        for (const ni of frontier) {
-          if (this.cellStatus[ni] === 0) {
-            if (!this._set(ni, 1)) return false;
+        // Members list is dense; iterate it directly. Visit each member
+        // cell's 4-neighbour and force unknown cross-island neighbours BLACK.
+        // (Members are connected; their non-member non-wall non-clue
+        // neighbours are the island frontier.)
+        for (let mi = 0; mi < size; mi++) {
+          const idx = membersList[mi];
+          const r = (idx / cols) | 0;
+          const c = idx - r * cols;
+          if (r > 0) {
+            const ni = idx - cols;
+            if (this.cellStatus[ni] === 0 && !this.isWall[ni]) {
+              if (!this._set(ni, 1)) return false;
+            }
+          }
+          if (r < rows - 1) {
+            const ni = idx + cols;
+            if (this.cellStatus[ni] === 0 && !this.isWall[ni]) {
+              if (!this._set(ni, 1)) return false;
+            }
+          }
+          if (c > 0) {
+            const ni = idx - 1;
+            if (this.cellStatus[ni] === 0 && !this.isWall[ni]) {
+              if (!this._set(ni, 1)) return false;
+            }
+          }
+          if (c < cols - 1) {
+            const ni = idx + 1;
+            if (this.cellStatus[ni] === 0 && !this.isWall[ni]) {
+              if (!this._set(ni, 1)) return false;
+            }
           }
         }
       }
       if (capacity === clue.size) {
-        for (let i = 0; i < this.N; i++) {
-          if (reachable[i] && this.cellStatus[i] === 0) {
+        for (let ri = 0; ri < capacity; ri++) {
+          const i = reachList[ri];
+          if (this.cellStatus[i] === 0) {
             if (!this._set(i, 2)) return false;
           }
         }
@@ -11052,32 +11158,60 @@ class NurikabeSolver {
 
   _applySeaConnectivity() {
     if (this._inLookahead) return true;
-    const blacks = [];
-    for (let i = 0; i < this.N; i++) if (this.cellStatus[i] === 1) blacks.push(i);
-    if (blacks.length === 0) return true;
-    const visited = new Uint8Array(this.N);
-    const queue = [blacks[0]];
-    visited[blacks[0]] = 1;
-    while (queue.length) {
-      const idx = queue.shift();
-      const r = (idx / this.cols) | 0;
-      const c = idx - r * this.cols;
-      const ns = [];
-      if (r > 0) ns.push(idx - this.cols);
-      if (r < this.rows - 1) ns.push(idx + this.cols);
-      if (c > 0) ns.push(idx - 1);
-      if (c < this.cols - 1) ns.push(idx + 1);
-      for (const ni of ns) {
-        if (visited[ni]) continue;
-        if (this.isWall[ni]) continue;
-        const v = this.cellStatus[ni];
-        if (v === 2) continue;
-        visited[ni] = 1;
-        queue.push(ni);
+    let firstBlack = -1, blackCount = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (this.cellStatus[i] === 1) {
+        if (firstBlack < 0) firstBlack = i;
+        blackCount++;
       }
     }
-    for (const b of blacks) if (!visited[b]) return false;
-    return true;
+    if (firstBlack < 0) return true;
+    const visited = this._bfsVisited;
+    visited.fill(0);
+    const queue = this._bfsQueue;
+    let qHead = 0, qTail = 0;
+    visited[firstBlack] = 1;
+    queue[qTail++] = firstBlack;
+    let blacksSeen = 1;
+    const cols = this.cols, rows = this.rows;
+    while (qHead < qTail) {
+      const idx = queue[qHead++];
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      if (r > 0) {
+        const ni = idx - cols;
+        if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 2) {
+          visited[ni] = 1;
+          if (this.cellStatus[ni] === 1) blacksSeen++;
+          queue[qTail++] = ni;
+        }
+      }
+      if (r < rows - 1) {
+        const ni = idx + cols;
+        if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 2) {
+          visited[ni] = 1;
+          if (this.cellStatus[ni] === 1) blacksSeen++;
+          queue[qTail++] = ni;
+        }
+      }
+      if (c > 0) {
+        const ni = idx - 1;
+        if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 2) {
+          visited[ni] = 1;
+          if (this.cellStatus[ni] === 1) blacksSeen++;
+          queue[qTail++] = ni;
+        }
+      }
+      if (c < cols - 1) {
+        const ni = idx + 1;
+        if (!visited[ni] && !this.isWall[ni] && this.cellStatus[ni] !== 2) {
+          visited[ni] = 1;
+          if (this.cellStatus[ni] === 1) blacksSeen++;
+          queue[qTail++] = ni;
+        }
+      }
+    }
+    return blacksSeen === blackCount;
   }
 
   _propagate() {
