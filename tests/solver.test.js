@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, computePuzzleDiff } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, computePuzzleDiff } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -2697,4 +2697,17 @@ test('HeyawakeSolver: heyawake6x6Easy fixture solves to a unique valid grid', ()
   assert.equal(r.solved, true);
   const expected = golden.heyawake6x6Easy;
   assert.deepEqual(r.grid, expected);
+});
+
+test('HitoriSolver: hitori5x5Easy fixture matches golden', () => {
+  const fixture = fixtures.hitori5x5Easy;
+  HitoriSolver.clearSolutionCache();
+  const s = new HitoriSolver({
+    rows: fixture.rows,
+    cols: fixture.cols,
+    task: fixture.task,
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.deepEqual(r.grid, golden.hitori5x5Easy);
 });

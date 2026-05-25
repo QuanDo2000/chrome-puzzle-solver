@@ -220,4 +220,18 @@ module.exports = {
       { index: 9, row: 6, col: 6, number: 2 },
     ],
   },
+
+  // 5x5 Hitori: simple puzzle with givens and unique solution.
+  hitori5x5Easy: {
+    type: 'hitori',
+    rows: 5,
+    cols: 5,
+    task: [
+      [5,5,2,3,3],
+      [2,5,4,4,3],
+      [4,4,1,5,2],
+      [1,2,5,4,5],
+      [1,4,5,5,1],
+    ],
+  },
 };
