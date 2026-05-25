@@ -9352,6 +9352,65 @@ class KurodokoSolver {
     if (this.maxMs <= 0) return false;
     return (Date.now() - this._startedAt) > this.maxMs;
   }
+
+  _applyVisibility() {
+    const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (let i = 0; i < this.clues.length; i++) {
+      const idx = this.clues[i];
+      const K = this.clueValues[i];
+      const r0 = (idx / this.cols) | 0;
+      const c0 = idx - r0 * this.cols;
+      const lowers = [];
+      const uppers = [];
+      const cellsByDir = [];
+      for (const [dr, dc] of dirs) {
+        let lower = 0;
+        let stillRun = true;
+        const cells = [];
+        let rr = r0 + dr, cc = c0 + dc;
+        while (rr >= 0 && rr < this.rows && cc >= 0 && cc < this.cols) {
+          const cidx = rr * this.cols + cc;
+          const v = this.cellStatus[cidx];
+          if (v === 1) break;
+          cells.push(cidx);
+          if (stillRun) {
+            if (v === 2) lower++;
+            else stillRun = false;
+          }
+          rr += dr; cc += dc;
+        }
+        lowers.push(lower);
+        uppers.push(cells.length);
+        cellsByDir.push(cells);
+      }
+      const sumLower = lowers[0] + lowers[1] + lowers[2] + lowers[3];
+      const sumUpper = uppers[0] + uppers[1] + uppers[2] + uppers[3];
+      if (sumLower + 1 > K) return false;
+      if (sumUpper + 1 < K) return false;
+      const T = K - 1;
+      for (let d = 0; d < 4; d++) {
+        const otherSumLower = sumLower - lowers[d];
+        const otherSumUpper = sumUpper - uppers[d];
+        const vis_min = Math.max(lowers[d], T - otherSumUpper);
+        const vis_max = Math.min(uppers[d], T - otherSumLower);
+        if (vis_min > vis_max) return false;
+        const cells = cellsByDir[d];
+        // Force [0..vis_min-1] white.
+        for (let j = 0; j < vis_min; j++) {
+          if (this.cellStatus[cells[j]] === 0) {
+            if (!this._set(cells[j], 2)) return false;
+          }
+        }
+        // If tight (vis_min == vis_max) and stopping cell exists, force black.
+        if (vis_min === vis_max && vis_max < cells.length) {
+          if (this.cellStatus[cells[vis_max]] === 0) {
+            if (!this._set(cells[vis_max], 1)) return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
