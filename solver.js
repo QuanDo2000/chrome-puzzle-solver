@@ -10716,6 +10716,118 @@ class NorinoriSolver {
   }
 }
 
+class NurikabeSolver {
+  constructor(data) {
+    const { rows, cols, task, initialState, maxMs } = data;
+    this.rows = rows;
+    this.cols = cols;
+    this.N = rows * cols;
+    this.task = new Int32Array(this.N);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        this.task[r * cols + c] = task[r][c];
+      }
+    }
+    this.clues = [];
+    let sum = 0;
+    for (let i = 0; i < this.N; i++) {
+      const v = this.task[i];
+      if (v > 0) { this.clues.push({ idx: i, size: v }); sum += v; }
+    }
+    this.expectedBlacks = this.N - sum;
+    this.cellStatus = new Uint8Array(this.N);
+    if (initialState) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          this.cellStatus[r * cols + c] = initialState[r][c];
+        }
+      }
+    }
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this.maxMs = maxMs || 0;
+    this._startedAt = 0;
+    this.contradiction = false;
+
+    // Force clue cells WHITE.
+    for (const clue of this.clues) {
+      if (!this._set(clue.idx, 2)) { this.contradiction = true; return; }
+    }
+    // Two clue cells can never be 4-adjacent.
+    for (const clue of this.clues) {
+      const r = (clue.idx / cols) | 0;
+      const c = clue.idx - r * cols;
+      const ns = [];
+      if (r > 0) ns.push(clue.idx - cols);
+      if (r < rows - 1) ns.push(clue.idx + cols);
+      if (c > 0) ns.push(clue.idx - 1);
+      if (c < cols - 1) ns.push(clue.idx + 1);
+      for (const ni of ns) {
+        if (this.task[ni] > 0) { this.contradiction = true; return; }
+      }
+    }
+    // Each clue's reachable area (BFS through non-BLACK, not through
+    // other clue cells) ≥ N.
+    for (const clue of this.clues) {
+      if (this._reachableFromCell(clue.idx, clue.size) < clue.size) {
+        this.contradiction = true;
+        return;
+      }
+    }
+  }
+
+  _reachableFromCell(startIdx, cap) {
+    const visited = new Uint8Array(this.N);
+    visited[startIdx] = 1;
+    const queue = [startIdx];
+    let count = 1;
+    while (queue.length && count < cap + 1) {
+      const idx = queue.shift();
+      const r = (idx / this.cols) | 0;
+      const c = idx - r * this.cols;
+      const ns = [];
+      if (r > 0) ns.push(idx - this.cols);
+      if (r < this.rows - 1) ns.push(idx + this.cols);
+      if (c > 0) ns.push(idx - 1);
+      if (c < this.cols - 1) ns.push(idx + 1);
+      for (const ni of ns) {
+        if (visited[ni]) continue;
+        if (this.cellStatus[ni] === 1) continue;
+        if (ni !== startIdx && this.task[ni] > 0) continue;
+        visited[ni] = 1;
+        count++;
+        if (count >= cap + 1) break;
+        queue.push(ni);
+      }
+    }
+    return count;
+  }
+
+  _set(idx, value) {
+    const old = this.cellStatus[idx];
+    if (old === value) return true;
+    if (old !== 0) return false;
+    this.trail.push(idx | (old << 24));
+    this.cellStatus[idx] = value;
+    return true;
+  }
+
+  _rollback(mark) {
+    while (this.trail.length > mark) {
+      const e = this.trail.pop();
+      const i = e & 0xffffff;
+      const old = (e >>> 24) & 0xff;
+      this.cellStatus[i] = old;
+    }
+  }
+
+  _timeUp() {
+    if (this.maxMs <= 0) return false;
+    return (Date.now() - this._startedAt) > this.maxMs;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, computePuzzleDiff };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, computePuzzleDiff };
 }
