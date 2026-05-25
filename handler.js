@@ -644,6 +644,51 @@ const kakurasuHandler = {
 
 registerHandler(kakurasuHandler);
 
+const kurodokoHandler = {
+  name: 'puzzles-mobile-kurodoko',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/kurodoko/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readKurodokoData', []);
+    if (!data) return { ...result, error: 'No Kurodoko task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'kurodoko',
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readKurodokoState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyKurodokoState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Kurodoko apply failed' };
+  },
+};
+
+registerHandler(kurodokoHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
