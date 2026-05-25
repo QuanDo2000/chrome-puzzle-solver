@@ -1304,15 +1304,23 @@ function dumpPuzzleForBench() {
     }
 
     if (path.indexOf('/heyawake/') !== -1 || g.slug === 'heyawake') {
-      var hwData = readHeyawakeData();
-      if (!hwData) return { error: 'heyawake: readHeyawakeData failed', diagnostic: diagnostic(g), path: path };
-      var hwAreas = [];
-      for (var r = 0; r < hwData.rows; r++) {
-        hwAreas.push(hwData.areas[r].slice());
+      // Inline extraction: dumpPuzzleForBench is serialized via fn.toString()
+      // and run in MAIN world where it can't see readHeyawakeData. Pull the
+      // fields we need (areas + areaTask + dims) straight from window.Game.
+      if (!g.areas || !g.areaTask || !g.puzzleWidth || !g.puzzleHeight) {
+        return { error: 'heyawake: missing g.areas/areaTask/dims', diagnostic: diagnostic(g), path: path };
       }
-      var hwAreaTask = g.areaTask ? Array.prototype.slice.call(g.areaTask) : [];
+      var hwRows = g.puzzleHeight, hwCols = g.puzzleWidth;
+      var hwAreas = [];
+      for (var hr = 0; hr < hwRows; hr++) {
+        var srcRow = g.areas[hr] || [];
+        var dstRow = new Array(hwCols);
+        for (var hc = 0; hc < hwCols; hc++) dstRow[hc] = srcRow[hc] || 0;
+        hwAreas.push(dstRow);
+      }
+      var hwAreaTask = Array.prototype.slice.call(g.areaTask);
       return {
-        type: 'heyawake', rows: hwData.rows, cols: hwData.cols,
+        type: 'heyawake', rows: hwRows, cols: hwCols,
         areas: hwAreas, areaTask: hwAreaTask, path: path,
       };
     }
