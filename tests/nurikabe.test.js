@@ -209,3 +209,21 @@ test('NurikabeSolver._applySeaConnectivity: connected via UNKNOWN is fine', () =
   });
   assert.equal(s._applySeaConnectivity(), true);
 });
+
+test('NurikabeSolver._propagate: fixpoint solves trivial 1x2 clue 2', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 2,
+    task: [[2, -1]],
+  });
+  assert.equal(s._propagate(), true);
+  assert.equal(s.cellStatus[0], 2);
+  assert.equal(s.cellStatus[1], 2);
+});
+
+test('NurikabeSolver._propagate: returns false on inherent contradiction', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[1, 1, -1]],
+  });
+  assert.equal(s.contradiction, true);
+});

@@ -11056,6 +11056,57 @@ class NurikabeSolver {
     for (const b of blacks) if (!visited[b]) return false;
     return true;
   }
+
+  _propagate() {
+    let changed = true;
+    while (changed) {
+      if (this._timeUp()) return true;
+      changed = false;
+      const mark = this.trail.length;
+      if (!this._applyClueAdjacency()) return false;
+      if (!this._applyUnreachable()) return false;
+      if (!this._applyIslandComplete()) return false;
+      if (!this._apply2x2()) return false;
+      if (!this._applySeaConnectivity()) return false;
+      if (!this._applyBlackCount()) return false;
+      if (this.trail.length > mark) changed = true;
+    }
+    if (this._depth === 0 && !this._inLookahead) {
+      if (!this._applyLookahead()) return false;
+    }
+    return true;
+  }
+
+  _applyLookahead() {
+    let changed = true;
+    while (changed) {
+      if (this._timeUp()) return true;
+      changed = false;
+      for (let i = 0; i < this.N; i++) {
+        if (this.cellStatus[i] !== 0) continue;
+        const survivors = [];
+        for (const v of [1, 2]) {
+          const mark = this.trail.length;
+          this._inLookahead = true;
+          this._depth++;
+          const okSet = this._set(i, v);
+          const ok = okSet && this._propagate();
+          this._depth--;
+          this._rollback(mark);
+          this._inLookahead = false;
+          if (ok) survivors.push(v);
+          if (survivors.length > 1) break;
+        }
+        if (survivors.length === 0) return false;
+        if (survivors.length === 1) {
+          if (!this._set(i, survivors[0])) return false;
+          if (!this._propagate()) return false;
+          changed = true;
+        }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
