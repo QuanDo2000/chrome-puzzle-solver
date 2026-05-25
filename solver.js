@@ -10845,6 +10845,49 @@ class NurikabeSolver {
     }
     return true;
   }
+
+  _bfsClueReach(clue) {
+    const reach = new Uint8Array(this.N);
+    reach[clue.idx] = 1;
+    let frontier = [clue.idx];
+    for (let step = 1; step < clue.size; step++) {
+      const next = [];
+      for (const idx of frontier) {
+        const r = (idx / this.cols) | 0;
+        const c = idx - r * this.cols;
+        const ns = [];
+        if (r > 0) ns.push(idx - this.cols);
+        if (r < this.rows - 1) ns.push(idx + this.cols);
+        if (c > 0) ns.push(idx - 1);
+        if (c < this.cols - 1) ns.push(idx + 1);
+        for (const ni of ns) {
+          if (reach[ni]) continue;
+          if (this.cellStatus[ni] === 1) continue;
+          if (ni !== clue.idx && this.task[ni] > 0) continue;
+          reach[ni] = 1;
+          next.push(ni);
+        }
+      }
+      frontier = next;
+      if (!frontier.length) break;
+    }
+    return reach;
+  }
+
+  _applyUnreachable() {
+    const union = new Uint8Array(this.N);
+    for (const clue of this.clues) {
+      const r = this._bfsClueReach(clue);
+      for (let i = 0; i < this.N; i++) if (r[i]) union[i] = 1;
+    }
+    for (let i = 0; i < this.N; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      if (!union[i]) {
+        if (!this._set(i, 1)) return false;
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

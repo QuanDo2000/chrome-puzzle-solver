@@ -82,3 +82,36 @@ test('NurikabeSolver._applyClueAdjacency: cell with one clue neighbour stays unk
   assert.equal(s._applyClueAdjacency(), true);
   assert.equal(s.cellStatus[1], 0);
 });
+
+test('NurikabeSolver._applyUnreachable: cell out of all clue reach → BLACK', () => {
+  const s = new NurikabeSolver({
+    rows: 5, cols: 5,
+    task: [
+      [1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, 1],
+    ],
+  });
+  assert.equal(s._applyUnreachable(), true);
+  assert.equal(s.cellStatus[12], 1);
+});
+
+test('NurikabeSolver._applyUnreachable: cell within Manhattan-but-not-BFS-distance still gets forced', () => {
+  const s = new NurikabeSolver({
+    rows: 3, cols: 3,
+    task: [[2, -1, -1], [-1, -1, -1], [-1, -1, -1]],
+  });
+  assert.equal(s._applyUnreachable(), true);
+  assert.equal(s.cellStatus[8], 1);
+});
+
+test('NurikabeSolver._applyUnreachable: cell within reach stays unknown', () => {
+  const s = new NurikabeSolver({
+    rows: 3, cols: 3,
+    task: [[-1, -1, -1], [-1, 4, -1], [-1, -1, -1]],
+  });
+  assert.equal(s._applyUnreachable(), true);
+  assert.equal(s.cellStatus[0], 0);
+});
