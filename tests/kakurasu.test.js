@@ -108,3 +108,22 @@ test('KakurasuSolver._applyLines: mask narrowing under known cell', () => {
   assert.equal(s.cellStatus[0], 1);
   assert.equal(s.cellStatus[1], 1);
 });
+
+test('KakurasuSolver._propagate: solves recon 4x4 by propagation alone', () => {
+  const s = new KakurasuSolver({
+    rows: 4, cols: 4,
+    rowClues: [2, 7, 9, 6],
+    colClues: [4, 8, 9, 5],
+  });
+  assert.equal(s._propagate(), true);
+  const expected = [
+    [2,1,2,2],
+    [2,2,1,1],
+    [2,1,1,1],
+    [1,1,1,2],
+  ];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    assert.equal(s.cellStatus[r*4+c], expected[r][c],
+      `cell (${r},${c}) expected ${expected[r][c]} got ${s.cellStatus[r*4+c]}`);
+  }
+});
