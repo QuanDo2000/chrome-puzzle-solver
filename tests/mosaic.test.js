@@ -67,3 +67,41 @@ test('MosaicSolver._buildNeighborhoods: edge clue has 6 cells', () => {
   assert.equal(s.clueNeighborhood[0].length, 6);
   assert.deepEqual(Array.from(s.clueNeighborhood[0]).sort((a,b)=>a-b), [0, 1, 2, 3, 4, 5]);
 });
+
+test('MosaicSolver._applyClues: K=0 forces neighborhood to white', () => {
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[0,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  assert.equal(s._applyClues(), true);
+  assert.equal(s.cellStatus[0], 2);
+  assert.equal(s.cellStatus[1], 2);
+  assert.equal(s.cellStatus[3], 2);
+  assert.equal(s.cellStatus[4], 2);
+});
+
+test('MosaicSolver._applyClues: K=neighborhood-size forces all black', () => {
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[-1,-1,-1],[-1,9,-1],[-1,-1,-1]],
+  });
+  assert.equal(s._applyClues(), true);
+  for (let i = 0; i < 9; i++) assert.equal(s.cellStatus[i], 1);
+});
+
+test('MosaicSolver._applyClues: contradiction when K > neighborhood', () => {
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[5,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  assert.equal(s._applyClues(), false);
+});
+
+test('MosaicSolver._applyClues: contradiction when K < known blacks', () => {
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[0,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+    initialState: [[0, 1, 0], [0, 0, 0], [0, 0, 0]],
+  });
+  assert.equal(s._applyClues(), false);
+});

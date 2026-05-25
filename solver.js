@@ -9827,6 +9827,35 @@ class MosaicSolver {
       this.clueNeighborhood[i] = new Int32Array(cells);
     }
   }
+
+  _applyClues() {
+    for (let i = 0; i < this.clues.length; i++) {
+      const cells = this.clueNeighborhood[i];
+      const K = this.clueValues[i];
+      let nB = 0, nU = 0;
+      for (let j = 0; j < cells.length; j++) {
+        const v = this.cellStatus[cells[j]];
+        if (v === 1) nB++;
+        else if (v === 0) nU++;
+      }
+      if (nB > K) return false;
+      if (nB + nU < K) return false;
+      if (nB === K && nU > 0) {
+        for (let j = 0; j < cells.length; j++) {
+          if (this.cellStatus[cells[j]] === 0) {
+            if (!this._set(cells[j], 2)) return false;
+          }
+        }
+      } else if (nB + nU === K && nU > 0) {
+        for (let j = 0; j < cells.length; j++) {
+          if (this.cellStatus[cells[j]] === 0) {
+            if (!this._set(cells[j], 1)) return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
