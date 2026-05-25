@@ -123,3 +123,50 @@ test('MosaicSolver._propagate: returns true on consistent input', () => {
   });
   assert.equal(s._propagate(), true);
 });
+
+test('MosaicSolver.solve: solves recon 5x5', () => {
+  MosaicSolver.clearSolutionCache();
+  const s = new MosaicSolver({
+    rows: 5, cols: 5,
+    task: [
+      [-1,4,-1,-1,1],
+      [-1,-1,-1,-1,-1],
+      [-1,-1,2,3,-1],
+      [-1,3,-1,-1,2],
+      [0,-1,4,-1,-1],
+    ],
+    maxMs: 5000,
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  for (const row of r.grid) for (const v of row) assert.notEqual(v, 0);
+});
+
+test('MosaicSolver.solve: unsat returns {solved:false, grid:null}', () => {
+  MosaicSolver.clearSolutionCache();
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[5,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, false);
+  assert.equal(r.grid, null);
+});
+
+test('MosaicSolver._solutionCache: cache hit returns deep copy', () => {
+  MosaicSolver.clearSolutionCache();
+  const opts = { rows: 3, cols: 3, task: [[-1,-1,-1],[-1,9,-1],[-1,-1,-1]] };
+  const a = new MosaicSolver(opts).solve();
+  a.grid[0][0] = 99;
+  const b = new MosaicSolver(opts).solve();
+  assert.notEqual(b.grid[0][0], 99);
+});
+
+test('computePuzzleDiff mosaic: flags wrong-color cells, ignores unknown', () => {
+  const { computePuzzleDiff } = require('../solver.js');
+  const solution = [[1, 2], [2, 1]];
+  const board = [[2, 2], [0, 1]];
+  const diff = computePuzzleDiff('mosaic', board, solution);
+  assert.equal(diff.length, 1);
+  assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
+});
