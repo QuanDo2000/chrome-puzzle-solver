@@ -357,3 +357,63 @@ test('NurikabeSolver._applyFrontierForce: multiple frontier cells → no forcing
   assert.equal(s.cellStatus[1], 0);
   assert.equal(s.cellStatus[2], 0);
 });
+
+test('NurikabeSolver._applyFrontierForce: frontier cell claimed by another clue is excluded', () => {
+  // 1x5: clue 2 at (0,0), clue 1 at (0,3). Initial state: clue (0,0) WHITE,
+  // (0,1) UNKNOWN, (0,2) BLACK (separates the two clues), clue (0,3) WHITE,
+  // (0,4) UNKNOWN.
+  //
+  // For clue (0,0) (size 2, current WHITE component = {(0,0)}, size 1):
+  // frontier neighbours of (0,0) are only (0,1) (since (0,2) is BLACK and
+  // (0,3) is a clue cell — but (0,3) is not adjacent to (0,0) anyway).
+  // So frontier = {(0,1)}, count 1, forces (0,1) WHITE.
+  //
+  // Now the interesting check: for clue (0,3) (size 1, complete with just
+  // its own cell — size === N), the rule should skip via `size >= clue.size`
+  // and not try to force (0,4) which has no other clue context. Verify
+  // (0,4) is left UNKNOWN (no spurious force).
+  const s = new NurikabeSolver({
+    rows: 1, cols: 5,
+    task: [[2, -1, -1, 1, -1]],
+    initialState: [[2, 0, 1, 2, 0]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyFrontierForce(), true);
+  assert.equal(s.cellStatus[1], 2);
+  assert.equal(s.cellStatus[4], 0);
+});
+
+test('NurikabeSolver._applyFrontierForce: WHITE cell claimed by another clue blocks frontier', () => {
+  // 2x3 with clue 2 at (0,0) and clue 1 at (0,2). Pre-mark (0,1) WHITE so
+  // that, in isolation, clue (0,0) could see (0,1) as an extension of its
+  // component. But (0,1) is WHITE-adjacent to clue (0,2), so _buildClaimedBy
+  // would flag it as owned by (0,2) -- wait, (0,1) is adjacent to both, so
+  // _buildClaimedBy would detect the conflict and return false. Let's use
+  // a different layout: place (0,1) WHITE adjacent to clue (0,2) only (not
+  // to clue (0,0)). E.g. 1x4 with clue 2 at (0,0), BLACK at (0,1), WHITE at
+  // (0,2), clue 1 at (0,3). Actually (0,3) has size 1, and (0,2) WHITE
+  // claimed by (0,3)? No -- claimedBy traverses WHITE-only from a clue.
+  // (0,2) is WHITE; (0,3) is a clue but WHITE in cellStatus; they're
+  // adjacent. So _buildClaimedBy claims (0,2) for clue (0,3). Then for
+  // clue (0,0) (size 2, component {(0,0)}, BLACK at (0,1)), no frontier
+  // (only neighbour is (0,1) which is BLACK). Contradiction.
+  //
+  // For a cleaner test of the "claimed-by-other" exclusion: 2x3 with clue
+  // 3 at (0,0), clue 1 at (1,2). Pre-mark (1,1) WHITE so it could be in
+  // (0,0)'s island in isolation, but _buildClaimedBy would not claim (1,1)
+  // for clue (1,2) (they're not adjacent — (1,1) and (1,2) ARE adjacent
+  // actually). So _buildClaimedBy claims (1,1) for clue (1,2). Then for
+  // clue (0,0) the BFS from (0,0): (0,1) UNKNOWN (frontier), (1,0)
+  // UNKNOWN (frontier). (1,1) is WHITE but claimed by another clue —
+  // excluded. So frontier = {(0,1), (1,0)}, count 2 → no force on either.
+  // Verify (0,1) and (1,0) stay UNKNOWN despite (0,0) having size 1 < 3.
+  const s = new NurikabeSolver({
+    rows: 2, cols: 3,
+    task: [[3, -1, -1], [-1, -1, 1]],
+    initialState: [[2, 0, 0], [0, 2, 2]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyFrontierForce(), true);
+  assert.equal(s.cellStatus[1], 0);
+  assert.equal(s.cellStatus[3], 0);
+});

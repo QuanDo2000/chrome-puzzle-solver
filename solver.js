@@ -11233,6 +11233,10 @@ class NurikabeSolver {
     return true;
   }
 
+  // For each clue with WHITE-component size S < N, find the UNKNOWN
+  // frontier of that component (cells adjacent to a member but not in it).
+  // 0 frontier cells → island cannot grow (contradiction). 1 frontier cell
+  // → that cell must be WHITE (only way for the island to reach N).
   _applyFrontierForce() {
     const visited = this._bfsVisited;
     const queue = this._bfsQueue;
