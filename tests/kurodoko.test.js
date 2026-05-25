@@ -177,3 +177,32 @@ test('computePuzzleDiff kurodoko: flags wrong-color cells, ignores unknown', () 
   assert.equal(diff.length, 1);
   assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
 });
+
+test('KurodokoSolver.getHint: K=1 yields immediate hint', () => {
+  KurodokoSolver.clearSolutionCache();
+  const s = new KurodokoSolver({
+    rows: 3, cols: 3,
+    task: [[-1,-1,-1],[-1,1,-1],[-1,-1,-1]],
+  });
+  const hint = s.getHint([[0,0,0],[0,0,0],[0,0,0]]);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length >= 1);
+  // At least one of (0,1), (1,0), (1,2), (2,1) should appear as black.
+  const expected = [[0,1],[1,0],[1,2],[2,1]];
+  const found = expected.some(([r,c]) =>
+    hint.some(h => h.row === r && h.col === c && h.value === 1));
+  assert.ok(found, `expected neighbour-of-(1,1) forced black; got ${JSON.stringify(hint)}`);
+  // No clue cell should appear in the hint set.
+  assert.ok(!hint.some(h => h.row === 1 && h.col === 1), 'clue cell must not be in hint');
+});
+
+test('KurodokoSolver.getHint: null on solved board', () => {
+  KurodokoSolver.clearSolutionCache();
+  const s = new KurodokoSolver({
+    rows: 3, cols: 3,
+    task: [[-1,-1,-1],[-1,1,-1],[-1,-1,-1]],
+  });
+  // Solved state: 4-neighbours black, rest white. Clue cell stays at 0.
+  const solved = [[2,1,2],[1,0,1],[2,1,2]];
+  assert.equal(s.getHint(solved), null);
+});

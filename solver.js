@@ -9664,6 +9664,80 @@ class KurodokoSolver {
     }
     m.set(key, this._cloneResult(result));
   }
+
+  getHint(initialState) {
+    const total = this.rows * this.cols;
+    // Load the caller's board state.
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        this.cellStatus[r * this.cols + c] = initialState[r][c];
+      }
+    }
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this._startedAt = Date.now();
+    // Force clue cells to white (matching constructor behaviour).
+    for (let i = 0; i < this.clues.length; i++) {
+      if (this.cellStatus[this.clues[i]] === 0) {
+        if (!this._set(this.clues[i], 2)) return null;
+      }
+    }
+    const before = new Uint8Array(total);
+    for (let i = 0; i < total; i++) before[i] = this.cellStatus[i];
+
+    const collectChanged = () => {
+      const out = [];
+      for (let i = 0; i < total; i++) {
+        if (before[i] === 0 && this.cellStatus[i] !== 0 && this.task[i] === -1) {
+          const r = (i / this.cols) | 0;
+          const c = i - r * this.cols;
+          out.push({ row: r, col: c, value: this.cellStatus[i] });
+        }
+      }
+      return out;
+    };
+
+    // Visibility — one pass; return if anything changed.
+    const cm1 = this.trail.length;
+    if (!this._applyVisibility()) return null;
+    if (this.trail.length > cm1) {
+      const h = collectChanged();
+      if (h.length) return h;
+    }
+
+    // Connectivity — one pass; return if anything changed.
+    const cm2 = this.trail.length;
+    if (!this._applyConnectivity()) return null;
+    if (this.trail.length > cm2) {
+      const h = collectChanged();
+      if (h.length) return h;
+    }
+
+    // Single lookahead probe.
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const survivors = [];
+      for (const v of [1, 2]) {
+        const mark = this.trail.length;
+        this._inLookahead = true;
+        const okSet = this._set(i, v);
+        const ok = okSet && this._propagate();
+        this._rollback(mark);
+        this._inLookahead = false;
+        if (ok) survivors.push(v);
+        if (survivors.length > 1) break;
+      }
+      if (survivors.length === 0) return null;
+      if (survivors.length === 1) {
+        if (!this._set(i, survivors[0])) return null;
+        const h = collectChanged();
+        if (h.length) return h;
+      }
+    }
+
+    return null;
+  }
 }
 
 KurodokoSolver._solutionCache = new Map();
