@@ -2537,6 +2537,15 @@ function makeWidget() {
         ctx.fillText(String(pd.colClues[cc]), cx, cy);
       }
     }
+    if (pd?.type === 'kurodoko') {
+      // Outer border only — clue digits are on the dynamic layer (cell
+      // shading changes text colour, so they can't be pre-rendered here).
+      const borderW = Math.max(2, Math.floor(cellSize / 5));
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = borderW;
+      ctx.lineCap = 'square';
+      ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
+    }
     return c;
   }
 
@@ -2851,6 +2860,7 @@ function makeWidget() {
     const isBinairo = puzzleData?.type === 'binairo';
     const isYinYang = puzzleData?.type === 'yinyang';
     const isHitori = puzzleData?.type === 'hitori';
+    const isKurodoko = puzzleData?.type === 'kurodoko';
     const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
     if (isSlitherlink) {
       ctx.save();
@@ -2978,7 +2988,7 @@ function makeWidget() {
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const v = grid[r][c];
-          if (v === 0 && !isShikaku && !isHitori) continue;
+          if (v === 0 && !isShikaku && !isHitori && !isKakurasu && !isKurodoko) continue;
           if (v === -1 && isShikaku) continue;
           const x = c * cellSize, y = r * cellSize;
           if (isShikaku) {
@@ -3081,6 +3091,41 @@ function makeWidget() {
               ctx.lineTo(x + pad, y + cellSize - pad);
               ctx.stroke();
             }
+          } else if (isKurodoko) {
+            // Kurodoko: every cell shows clue digit if it's a clue cell.
+            // v=1 = black cell (solid dark fill); v=2 = confirmed white/empty
+            // (× cross so the player can see deduced whites); v=0 = unknown
+            // (blank — skipped by early-bail unless clue cell).
+            const taskVal = (pd?.task?.[r]?.[c] ?? -1);
+            if (taskVal !== -1) {
+              // Clue cell: show the number. If also marked black, fill dark
+              // first so the digit renders in light colour on top.
+              ctx.font = `bold ${Math.floor(cellSize * 0.5)}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              if (v === 1) {
+                ctx.fillStyle = '#1f2937';
+                ctx.fillRect(x, y, cellSize, cellSize);
+                ctx.fillStyle = '#f3f4f6';
+              } else {
+                ctx.fillStyle = '#1f2937';
+              }
+              ctx.fillText(String(taskVal), x + cellSize / 2, y + cellSize / 2);
+            } else if (v === 1) {
+              ctx.fillStyle = '#1f2937';
+              ctx.fillRect(x, y, cellSize, cellSize);
+            } else if (v === 2) {
+              const pad = Math.max(3, Math.floor(cellSize * 0.25));
+              ctx.strokeStyle = '#9ca3af';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(x + pad, y + pad);
+              ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
+              ctx.moveTo(x + cellSize - pad, y + pad);
+              ctx.lineTo(x + pad, y + cellSize - pad);
+              ctx.stroke();
+            }
+            // v === 0 non-clue → blank (already excluded by early-bail above)
           } else if (v === 1) {
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(x, y, cellSize, cellSize);
@@ -3189,6 +3234,8 @@ function makeWidget() {
         // Hitori hints are absolute cells (extraCells) — no row/column band.
       } else if (isKakurasu) {
         // Kakurasu hints are absolute cells (extraCells) — no row/column band.
+      } else if (isKurodoko) {
+        // Kurodoko hints are absolute cells (extraCells) — no row/column band.
       } else if (hint.type === 'hashi') {
         // Hashi hint edges are already merged into grid.edges by
         // applyHintToGrid and painted by the dynamic-bridges branch above.
@@ -3246,6 +3293,12 @@ function makeWidget() {
         } else if (isKakurasu && (cell.value === 1 || cell.value === 2)) {
           // Kakurasu hint: value 1 = must be filled (darker blue ring),
           // value 2 = must be crossed (lighter blue ring).
+          ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+          ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+        } else if (isKurodoko && (cell.value === 1 || cell.value === 2)) {
+          // Kurodoko hint: value 1 = must be black (darker blue ring),
+          // value 2 = must be white/empty (lighter blue ring).
           ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
           ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
@@ -3861,7 +3914,7 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && !hr.hint?.cells?.length) break;
+      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && hr.hint?.type !== 'kurodoko' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // getHint may lazily solve as a fallback (galaxies + aquarium);
