@@ -10681,6 +10681,67 @@ class NorinoriSolver {
     };
   }
 
+  getHint(initialState) {
+    const total = this.rows * this.cols;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        this.cellStatus[r * this.cols + c] = initialState[r][c];
+      }
+    }
+    const before = new Uint8Array(total);
+    for (let i = 0; i < total; i++) before[i] = this.cellStatus[i];
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this._startedAt = Date.now();
+
+    const collectChanged = () => {
+      const out = [];
+      for (let i = 0; i < total; i++) {
+        if (before[i] === 0 && this.cellStatus[i] !== 0) {
+          const r = (i / this.cols) | 0;
+          const c = i - r * this.cols;
+          out.push({ row: r, col: c, value: this.cellStatus[i] });
+        }
+      }
+      return out;
+    };
+
+    if (!this._applyDominoes()) return null;
+    {
+      const h = collectChanged();
+      if (h.length) return h;
+    }
+    if (!this._applyCrossRegionDominate()) return null;
+    {
+      const h = collectChanged();
+      if (h.length) return h;
+    }
+
+    // Single lookahead probe.
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const survivors = [];
+      for (const v of [1, 2]) {
+        const mark = this.trail.length;
+        this._inLookahead = true;
+        const okSet = this._set(i, v);
+        const ok = okSet && this._propagate();
+        this._rollback(mark);
+        this._inLookahead = false;
+        if (ok) survivors.push(v);
+        if (survivors.length > 1) break;
+      }
+      if (survivors.length === 0) return null;
+      if (survivors.length === 1) {
+        if (!this._set(i, survivors[0])) return null;
+        const h = collectChanged();
+        if (h.length) return h;
+      }
+    }
+    return null;
+  }
+
   _storeInCache(key, result) {
     const m = result.partial ? NorinoriSolver._partialCache : NorinoriSolver._solutionCache;
     const max = result.partial ? NorinoriSolver._maxPartialCache : NorinoriSolver._maxSolutionCache;

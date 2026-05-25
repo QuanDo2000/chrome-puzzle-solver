@@ -275,3 +275,24 @@ test('computePuzzleDiff norinori: flags wrong-color cells, ignores unknown', () 
   assert.equal(diff.length, 1);
   assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
 });
+
+test('NorinoriSolver.getHint: 1x2 single region yields immediate blacks', () => {
+  NorinoriSolver.clearSolutionCache();
+  const s = new NorinoriSolver({
+    rows: 1, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+  });
+  const hint = s.getHint([[0, 0]]);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length === 2);
+  for (const h of hint) assert.equal(h.value, 1);
+});
+
+test('NorinoriSolver.getHint: null on solved board', () => {
+  NorinoriSolver.clearSolutionCache();
+  const s = new NorinoriSolver({
+    rows: 1, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+  });
+  assert.equal(s.getHint([[1, 1]]), null);
+});
