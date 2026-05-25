@@ -422,6 +422,20 @@ module.exports = {
     ],
   },
 
+  // 5x5 Hitori captured for bench-real.js coverage.
+  hitori5x5EasyReal: {
+    type: 'hitori',
+    rows: 5,
+    cols: 5,
+    task: [
+      [5,5,2,3,3],
+      [2,5,4,4,3],
+      [4,4,1,5,2],
+      [1,2,5,4,5],
+      [1,4,5,5,1],
+    ],
+  },
+
   // 6x6 Heyawake captured from a real recon dump.
   heyawake6x6EasyReal: {
     type: 'heyawake',

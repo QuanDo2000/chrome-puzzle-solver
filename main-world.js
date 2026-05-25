@@ -1361,6 +1361,23 @@ function dumpPuzzleForBench() {
       return { type: 'galaxies', rows: cellH, cols: cellW, stars: stars, path: path };
     }
 
+    if (path.indexOf('/hitori/') !== -1 || g.slug === 'hitori') {
+      // INLINE extraction — dumpPuzzleForBench is serialized via fn.toString()
+      // and can't call readHitoriData from MAIN world.
+      if (!g.task || !g.puzzleWidth || !g.puzzleHeight) {
+        return { error: 'hitori: missing g.task/dims', diagnostic: diagnostic(g), path: path };
+      }
+      var hiRows = g.puzzleHeight, hiCols = g.puzzleWidth;
+      var hiTask = [];
+      for (var hr = 0; hr < hiRows; hr++) {
+        var srcRow = g.task[hr] || [];
+        var dstRow = new Array(hiCols);
+        for (var hc = 0; hc < hiCols; hc++) dstRow[hc] = srcRow[hc] || 0;
+        hiTask.push(dstRow);
+      }
+      return { type: 'hitori', rows: hiRows, cols: hiCols, task: hiTask, path: path };
+    }
+
     if (path.indexOf('/heyawake/') !== -1 || g.slug === 'heyawake') {
       // Inline extraction: dumpPuzzleForBench is serialized via fn.toString()
       // and run in MAIN world where it can't see readHeyawakeData. Pull the

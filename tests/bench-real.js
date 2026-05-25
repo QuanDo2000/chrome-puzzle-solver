@@ -4,7 +4,7 @@
 // For each puzzle, runs 5 solves, reports min / median / max plus solver type,
 // solved flag, and search-node count where applicable.
 
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver, HeyawakeSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver, HeyawakeSolver, HitoriSolver } = require('../solver.js');
 const fixtures = require('./fixtures/real-puzzles.js');
 
 function heyawakeRoomsFromFixture(p) {
@@ -38,6 +38,7 @@ function buildSolver(p) {
   if (p.type === 'galaxies') return new GalaxiesSolver(p.stars, p.rows, p.cols);
   if (p.type === 'hashi') return new HashiSolver({ rows: p.rows, cols: p.cols, islands: p.islands, maxMs: 10000 });
   if (p.type === 'heyawake') return new HeyawakeSolver({ rows: p.rows, cols: p.cols, rooms: heyawakeRoomsFromFixture(p) });
+  if (p.type === 'hitori') return new HitoriSolver({ rows: p.rows, cols: p.cols, task: p.task });
   return null;
 }
 
@@ -53,6 +54,7 @@ for (const name of Object.keys(fixtures)) {
     GalaxiesSolver.clearSolutionCache();
     HashiSolver.clearSolutionCache();
     HeyawakeSolver.clearSolutionCache();
+    HitoriSolver.clearSolutionCache();
     buildSolver(p).solve(null);
   }
   const times = [];
@@ -65,6 +67,7 @@ for (const name of Object.keys(fixtures)) {
     GalaxiesSolver.clearSolutionCache();
     HashiSolver.clearSolutionCache();
     HeyawakeSolver.clearSolutionCache();
+    HitoriSolver.clearSolutionCache();
     const s = buildSolver(p);
     const t0 = process.hrtime.bigint();
     const r = s.solve(null);
