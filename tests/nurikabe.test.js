@@ -460,3 +460,46 @@ test('NurikabeSolver._applySeaArticulation: skipped during lookahead', () => {
   assert.equal(s._applySeaArticulation(), true);
   assert.equal(s.cellStatus[1], 0);
 });
+
+test('NurikabeSolver._applyShapeEnumeration: 1x3 clue 3 forces all cells WHITE', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[3, -1, -1]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyShapeEnumeration(), true);
+  assert.equal(s.cellStatus[0], 2);
+  assert.equal(s.cellStatus[1], 2);
+  assert.equal(s.cellStatus[2], 2);
+});
+
+test('NurikabeSolver._applyShapeEnumeration: 2x3 clue 3 + BLACK boundary forces shared cell WHITE', () => {
+  const s = new NurikabeSolver({
+    rows: 2, cols: 3,
+    task: [[3, -1, -1], [-1, -1, -1]],
+    initialState: [[2, 0, 1], [0, 0, 0]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyShapeEnumeration(), true);
+  assert.equal(s.cellStatus[1], 2);
+});
+
+test('NurikabeSolver._applyShapeEnumeration: divergent shapes leave shared-only cells unknown', () => {
+  const s = new NurikabeSolver({
+    rows: 2, cols: 2,
+    task: [[2, -1], [-1, -1]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyShapeEnumeration(), true);
+  assert.equal(s.cellStatus[1], 0);
+  assert.equal(s.cellStatus[2], 0);
+});
+
+test('NurikabeSolver._applyShapeEnumeration: skips clues larger than cap', () => {
+  const taskArr = [
+    [16, -1, -1, -1], [-1, -1, -1, -1], [-1, -1, -1, -1], [-1, -1, -1, -1]
+  ];
+  const s = new NurikabeSolver({ rows: 4, cols: 4, task: taskArr });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyShapeEnumeration(), true);
+});

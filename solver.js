@@ -10807,6 +10807,11 @@ class NurikabeSolver {
     }
   }
 
+  // Caps for _applyShapeEnumeration. Both numbers are conservative — raise
+  // only after benching.
+  static MAX_SHAPES_PER_CLUE = 2000;
+  static MAX_ENUMERATED_CLUE_SIZE = 12;
+
   _reachableFromCell(startIdx, cap) {
     const visited = this._bfsVisited;
     visited.fill(0);
@@ -11120,6 +11125,258 @@ class NurikabeSolver {
             if (!this._set(i, 2)) return false;
           }
         }
+      }
+    }
+    return true;
+  }
+
+  // For one clue, recursively enumerate connected supersets of its current
+  // WHITE component of size exactly clue.size, drawing from {WHITE ∪
+  // UNKNOWN} cells not blocked by BLACK / walls / other clue cells / cells
+  // claimed by another clue. On each surviving shape, OR-mark inAny and
+  // AND-mark inAll per cell. Returns { count, capped, infeasible }.
+  _enumerateClueShapes(clue) {
+    const N = this.N;
+    const cols = this.cols, rows = this.rows;
+    const isWall = this.isWall;
+    const cellStatus = this.cellStatus;
+    const task = this.task;
+    const claimedBy = this._claimedBy;
+    const inShape = this._shapeInShape;
+    const inFrontier = this._shapeInFrontier;
+    const stack = this._shapeStack;
+    const frontier = this._shapeFrontier;
+    const inAll = this._shapeInAll;
+    const inAny = this._shapeInAny;
+
+    inShape.fill(0);
+    inFrontier.fill(0);
+    inAll.fill(1);
+    inAny.fill(0);
+
+    let shapeSize = 0;
+    let stackTop = 0;
+    let frontierTop = 0;
+    const seedQueue = this._bfsQueue;
+    let qH = 0, qT = 0;
+    inShape[clue.idx] = 1;
+    stack[stackTop++] = clue.idx;
+    shapeSize = 1;
+    seedQueue[qT++] = clue.idx;
+    while (qH < qT) {
+      const idx = seedQueue[qH++];
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      const seedN = (ni) => {
+        if (inShape[ni]) return;
+        if (isWall[ni]) return;
+        const v = cellStatus[ni];
+        if (v === 1) return;
+        if (task[ni] > 0 && ni !== clue.idx) return;
+        const o = claimedBy[ni];
+        if (o !== -1 && o !== clue.idx) return;
+        if (v === 2) {
+          inShape[ni] = 1;
+          shapeSize++;
+          stack[stackTop++] = ni;
+          seedQueue[qT++] = ni;
+        } else {
+          if (!inFrontier[ni]) {
+            inFrontier[ni] = 1;
+            frontier[frontierTop++] = ni;
+          }
+        }
+      };
+      if (r > 0) seedN(idx - cols);
+      if (r < rows - 1) seedN(idx + cols);
+      if (c > 0) seedN(idx - 1);
+      if (c < cols - 1) seedN(idx + 1);
+    }
+    if (shapeSize > clue.size) {
+      return { count: 0, capped: false, infeasible: false };
+    }
+
+    const target = clue.size;
+    const MAX = NurikabeSolver.MAX_SHAPES_PER_CLUE;
+    let shapeCount = 0;
+    let capped = false;
+
+    const recordShape = () => {
+      shapeCount++;
+      for (let k = 0; k < stackTop; k++) inAny[stack[k]] = 1;
+      if (shapeCount === 1) {
+        for (let i = 0; i < N; i++) inAll[i] = inShape[i];
+      } else {
+        for (let i = 0; i < N; i++) {
+          if (inAll[i] && !inShape[i]) inAll[i] = 0;
+        }
+      }
+    };
+
+    const recurse = () => {
+      if (shapeCount >= MAX) { capped = true; return; }
+      if (shapeSize === target) {
+        if (this._shapeIsValid(clue)) recordShape();
+        return;
+      }
+      const baseFrontierTop = frontierTop;
+      const baseCells = [];
+      for (let i = 0; i < baseFrontierTop; i++) {
+        const f = frontier[i];
+        if (!inShape[f]) baseCells.push(f);
+      }
+      for (let i = 0; i < baseCells.length; i++) {
+        if (shapeCount >= MAX) { capped = true; break; }
+        const cell = baseCells[i];
+        if (inShape[cell]) continue;
+        inShape[cell] = 1;
+        stack[stackTop++] = cell;
+        shapeSize++;
+        const fAddedFrom = frontierTop;
+        const rc = (cell / cols) | 0;
+        const cc = cell - rc * cols;
+        const addF = (ni) => {
+          if (inShape[ni]) return;
+          if (isWall[ni]) return;
+          const v = cellStatus[ni];
+          if (v === 1) return;
+          if (task[ni] > 0 && ni !== clue.idx) return;
+          const o = claimedBy[ni];
+          if (o !== -1 && o !== clue.idx) return;
+          if (inFrontier[ni]) return;
+          inFrontier[ni] = 1;
+          frontier[frontierTop++] = ni;
+        };
+        if (rc > 0) addF(cell - cols);
+        if (rc < rows - 1) addF(cell + cols);
+        if (cc > 0) addF(cell - 1);
+        if (cc < cols - 1) addF(cell + 1);
+        recurse();
+        for (let k = fAddedFrom; k < frontierTop; k++) inFrontier[frontier[k]] = 0;
+        frontierTop = fAddedFrom;
+        shapeSize--;
+        stackTop--;
+        inShape[cell] = 0;
+      }
+    };
+
+    if (shapeSize === target) {
+      if (this._shapeIsValid(clue)) recordShape();
+    } else {
+      recurse();
+    }
+
+    for (let i = 0; i < frontierTop; i++) inFrontier[frontier[i]] = 0;
+    for (let i = 0; i < stackTop; i++) inShape[stack[i]] = 0;
+
+    return { count: shapeCount, capped, infeasible: shapeCount === 0 && !capped };
+  }
+
+  // Validate the current shape (cells with inShape === 1): the shape must
+  // not extend into another clue's WHITE component, and the "forced-BLACK"
+  // halo around the shape (UNKNOWN cells orthogonally adjacent but not
+  // in the shape) must not, combined with existing BLACK/walls, form a
+  // 2x2 all-BLACK block.
+  _shapeIsValid(clue) {
+    const cols = this.cols, rows = this.rows;
+    const inShape = this._shapeInShape;
+    const isWall = this.isWall;
+    const cellStatus = this.cellStatus;
+    const claimedBy = this._claimedBy;
+    const stack = this._shapeStack;
+    const N = this.N;
+    let stackTop = 0;
+    for (let i = 0; i < N; i++) if (inShape[i]) stack[stackTop++] = i;
+    for (let s = 0; s < stackTop; s++) {
+      const idx = stack[s];
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      if (cellStatus[idx] === 0) {
+        const check = (ni) => {
+          if (cellStatus[ni] === 2 && claimedBy[ni] !== -1 && claimedBy[ni] !== clue.idx) {
+            return false;
+          }
+          return true;
+        };
+        if (r > 0 && !check(idx - cols)) return false;
+        if (r < rows - 1 && !check(idx + cols)) return false;
+        if (c > 0 && !check(idx - 1)) return false;
+        if (c < cols - 1 && !check(idx + 1)) return false;
+      }
+    }
+    const wouldBlack = this._bfsVisited;
+    wouldBlack.fill(0);
+    for (let s = 0; s < stackTop; s++) {
+      const idx = stack[s];
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      const addB = (ni) => {
+        if (inShape[ni]) return;
+        if (isWall[ni]) return;
+        if (cellStatus[ni] === 0) wouldBlack[ni] = 1;
+      };
+      if (r > 0) addB(idx - cols);
+      if (r < rows - 1) addB(idx + cols);
+      if (c > 0) addB(idx - 1);
+      if (c < cols - 1) addB(idx + 1);
+    }
+    let minR = rows, minC = cols, maxR = -1, maxC = -1;
+    for (let s = 0; s < stackTop; s++) {
+      const idx = stack[s];
+      const r = (idx / cols) | 0;
+      const c = idx - r * cols;
+      if (r < minR) minR = r;
+      if (r > maxR) maxR = r;
+      if (c < minC) minC = c;
+      if (c > maxC) maxC = c;
+    }
+    const r0 = Math.max(0, minR - 1);
+    const c0 = Math.max(0, minC - 1);
+    const r1 = Math.min(rows - 2, maxR);
+    const c1 = Math.min(cols - 2, maxC);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const a = r * cols + c;
+        const b = a + 1;
+        const d = a + cols;
+        const e = d + 1;
+        const isBlack = (ii) => {
+          if (inShape[ii]) return false;
+          if (isWall[ii]) return false;
+          if (cellStatus[ii] === 1) return true;
+          if (wouldBlack[ii]) return true;
+          return false;
+        };
+        if (isBlack(a) && isBlack(b) && isBlack(d) && isBlack(e)) {
+          wouldBlack.fill(0);
+          return false;
+        }
+      }
+    }
+    wouldBlack.fill(0);
+    return true;
+  }
+
+  // Main rule. For each clue ≤ MAX_ENUMERATED_CLUE_SIZE, enumerate valid
+  // shapes; force WHITE on cells present in every surviving shape (inAll).
+  // Cross-clue BLACK exclusion is added in Task 5.
+  _applyShapeEnumeration() {
+    if (!this._dirtyShape) return true;
+    this._dirtyShape = false;
+    const couldBeWhite = this._shapeCouldBeWhite;
+    couldBeWhite.fill(0);
+    for (const clue of this.clues) {
+      if (this._timeUp()) return true;
+      if (clue.size > NurikabeSolver.MAX_ENUMERATED_CLUE_SIZE) continue;
+      const { count, capped, infeasible } = this._enumerateClueShapes(clue);
+      if (capped) continue;
+      if (infeasible) return false;
+      if (count === 0) continue;
+      for (let i = 0; i < this.N; i++) {
+        if (this._shapeInAll[i] && this.cellStatus[i] === 0) {
+          if (!this._set(i, 2)) return false;
+        }
+        if (this._shapeInAny[i]) couldBeWhite[i] = 1;
       }
     }
     return true;
