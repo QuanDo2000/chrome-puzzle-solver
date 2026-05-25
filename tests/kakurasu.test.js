@@ -175,3 +175,42 @@ test('computePuzzleDiff kakurasu: flags wrong-color cells, ignores unknown', () 
   assert.equal(diff.length, 1);
   assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
 });
+
+test('KakurasuSolver.getHint: single-mask row yields immediate hint', () => {
+  KakurasuSolver.clearSolutionCache();
+  const s = new KakurasuSolver({
+    rows: 1, cols: 4,
+    rowClues: [2],
+    colClues: [0, 1, 0, 0],
+  });
+  const hint = s.getHint([[0,0,0,0]]);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length >= 1);
+  const c1 = hint.find(h => h.row === 0 && h.col === 1);
+  assert.ok(c1);
+  assert.equal(c1.value, 1);
+});
+
+test('KakurasuSolver.getHint: null on solved board', () => {
+  KakurasuSolver.clearSolutionCache();
+  const s = new KakurasuSolver({
+    rows: 1, cols: 4,
+    rowClues: [2],
+    colClues: [0, 1, 0, 0],
+  });
+  assert.equal(s.getHint([[2, 1, 2, 2]]), null);
+});
+
+test('KakurasuSolver.getHint: stepwise — small batch on 4x4', () => {
+  KakurasuSolver.clearSolutionCache();
+  const s = new KakurasuSolver({
+    rows: 4, cols: 4,
+    rowClues: [2, 7, 9, 6],
+    colClues: [4, 8, 9, 5],
+  });
+  const empty = Array.from({length:4}, () => new Array(4).fill(0));
+  const hint = s.getHint(empty);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length >= 1);
+  assert.ok(hint.length <= 8, `expected ≤ 8 cells per step; got ${hint.length}`);
+});

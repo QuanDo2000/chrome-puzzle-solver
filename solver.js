@@ -9101,6 +9101,116 @@ class KakurasuSolver {
     return false;
   }
 
+  getHint(initialState) {
+    const total = this.rows * this.cols;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        this.cellStatus[r * this.cols + c] = initialState[r][c];
+      }
+    }
+    const before = new Uint8Array(total);
+    for (let i = 0; i < total; i++) before[i] = this.cellStatus[i];
+    this.cellTrail = [];
+    this.maskTrail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this._startedAt = Date.now();
+
+    const collectChanged = () => {
+      const out = [];
+      for (let i = 0; i < total; i++) {
+        if (before[i] === 0 && this.cellStatus[i] !== 0) {
+          const r = (i / this.cols) | 0;
+          const c = i - r * this.cols;
+          out.push({ row: r, col: c, value: this.cellStatus[i] });
+        }
+      }
+      return out;
+    };
+
+    // Rebuild mask domains from current state so narrowing starts fresh.
+    this._buildMaskDomains();
+
+    // Per-row narrowing+forcing — stop at first row that yields a change.
+    for (let r = 0; r < this.rows; r++) {
+      const active = this._narrowLine(0, r, this.rowMasksActive[r]);
+      this.rowMasksActive[r] = active;
+      if (active.length === 0) return null;
+      let inter = active[0], union = active[0];
+      for (let i = 1; i < active.length; i++) {
+        inter &= active[i];
+        union |= active[i];
+      }
+      let changed = false;
+      for (let c = 0; c < this.cols; c++) {
+        const bitMask = 1 << c;
+        const idx = r * this.cols + c;
+        if ((inter & bitMask) && this.cellStatus[idx] === 0) {
+          if (!this._set(idx, 1)) return null;
+          changed = true;
+        } else if (!(union & bitMask) && this.cellStatus[idx] === 0) {
+          if (!this._set(idx, 2)) return null;
+          changed = true;
+        }
+      }
+      if (changed) {
+        const h = collectChanged();
+        if (h.length) return h;
+      }
+    }
+
+    // Per-col narrowing+forcing — stop at first col that yields a change.
+    for (let c = 0; c < this.cols; c++) {
+      const active = this._narrowLine(1, c, this.colMasksActive[c]);
+      this.colMasksActive[c] = active;
+      if (active.length === 0) return null;
+      let inter = active[0], union = active[0];
+      for (let i = 1; i < active.length; i++) {
+        inter &= active[i];
+        union |= active[i];
+      }
+      let changed = false;
+      for (let r = 0; r < this.rows; r++) {
+        const bitMask = 1 << r;
+        const idx = r * this.cols + c;
+        if ((inter & bitMask) && this.cellStatus[idx] === 0) {
+          if (!this._set(idx, 1)) return null;
+          changed = true;
+        } else if (!(union & bitMask) && this.cellStatus[idx] === 0) {
+          if (!this._set(idx, 2)) return null;
+          changed = true;
+        }
+      }
+      if (changed) {
+        const h = collectChanged();
+        if (h.length) return h;
+      }
+    }
+
+    // Single lookahead probe.
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const survivors = [];
+      for (const v of [1, 2]) {
+        const cm = this.cellTrail.length, mm = this.maskTrail.length;
+        this._inLookahead = true;
+        const okSet = this._set(i, v);
+        const ok = okSet && this._propagate();
+        this._rollback(cm, mm);
+        this._inLookahead = false;
+        if (ok) survivors.push(v);
+        if (survivors.length > 1) break;
+      }
+      if (survivors.length === 0) return null;
+      if (survivors.length === 1) {
+        if (!this._set(i, survivors[0])) return null;
+        const h = collectChanged();
+        if (h.length) return h;
+      }
+    }
+    return null;
+  }
+
   solve() {
     const key = this._cacheKey();
     const cached = KakurasuSolver._solutionCache.get(key)
