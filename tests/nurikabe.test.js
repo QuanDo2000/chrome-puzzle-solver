@@ -529,3 +529,17 @@ test('NurikabeSolver._applyShapeEnumeration: cell in reach but in no shape → B
   assert.equal(s.cellStatus[5], 1);
   assert.equal(s.cellStatus[6], 1);
 });
+
+test('NurikabeSolver._pickBestUnknown: returns the single remaining unknown', () => {
+  // 1x4 with clue 2 at (0,0) and clue 1 at (0,3). After buildClaimedBy +
+  // unreachable, (0,2) becomes BLACK; (0,0) and (0,3) are WHITE clues.
+  // Only (0,1) remains UNKNOWN. The picker must return its index (= 1).
+  const s = new NurikabeSolver({
+    rows: 1, cols: 4,
+    task: [[2, -1, -1, 1]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyUnreachable(), true);
+  const idx = s._pickBestUnknown();
+  assert.equal(idx, 1);
+});

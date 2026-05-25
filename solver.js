@@ -11803,16 +11803,57 @@ class NurikabeSolver {
 
   _pickBestUnknown() {
     let bestIdx = -1, bestScore = -1;
+    const claimedBy = this._claimedBy;
+    // Find the clue with the smallest positive remaining N - S so we can
+    // bias toward closing it out. _bfsClueIsland returns { size, capacity }
+    // — we only need size here.
+    let smallestRemaining = Infinity;
+    let smallestClueIdx = -1;
+    let smallestClueSize = 0;
+    for (const clue of this.clues) {
+      const { size } = this._bfsClueIsland(clue);
+      const rem = clue.size - size;
+      if (rem > 0 && rem < smallestRemaining) {
+        smallestRemaining = rem;
+        smallestClueIdx = clue.idx;
+        smallestClueSize = clue.size;
+      }
+    }
     for (let i = 0; i < this.N; i++) {
       if (this.isWall[i]) continue;
       if (this.cellStatus[i] !== 0) continue;
       const r = (i / this.cols) | 0;
       const c = i - r * this.cols;
       let score = 0;
+      // Known/wall 4-neighbours
       if (r > 0 && (this.isWall[i - this.cols] || this.cellStatus[i - this.cols] !== 0)) score++;
       if (r < this.rows - 1 && (this.isWall[i + this.cols] || this.cellStatus[i + this.cols] !== 0)) score++;
       if (c > 0 && (this.isWall[i - 1] || this.cellStatus[i - 1] !== 0)) score++;
       if (c < this.cols - 1 && (this.isWall[i + 1] || this.cellStatus[i + 1] !== 0)) score++;
+      // Adjacent to any claimed WHITE cell — +2
+      const adjClaimed =
+        (r > 0 && claimedBy[i - this.cols] >= 0) ||
+        (r < this.rows - 1 && claimedBy[i + this.cols] >= 0) ||
+        (c > 0 && claimedBy[i - 1] >= 0) ||
+        (c < this.cols - 1 && claimedBy[i + 1] >= 0);
+      if (adjClaimed) score += 2;
+      // In Manhattan reach of exactly one clue — +3
+      let reachingClues = 0;
+      for (const clue of this.clues) {
+        const cr = (clue.idx / this.cols) | 0;
+        const cc = clue.idx - cr * this.cols;
+        if (Math.abs(cr - r) + Math.abs(cc - c) <= clue.size - 1) {
+          reachingClues++;
+          if (reachingClues > 1) break;
+        }
+      }
+      if (reachingClues === 1) score += 3;
+      // In Manhattan reach of the smallest-remaining clue — +5
+      if (smallestClueIdx >= 0) {
+        const cr = (smallestClueIdx / this.cols) | 0;
+        const cc = smallestClueIdx - cr * this.cols;
+        if (Math.abs(cr - r) + Math.abs(cc - c) <= smallestClueSize - 1) score += 5;
+      }
       if (score > bestScore) { bestScore = score; bestIdx = i; }
     }
     return bestIdx;
