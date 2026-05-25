@@ -10826,6 +10826,25 @@ class NurikabeSolver {
     if (this.maxMs <= 0) return false;
     return (Date.now() - this._startedAt) > this.maxMs;
   }
+
+  _applyClueAdjacency() {
+    for (let i = 0; i < this.N; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const r = (i / this.cols) | 0;
+      const c = i - r * this.cols;
+      const ns = [];
+      if (r > 0) ns.push(i - this.cols);
+      if (r < this.rows - 1) ns.push(i + this.cols);
+      if (c > 0) ns.push(i - 1);
+      if (c < this.cols - 1) ns.push(i + 1);
+      let clueCount = 0;
+      for (const ni of ns) if (this.task[ni] > 0) clueCount++;
+      if (clueCount >= 2) {
+        if (!this._set(i, 1)) return false;
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

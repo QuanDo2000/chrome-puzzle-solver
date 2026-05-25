@@ -63,3 +63,22 @@ test('NurikabeSolver: two adjacent clue cells set contradiction at construction'
   });
   assert.equal(s.contradiction, true);
 });
+
+test('NurikabeSolver._applyClueAdjacency: cell with 2 clue neighbours → BLACK', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[1, -1, 1]],
+  });
+  assert.equal(s.contradiction, false);
+  assert.equal(s._applyClueAdjacency(), true);
+  assert.equal(s.cellStatus[1], 1);
+});
+
+test('NurikabeSolver._applyClueAdjacency: cell with one clue neighbour stays unknown', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[1, -1, -1]],
+  });
+  assert.equal(s._applyClueAdjacency(), true);
+  assert.equal(s.cellStatus[1], 0);
+});
