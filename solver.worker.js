@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -113,6 +113,15 @@ self.onmessage = function (e) {
       result = s.solve();
     } else if (type === 'kurodoko' && extraData) {
       const s = new KurodokoSolver({
+        rows: extraData.rows,
+        cols: extraData.cols,
+        task: extraData.task,
+        initialState: initialGrid || null,
+        maxMs: 30000,
+      });
+      result = s.solve();
+    } else if (type === 'mosaic' && extraData) {
+      const s = new MosaicSolver({
         rows: extraData.rows,
         cols: extraData.cols,
         task: extraData.task,

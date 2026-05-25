@@ -689,6 +689,53 @@ const kurodokoHandler = {
 
 registerHandler(kurodokoHandler);
 
+// ── Mosaic handler (puzzles-mobile.com/mosaic/) ───────────────
+
+const mosaicHandler = {
+  name: 'puzzles-mobile-mosaic',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/mosaic/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readMosaicData', []);
+    if (!data) return { ...result, error: 'No Mosaic task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'mosaic',
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readMosaicState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyMosaicState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Mosaic apply failed' };
+  },
+};
+
+registerHandler(mosaicHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
