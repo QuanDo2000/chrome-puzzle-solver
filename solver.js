@@ -10768,6 +10768,17 @@ class NurikabeSolver {
     // claimedBy[i] = clue idx that owns this WHITE cell, or -1 if not yet
     // claimed (UNKNOWN/BLACK/wall, or WHITE not yet attached to a clue).
     this._claimedBy = new Int32Array(this.N);
+    // Shape enumeration scratch.
+    this._shapeInShape = new Uint8Array(this.N);
+    this._shapeStack = new Int32Array(this.N);
+    this._shapeFrontier = new Int32Array(this.N);
+    this._shapeInFrontier = new Uint8Array(this.N);
+    this._shapeInAll = new Uint8Array(this.N);
+    this._shapeInAny = new Uint8Array(this.N);
+    this._shapeCouldBeWhite = new Uint8Array(this.N);
+    // Coarse dirty bit — set whenever cellStatus changes via _set; cleared
+    // by _applyShapeEnumeration on entry.
+    this._dirtyShape = true;
 
     // Force clue cells WHITE.
     for (const clue of this.clues) {
@@ -10851,6 +10862,7 @@ class NurikabeSolver {
     if (old !== 0) return false;
     this.trail.push(idx | (old << 24));
     this.cellStatus[idx] = value;
+    this._dirtyShape = true;
     return true;
   }
 
