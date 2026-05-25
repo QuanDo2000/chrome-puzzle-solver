@@ -132,3 +132,39 @@ test('HitoriSolver._applyUniqueness: column uniqueness', () => {
   assert.equal(s._applyUniqueness(), true);
   assert.equal(s.cellStatus[2], 1);
 });
+
+test('HitoriSolver._applyConnectivity: blacks splitting whites → contradiction', () => {
+  const s = new HitoriSolver({
+    rows: 3, cols: 3,
+    task: [[1,2,3],[4,5,6],[7,8,9]],
+  });
+  s.cellStatus[0] = 2; s.cellStatus[1] = 1; s.cellStatus[2] = 2;
+  s.cellStatus[3] = 1; s.cellStatus[4] = 1; s.cellStatus[5] = 1;
+  s.cellStatus[6] = 2; s.cellStatus[7] = 1; s.cellStatus[8] = 2;
+  assert.equal(s._applyConnectivity(), false);
+});
+
+test('HitoriSolver._applyConnectivity: articulation unknown forced white', () => {
+  const s = new HitoriSolver({
+    rows: 3, cols: 3,
+    task: [[1,2,3],[4,5,6],[7,8,9]],
+  });
+  s.cellStatus[0] = 2; s.cellStatus[2] = 2;
+  s.cellStatus[3] = 1; s.cellStatus[5] = 1;
+  s.cellStatus[6] = 2; s.cellStatus[8] = 2;
+  assert.equal(s._applyConnectivity(), true);
+  assert.equal(s.cellStatus[4], 2);
+});
+
+test('HitoriSolver._applyConnectivity: skipped inside lookahead', () => {
+  const s = new HitoriSolver({
+    rows: 3, cols: 3,
+    task: [[1,2,3],[4,5,6],[7,8,9]],
+  });
+  s.cellStatus[0] = 2; s.cellStatus[2] = 2;
+  s.cellStatus[3] = 1; s.cellStatus[5] = 1;
+  s.cellStatus[6] = 2; s.cellStatus[8] = 2;
+  s._inLookahead = true;
+  assert.equal(s._applyConnectivity(), true);
+  assert.equal(s.cellStatus[4], 0);
+});
