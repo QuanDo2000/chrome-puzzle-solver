@@ -8847,6 +8847,60 @@ HitoriSolver.clearSolutionCache = function() {
   HitoriSolver._partialCache.clear();
 };
 
+class KakurasuSolver {
+  constructor(data) {
+    const { rows, cols, rowClues, colClues, initialState, maxMs } = data;
+    this.rows = rows;
+    this.cols = cols;
+    this.rowClues = new Int32Array(rows);
+    for (let r = 0; r < rows; r++) this.rowClues[r] = rowClues[r];
+    this.colClues = new Int32Array(cols);
+    for (let c = 0; c < cols; c++) this.colClues[c] = colClues[c];
+    this.cellStatus = new Uint8Array(rows * cols);
+    if (initialState) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          this.cellStatus[r * cols + c] = initialState[r][c];
+        }
+      }
+    }
+    this.cellTrail = [];
+    this.maskTrail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this.maxMs = maxMs || 0;
+    this._startedAt = 0;
+  }
+
+  _set(idx, value) {
+    const old = this.cellStatus[idx];
+    if (old === value) return true;
+    if (old !== 0) return false;
+    this.cellTrail.push(idx | (old << 24));
+    this.cellStatus[idx] = value;
+    return true;
+  }
+
+  _rollback(cellMark, maskMark) {
+    while (this.cellTrail.length > cellMark) {
+      const e = this.cellTrail.pop();
+      const i = e & 0xffffff;
+      const old = (e >>> 24) & 0xff;
+      this.cellStatus[i] = old;
+    }
+    while (this.maskTrail.length > maskMark) {
+      const { axis, lineIdx, mask } = this.maskTrail.pop();
+      if (axis === 0) this.rowMasksActive[lineIdx].push(mask);
+      else this.colMasksActive[lineIdx].push(mask);
+    }
+  }
+
+  _timeUp() {
+    if (this.maxMs <= 0) return false;
+    return (Date.now() - this._startedAt) > this.maxMs;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, computePuzzleDiff };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, computePuzzleDiff };
 }
