@@ -238,3 +238,43 @@ test('computePuzzleDiff hitori: flags wrong-color cells, ignores unknown', () =>
   assert.equal(diff.length, 1);
   assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
 });
+
+test('HitoriSolver.getHint: sandwich/triplet emit on first call', () => {
+  HitoriSolver.clearSolutionCache();
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+  });
+  const hint = s.getHint([[0, 0, 0]]);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length >= 1);
+  const mid = hint.find(h => h.row === 0 && h.col === 1);
+  assert.ok(mid, `expected (0,1) in hint; got ${JSON.stringify(hint)}`);
+  assert.equal(mid.value, 2);
+});
+
+test('HitoriSolver.getHint: null on solved board', () => {
+  HitoriSolver.clearSolutionCache();
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+  });
+  assert.equal(s.getHint([[1, 2, 1]]), null);
+});
+
+test('HitoriSolver.getHint: stepwise — small batch per call on 5x5', () => {
+  HitoriSolver.clearSolutionCache();
+  const task = [
+    [5,5,2,3,3],
+    [2,5,4,4,3],
+    [4,4,1,5,2],
+    [1,2,5,4,5],
+    [1,4,5,5,1],
+  ];
+  const s = new HitoriSolver({ rows:5, cols:5, task });
+  const empty = Array.from({length:5}, () => new Array(5).fill(0));
+  const hint = s.getHint(empty);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length >= 1);
+  assert.ok(hint.length <= 8, `expected ≤ 8 cells; got ${hint.length}`);
+});
