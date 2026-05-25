@@ -123,3 +123,57 @@ test('KurodokoSolver._propagate: contradictory input', () => {
   });
   assert.equal(s._propagate(), false);
 });
+
+test('KurodokoSolver.solve: solves the recon 5x5', () => {
+  KurodokoSolver.clearSolutionCache();
+  const s = new KurodokoSolver({
+    rows: 5, cols: 5,
+    task: [
+      [-1,-1,-1,6,-1],
+      [-1,4,-1,7,-1],
+      [-1,-1,-1,-1,-1],
+      [-1,5,-1,8,-1],
+      [-1,5,-1,-1,-1],
+    ],
+    maxMs: 5000,
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  let blacks = 0, whites = 0, zeros = 0;
+  for (const row of r.grid) for (const v of row) {
+    if (v === 1) blacks++;
+    else if (v === 2) whites++;
+    else if (v === 0) zeros++;
+  }
+  // 6 clue cells (the -1 positions in task are non-clue); clue cells emit 0.
+  assert.equal(zeros, 6, `expected 6 zero (clue) cells; got ${zeros}`);
+});
+
+test('KurodokoSolver.solve: returns {solved:false, grid:null} on unsat', () => {
+  KurodokoSolver.clearSolutionCache();
+  const s = new KurodokoSolver({
+    rows: 2, cols: 2,
+    task: [[4,-1],[-1,-1]],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, false);
+  assert.equal(r.grid, null);
+});
+
+test('KurodokoSolver._solutionCache: cache hit returns deep copy', () => {
+  KurodokoSolver.clearSolutionCache();
+  const opts = { rows: 3, cols: 3, task: [[-1,-1,-1],[-1,5,-1],[-1,-1,-1]] };
+  const a = new KurodokoSolver(opts).solve();
+  a.grid[0][0] = 99;
+  const b = new KurodokoSolver(opts).solve();
+  assert.notEqual(b.grid[0][0], 99);
+});
+
+test('computePuzzleDiff kurodoko: flags wrong-color cells, ignores unknown', () => {
+  const { computePuzzleDiff } = require('../solver.js');
+  const solution = [[1, 2], [2, 1]];
+  const board = [[2, 2], [0, 1]];
+  const diff = computePuzzleDiff('kurodoko', board, solution);
+  assert.equal(diff.length, 1);
+  assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
+});
