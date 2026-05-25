@@ -2613,6 +2613,11 @@ function makeWidget() {
     if (pd?.type === 'heyawake' && Array.isArray(pd.areas)) {
       drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, pd.rooms);
     }
+    if (pd?.type === 'norinori' && Array.isArray(pd.areas)) {
+      // Norinori has the same room-boundary structure as Heyawake but no
+      // target numbers — call the shared helper with rooms=null.
+      drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, null);
+    }
     if (pd?.type === 'hitori') {
       // Outer border only — clue digits are on the dynamic layer (shading
       // changes text colour, so they can't be cached here).
@@ -2983,6 +2988,7 @@ function makeWidget() {
     const isHitori = puzzleData?.type === 'hitori';
     const isKurodoko = puzzleData?.type === 'kurodoko';
     const isMosaic = puzzleData?.type === 'mosaic';
+    const isNorinori = puzzleData?.type === 'norinori';
     const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
     if (isSlitherlink) {
       ctx.save();
@@ -3110,7 +3116,7 @@ function makeWidget() {
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const v = grid[r][c];
-          if (v === 0 && !isShikaku && !isHitori && !isKakurasu && !isKurodoko && !isMosaic) continue;
+          if (v === 0 && !isShikaku && !isHitori && !isKakurasu && !isKurodoko && !isMosaic && !isNorinori) continue;
           if (v === -1 && isShikaku) continue;
           const x = c * cellSize, y = r * cellSize;
           if (isShikaku) {
@@ -3273,6 +3279,24 @@ function makeWidget() {
               ctx.fillStyle = (v === 1) ? '#f3f4f6' : '#1f2937';
               ctx.fillText(String(taskVal), x + cellSize / 2, y + cellSize / 2);
             }
+          } else if (isNorinori) {
+            // Norinori: v=1 = black cell (solid dark fill inset); v=2 = crossed
+            // empty (diagonal cross in muted gray); v=0 = unknown (blank).
+            if (v === 1) {
+              const pad = Math.max(2, Math.floor(cellSize * 0.1));
+              ctx.fillStyle = '#1f2937';
+              ctx.fillRect(x + pad, y + pad, cellSize - 2 * pad, cellSize - 2 * pad);
+            } else if (v === 2) {
+              const pad = Math.max(3, Math.floor(cellSize * 0.25));
+              ctx.strokeStyle = '#9ca3af';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(x + pad, y + pad);
+              ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
+              ctx.moveTo(x + cellSize - pad, y + pad);
+              ctx.lineTo(x + pad, y + cellSize - pad);
+              ctx.stroke();
+            }
           } else if (v === 1) {
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(x, y, cellSize, cellSize);
@@ -3385,6 +3409,8 @@ function makeWidget() {
         // Kurodoko hints are absolute cells (extraCells) — no row/column band.
       } else if (isMosaic) {
         // Mosaic hints are absolute cells (extraCells) — no row/column band.
+      } else if (isNorinori) {
+        // Norinori hints are absolute cells (extraCells) — no row/column band.
       } else if (hint.type === 'hashi') {
         // Hashi hint edges are already merged into grid.edges by
         // applyHintToGrid and painted by the dynamic-bridges branch above.
@@ -3454,6 +3480,12 @@ function makeWidget() {
         } else if (isMosaic && (cell.value === 1 || cell.value === 2)) {
           // Mosaic hint: value 1 = must be black (darker blue ring),
           // value 2 = must be white/empty (lighter blue ring).
+          ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+          ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+        } else if (isNorinori && (cell.value === 1 || cell.value === 2)) {
+          // Norinori hint: value 1 = must be black (darker blue ring),
+          // value 2 = must be empty/crossed (lighter blue ring).
           ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
           ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
@@ -4077,7 +4109,7 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && hr.hint?.type !== 'kurodoko' && hr.hint?.type !== 'mosaic' && !hr.hint?.cells?.length) break;
+      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && hr.hint?.type !== 'kurodoko' && hr.hint?.type !== 'mosaic' && hr.hint?.type !== 'norinori' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // getHint may lazily solve as a fallback (galaxies + aquarium);
