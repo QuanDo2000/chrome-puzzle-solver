@@ -43,3 +43,5 @@ jobs:
         run: node tests/bench-mosaic.js
       - name: Bench Norinori
         run: node tests/bench-norinori.js
+      - name: Bench Nurikabe
+        run: node tests/bench-nurikabe.js
