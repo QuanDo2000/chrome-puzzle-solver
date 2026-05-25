@@ -10888,6 +10888,98 @@ class NurikabeSolver {
     }
     return true;
   }
+
+  _bfsWhiteComponent(startIdx) {
+    const members = new Uint8Array(this.N);
+    members[startIdx] = 1;
+    const queue = [startIdx];
+    const frontier = [];
+    const seenFrontier = new Uint8Array(this.N);
+    let size = 1;
+    while (queue.length) {
+      const idx = queue.shift();
+      const r = (idx / this.cols) | 0;
+      const c = idx - r * this.cols;
+      const ns = [];
+      if (r > 0) ns.push(idx - this.cols);
+      if (r < this.rows - 1) ns.push(idx + this.cols);
+      if (c > 0) ns.push(idx - 1);
+      if (c < this.cols - 1) ns.push(idx + 1);
+      for (const ni of ns) {
+        if (members[ni]) continue;
+        const v = this.cellStatus[ni];
+        if (v === 1) continue;
+        if (this.task[ni] > 0 && ni !== startIdx) continue;
+        if (v === 2) {
+          members[ni] = 1;
+          size++;
+          queue.push(ni);
+        } else if (v === 0) {
+          if (!seenFrontier[ni]) {
+            seenFrontier[ni] = 1;
+            frontier.push(ni);
+          }
+        }
+      }
+    }
+    return { size, members, frontier };
+  }
+
+  _islandCapacity(startIdx, members) {
+    const visited = new Uint8Array(this.N);
+    const queue = [];
+    let count = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (members[i]) { visited[i] = 1; queue.push(i); count++; }
+    }
+    const reachable = new Uint8Array(this.N);
+    for (let i = 0; i < this.N; i++) if (members[i]) reachable[i] = 1;
+    while (queue.length) {
+      const idx = queue.shift();
+      const r = (idx / this.cols) | 0;
+      const c = idx - r * this.cols;
+      const ns = [];
+      if (r > 0) ns.push(idx - this.cols);
+      if (r < this.rows - 1) ns.push(idx + this.cols);
+      if (c > 0) ns.push(idx - 1);
+      if (c < this.cols - 1) ns.push(idx + 1);
+      for (const ni of ns) {
+        if (visited[ni]) continue;
+        const v = this.cellStatus[ni];
+        if (v === 1) continue;
+        if (this.task[ni] > 0 && ni !== startIdx) continue;
+        visited[ni] = 1;
+        reachable[ni] = 1;
+        count++;
+        queue.push(ni);
+      }
+    }
+    return { capacity: count, reachable };
+  }
+
+  _applyIslandComplete() {
+    for (const clue of this.clues) {
+      const { size, members, frontier } = this._bfsWhiteComponent(clue.idx);
+      if (size > clue.size) return false;
+      const { capacity, reachable } = this._islandCapacity(clue.idx, members);
+      if (capacity < clue.size) return false;
+      if (size === clue.size) {
+        for (const ni of frontier) {
+          if (this.cellStatus[ni] === 0) {
+            if (!this._set(ni, 1)) return false;
+          }
+        }
+      }
+      if (capacity === clue.size) {
+        for (let i = 0; i < this.N; i++) {
+          if (reachable[i] && this.cellStatus[i] === 0) {
+            if (!this._set(i, 2)) return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

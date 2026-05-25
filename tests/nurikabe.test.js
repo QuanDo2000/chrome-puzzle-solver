@@ -115,3 +115,41 @@ test('NurikabeSolver._applyUnreachable: cell within reach stays unknown', () => 
   assert.equal(s._applyUnreachable(), true);
   assert.equal(s.cellStatus[0], 0);
 });
+
+test('NurikabeSolver._applyIslandComplete: white component == N forces UNKNOWN frontier to BLACK', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[2, -1, -1]],
+  });
+  s._set(1, 2);
+  assert.equal(s._applyIslandComplete(), true);
+  assert.equal(s.cellStatus[2], 1);
+});
+
+test('NurikabeSolver._applyIslandComplete: capacity == N forces reachable UNKNOWNs to WHITE', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[2, -1, -1]],
+  });
+  s._set(2, 1);
+  assert.equal(s._applyIslandComplete(), true);
+  assert.equal(s.cellStatus[1], 2);
+});
+
+test('NurikabeSolver._applyIslandComplete: white component > N → contradiction', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[1, -1, -1]],
+    initialState: [[2, 2, 0]],
+  });
+  assert.equal(s._applyIslandComplete(), false);
+});
+
+test('NurikabeSolver._applyIslandComplete: capacity < N → contradiction', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[3, -1, -1]],
+    initialState: [[2, 0, 1]],
+  });
+  assert.equal(s._applyIslandComplete(), false);
+});
