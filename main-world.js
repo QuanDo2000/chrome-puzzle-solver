@@ -1303,6 +1303,20 @@ function dumpPuzzleForBench() {
       return { type: 'galaxies', rows: cellH, cols: cellW, stars: stars, path: path };
     }
 
+    if (path.indexOf('/heyawake/') !== -1 || g.slug === 'heyawake') {
+      var hwData = readHeyawakeData();
+      if (!hwData) return { error: 'heyawake: readHeyawakeData failed', diagnostic: diagnostic(g), path: path };
+      var hwAreas = [];
+      for (var r = 0; r < hwData.rows; r++) {
+        hwAreas.push(hwData.areas[r].slice());
+      }
+      var hwAreaTask = g.areaTask ? Array.prototype.slice.call(g.areaTask) : [];
+      return {
+        type: 'heyawake', rows: hwData.rows, cols: hwData.cols,
+        areas: hwAreas, areaTask: hwAreaTask, path: path,
+      };
+    }
+
     // Hashi: islands list, no grid clues. g.task is a flat array of island
     // descriptors, not a 2D grid — must come before any generic-fallback
     // 2D-grid path or the shape-walkers below will trip on it.

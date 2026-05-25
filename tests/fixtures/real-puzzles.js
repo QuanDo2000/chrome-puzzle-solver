@@ -421,4 +421,20 @@ module.exports = {
       { index: 9, row: 6, col: 6, number: 2 },
     ],
   },
+
+  // 6x6 Heyawake captured from a real recon dump.
+  heyawake6x6EasyReal: {
+    type: 'heyawake',
+    rows: 6,
+    cols: 6,
+    areas: [
+      [0, 1, 2, 3, 3, 3],
+      [4, 4, 2, 3, 3, 3],
+      [5, 5, 5, 5, 6, 7],
+      [8, 8, 8, 9, 6, 7],
+      [8, 8, 8, 10, 10, 7],
+      [8, 8, 8, 10, 10, 7],
+    ],
+    areaTask: [1, -1, -1, 2, 1, -1, 0, -1, 3, 1, -1],
+  },
 };
