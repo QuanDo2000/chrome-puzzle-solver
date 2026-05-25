@@ -9994,6 +9994,91 @@ class MosaicSolver {
     };
   }
 
+  getHint(initialState) {
+    const total = this.rows * this.cols;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        this.cellStatus[r * this.cols + c] = initialState[r][c];
+      }
+    }
+    const before = new Uint8Array(total);
+    for (let i = 0; i < total; i++) before[i] = this.cellStatus[i];
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this._startedAt = Date.now();
+
+    const collectChanged = () => {
+      const out = [];
+      for (let i = 0; i < total; i++) {
+        if (before[i] === 0 && this.cellStatus[i] !== 0) {
+          const r = (i / this.cols) | 0;
+          const c = i - r * this.cols;
+          out.push({ row: r, col: c, value: this.cellStatus[i] });
+        }
+      }
+      return out;
+    };
+
+    // Per-clue scan, stop at first that yields a change.
+    for (let i = 0; i < this.clues.length; i++) {
+      const cells = this.clueNeighborhood[i];
+      const K = this.clueValues[i];
+      let nB = 0, nU = 0;
+      for (let j = 0; j < cells.length; j++) {
+        const v = this.cellStatus[cells[j]];
+        if (v === 1) nB++;
+        else if (v === 0) nU++;
+      }
+      if (nB > K) return null;
+      if (nB + nU < K) return null;
+      let changed = false;
+      if (nB === K && nU > 0) {
+        for (let j = 0; j < cells.length; j++) {
+          if (this.cellStatus[cells[j]] === 0) {
+            if (!this._set(cells[j], 2)) return null;
+            changed = true;
+          }
+        }
+      } else if (nB + nU === K && nU > 0) {
+        for (let j = 0; j < cells.length; j++) {
+          if (this.cellStatus[cells[j]] === 0) {
+            if (!this._set(cells[j], 1)) return null;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        const h = collectChanged();
+        if (h.length) return h;
+      }
+    }
+
+    // Single lookahead probe.
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const survivors = [];
+      for (const v of [1, 2]) {
+        const mark = this.trail.length;
+        this._inLookahead = true;
+        const okSet = this._set(i, v);
+        const ok = okSet && this._propagate();
+        this._rollback(mark);
+        this._inLookahead = false;
+        if (ok) survivors.push(v);
+        if (survivors.length > 1) break;
+      }
+      if (survivors.length === 0) return null;
+      if (survivors.length === 1) {
+        if (!this._set(i, survivors[0])) return null;
+        const h = collectChanged();
+        if (h.length) return h;
+      }
+    }
+
+    return null;
+  }
+
   _storeInCache(key, result) {
     const m = result.partial ? MosaicSolver._partialCache : MosaicSolver._solutionCache;
     const max = result.partial ? MosaicSolver._maxPartialCache : MosaicSolver._maxSolutionCache;

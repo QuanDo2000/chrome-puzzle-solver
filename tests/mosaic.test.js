@@ -170,3 +170,28 @@ test('computePuzzleDiff mosaic: flags wrong-color cells, ignores unknown', () =>
   assert.equal(diff.length, 1);
   assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
 });
+
+test('MosaicSolver.getHint: K=0 yields immediate whites', () => {
+  MosaicSolver.clearSolutionCache();
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[0,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const hint = s.getHint([[0,0,0],[0,0,0],[0,0,0]]);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length >= 1);
+  for (const [r, c] of [[0,0],[0,1],[1,0],[1,1]]) {
+    const h = hint.find(x => x.row === r && x.col === c);
+    assert.ok(h && h.value === 2);
+  }
+});
+
+test('MosaicSolver.getHint: null on solved board', () => {
+  MosaicSolver.clearSolutionCache();
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[0,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  const solved = [[2,2,2],[2,2,2],[2,2,2]];
+  assert.equal(s.getHint(solved), null);
+});
