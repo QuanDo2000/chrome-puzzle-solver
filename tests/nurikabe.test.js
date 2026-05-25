@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { NurikabeSolver } = require('../solver.js');
+const { NurikabeSolver, computePuzzleDiff } = require('../solver.js');
 
 test('NurikabeSolver: constructor sets clue cells WHITE and builds clues list', () => {
   const s = new NurikabeSolver({
@@ -226,4 +226,45 @@ test('NurikabeSolver._propagate: returns false on inherent contradiction', () =>
     task: [[1, 1, -1]],
   });
   assert.equal(s.contradiction, true);
+});
+
+test('NurikabeSolver.solve: solves trivial 1x2 clue 2', () => {
+  NurikabeSolver.clearSolutionCache();
+  const s = new NurikabeSolver({
+    rows: 1, cols: 2,
+    task: [[2, -1]],
+    maxMs: 5000,
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.deepEqual(r.grid, [[2, 2]]);
+});
+
+test('NurikabeSolver.solve: solves unsat returning {solved:false, grid:null}', () => {
+  NurikabeSolver.clearSolutionCache();
+  const s = new NurikabeSolver({
+    rows: 1, cols: 2,
+    task: [[1, 1]],
+    maxMs: 5000,
+  });
+  const r = s.solve();
+  assert.equal(r.solved, false);
+  assert.equal(r.grid, null);
+});
+
+test('NurikabeSolver._solutionCache: cache hit returns deep copy', () => {
+  NurikabeSolver.clearSolutionCache();
+  const opts = { rows: 1, cols: 2, task: [[2, -1]] };
+  const a = new NurikabeSolver(opts).solve();
+  a.grid[0][0] = 99;
+  const b = new NurikabeSolver(opts).solve();
+  assert.notEqual(b.grid[0][0], 99);
+});
+
+test('computePuzzleDiff nurikabe: flags wrong-color non-clue cells', () => {
+  const solution = [[2, 1], [1, 2]];
+  const board = [[2, 2], [1, 2]];
+  const diff = computePuzzleDiff('nurikabe', board, solution);
+  assert.equal(diff.length, 1);
+  assert.deepEqual(diff[0], { row: 0, col: 1, expected: 1, actual: 2 });
 });
