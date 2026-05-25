@@ -127,3 +127,51 @@ test('KakurasuSolver._propagate: solves recon 4x4 by propagation alone', () => {
       `cell (${r},${c}) expected ${expected[r][c]} got ${s.cellStatus[r*4+c]}`);
   }
 });
+
+test('KakurasuSolver.solve: solves recon 4x4', () => {
+  KakurasuSolver.clearSolutionCache();
+  const s = new KakurasuSolver({
+    rows: 4, cols: 4,
+    rowClues: [2, 7, 9, 6],
+    colClues: [4, 8, 9, 5],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  const expected = [
+    [2,1,2,2],
+    [2,2,1,1],
+    [2,1,1,1],
+    [1,1,1,2],
+  ];
+  assert.deepEqual(r.grid, expected);
+});
+
+test('KakurasuSolver.solve: unsat returns {solved:false, grid:null}', () => {
+  KakurasuSolver.clearSolutionCache();
+  const s = new KakurasuSolver({
+    rows: 1, cols: 3,
+    rowClues: [100],
+    colClues: [0, 0, 0],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, false);
+  assert.equal(r.grid, null);
+});
+
+test('KakurasuSolver._solutionCache: cache hit returns deep copy', () => {
+  KakurasuSolver.clearSolutionCache();
+  const opts = { rows:4, cols:4, rowClues:[2,7,9,6], colClues:[4,8,9,5] };
+  const a = new KakurasuSolver(opts).solve();
+  a.grid[0][0] = 99;
+  const b = new KakurasuSolver(opts).solve();
+  assert.notEqual(b.grid[0][0], 99);
+});
+
+test('computePuzzleDiff kakurasu: flags wrong-color cells, ignores unknown', () => {
+  const { computePuzzleDiff } = require('../solver.js');
+  const solution = [[1, 2], [2, 1]];
+  const board = [[2, 2], [0, 1]];
+  const diff = computePuzzleDiff('kakurasu', board, solution);
+  assert.equal(diff.length, 1);
+  assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
+});
