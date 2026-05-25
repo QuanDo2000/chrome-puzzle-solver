@@ -976,6 +976,9 @@ function solveExtraData() {
   if (data.type === 'norinori') {
     return { rows: data.rows, cols: data.cols, rooms: data.rooms };
   }
+  if (data.type === 'nurikabe') {
+    return { rows: data.rows, cols: data.cols, task: data.task };
+  }
   return null;
 }
 
@@ -990,7 +993,7 @@ function solveExtraData() {
 //     localStorage quota (~5 MB per origin).
 const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SOLUTION_CACHE_MAX = 50;
-const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:', 'hashi-solution:', 'heyawake-solution:', 'hitori-solution:', 'kakurasu-solution:', 'kurodoko-solution:', 'mosaic-solution:', 'norinori-solution:'];
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:', 'hashi-solution:', 'heyawake-solution:', 'hitori-solution:', 'kakurasu-solution:', 'kurodoko-solution:', 'mosaic-solution:', 'norinori-solution:', 'nurikabe-solution:'];
 
 function isSolutionCacheKey(key) {
   return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
@@ -1275,6 +1278,16 @@ function norinoriCacheKey(data) {
   return 'norinori-solution:' + (h >>> 0).toString(16);
 }
 
+function nurikabeCacheKey(data) {
+  if (data?.type !== 'nurikabe' || !data.task) return null;
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x4F); // distinct from Norinori (0x4E)
+  mix(data.rows); mix(data.cols);
+  for (const row of data.task) for (const v of row) { mix(v & 0xff); mix((v >>> 8) & 0xff); }
+  return 'nurikabe-solution:' + (h >>> 0).toString(16);
+}
+
 function getCachedGridSolution(data) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
@@ -1289,6 +1302,7 @@ function getCachedGridSolution(data) {
     : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
     : data?.type === 'mosaic' ? mosaicCacheKey(data)
     : data?.type === 'norinori' ? norinoriCacheKey(data)
+    : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
     : null;
   if (!key) return null;
   try {
@@ -1331,6 +1345,7 @@ function cacheGridSolution(data, grid) {
     : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
     : data?.type === 'mosaic' ? mosaicCacheKey(data)
     : data?.type === 'norinori' ? norinoriCacheKey(data)
+    : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
     : null;
   if (!key) return;
   try {
@@ -1755,6 +1770,18 @@ async function getHint(request = {}) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
       hint = { type: 'norinori', extraCells: hintCells, count: hintCells.length };
+    } else if (detectedGrid.type === 'nurikabe') {
+      if (solution && firstMismatch(grid, solution)) {
+        return { success: false, error: 'Current game state is wrong.' };
+      }
+      const solver = new NurikabeSolver({
+        rows, cols, task: detectedGrid.task,
+      });
+      const hintCells = solver.getHint(grid);
+      if (!hintCells || hintCells.length === 0) {
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+      }
+      hint = { type: 'nurikabe', extraCells: hintCells, count: hintCells.length };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1843,6 +1870,7 @@ const SUPPORTED_PUZZLES = [
   { name: 'Kurodoko',     url: 'https://www.puzzles-mobile.com/kurodoko/' },
   { name: 'Mosaic',       url: 'https://www.puzzles-mobile.com/mosaic/' },
   { name: 'Norinori',     url: 'https://www.puzzles-mobile.com/norinori/' },
+  { name: 'Nurikabe',     url: 'https://www.puzzles-mobile.com/nurikabe/' },
   { name: 'Nonogram',     url: 'https://www.puzzles-mobile.com/nonograms/' },
   { name: 'Shikaku',      url: 'https://www.puzzles-mobile.com/shikaku/' },
   { name: 'Slitherlink',  url: 'https://www.puzzles-mobile.com/loop/' },
@@ -2057,6 +2085,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...mosaicHintStatusNodes(h));
     } else if (puzzleData?.type === 'norinori') {
       setStatusNodes('info', prefix, ...norinoriHintStatusNodes(h));
+    } else if (puzzleData?.type === 'nurikabe') {
+      setStatusNodes('info', prefix, ...nurikabeHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -2168,6 +2198,22 @@ function makeWidget() {
     if (cells.length === 1) {
       const cell = cells[0];
       const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
+      return [
+        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
+        ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(cells.length)), ' cells can be deduced'];
+  }
+
+  // Nurikabe hints carry absolute cells in extraCells.
+  // cellStatus 1 = sea (black), 2 = island (white).
+  function nurikabeHintStatusNodes(h) {
+    const cells = h.extraCells || [];
+    if (cells.length === 0) return ['No hint available'];
+    if (cells.length === 1) {
+      const cell = cells[0];
+      const valueStr = cell.value === 1 ? 'sea (black)' : 'island (white)';
       return [
         'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
         ' must be ', bold(valueStr),
@@ -2484,6 +2530,16 @@ function makeWidget() {
     let h = 0x811c9dc5;
     for (const row of areas) for (const v of row) {
       h ^= (v + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  function nurikabeTaskSig(task) {
+    if (!task) return '0';
+    let h = 0x811c9dc5;
+    for (const row of task) for (const v of row) {
+      h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+      h ^= (v >>> 8) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
     }
     return (h >>> 0).toString(16);
   }
@@ -2900,7 +2956,7 @@ function makeWidget() {
   }
 
   function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi' || pd?.type === 'heyawake' || pd?.type === 'hitori' || pd?.type === 'kakurasu' || pd?.type === 'kurodoko' || pd?.type === 'mosaic' || pd?.type === 'norinori') return;
+    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi' || pd?.type === 'heyawake' || pd?.type === 'hitori' || pd?.type === 'kakurasu' || pd?.type === 'kurodoko' || pd?.type === 'mosaic' || pd?.type === 'norinori' || pd?.type === 'nurikabe') return;
     ctx.save();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -2991,7 +3047,8 @@ function makeWidget() {
                       '|ka=' + kakurasuCluesSig(pd?.type === 'kakurasu' ? pd.rowClues : null, pd?.type === 'kakurasu' ? pd.colClues : null) +
                       '|kd=' + kurodokoTaskSig(pd?.type === 'kurodoko' ? pd.task : null) +
                       '|mc=' + mosaicTaskSig(pd?.type === 'mosaic' ? pd.task : null) +
-                      '|nn=' + norinoriAreasSig(pd?.type === 'norinori' ? pd.areas : null);
+                      '|nn=' + norinoriAreasSig(pd?.type === 'norinori' ? pd.areas : null) +
+                      '|nu=' + nurikabeTaskSig(pd?.type === 'nurikabe' ? pd.task : null);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull);
       staticLayer = buildStaticLayer(rows, cols, cellSize, wFull, hFull, pd);
@@ -3019,6 +3076,7 @@ function makeWidget() {
     const isKurodoko = puzzleData?.type === 'kurodoko';
     const isMosaic = puzzleData?.type === 'mosaic';
     const isNorinori = puzzleData?.type === 'norinori';
+    const isNurikabe = puzzleData?.type === 'nurikabe';
     const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
     if (isSlitherlink) {
       ctx.save();
@@ -3146,7 +3204,7 @@ function makeWidget() {
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const v = grid[r][c];
-          if (v === 0 && !isShikaku && !isHitori && !isKakurasu && !isKurodoko && !isMosaic && !isNorinori) continue;
+          if (v === 0 && !isShikaku && !isHitori && !isKakurasu && !isKurodoko && !isMosaic && !isNorinori && !isNurikabe) continue;
           if (v === -1 && isShikaku) continue;
           const x = c * cellSize, y = r * cellSize;
           if (isShikaku) {
@@ -3327,6 +3385,26 @@ function makeWidget() {
               ctx.lineTo(x + pad, y + cellSize - pad);
               ctx.stroke();
             }
+          } else if (isNurikabe) {
+            // Skip clue cells — page renders them as their own DOM node.
+            const taskVal = puzzleData?.task?.[r]?.[c];
+            if (typeof taskVal === 'number' && taskVal > 0) {
+              // leave page's clue cell visible
+            } else if (v === 1) {
+              const pad = Math.max(2, Math.floor(cellSize * 0.1));
+              ctx.fillStyle = '#1f2937';
+              ctx.fillRect(x + pad, y + pad, cellSize - 2 * pad, cellSize - 2 * pad);
+            } else if (v === 2) {
+              const pad = Math.max(3, Math.floor(cellSize * 0.25));
+              ctx.strokeStyle = '#9ca3af';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(x + pad, y + pad);
+              ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
+              ctx.moveTo(x + cellSize - pad, y + pad);
+              ctx.lineTo(x + pad, y + cellSize - pad);
+              ctx.stroke();
+            }
           } else if (v === 1) {
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(x, y, cellSize, cellSize);
@@ -3441,6 +3519,8 @@ function makeWidget() {
         // Mosaic hints are absolute cells (extraCells) — no row/column band.
       } else if (isNorinori) {
         // Norinori hints are absolute cells (extraCells) — no row/column band.
+      } else if (isNurikabe) {
+        // Nurikabe hints are absolute cells (extraCells) — no row/column band.
       } else if (hint.type === 'hashi') {
         // Hashi hint edges are already merged into grid.edges by
         // applyHintToGrid and painted by the dynamic-bridges branch above.
@@ -3516,6 +3596,11 @@ function makeWidget() {
         } else if (isNorinori && (cell.value === 1 || cell.value === 2)) {
           // Norinori hint: value 1 = must be black (darker blue ring),
           // value 2 = must be empty/crossed (lighter blue ring).
+          ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+          ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+        } else if (isNurikabe && (cell.value === 1 || cell.value === 2)) {
+          // Nurikabe hint: value 1 = must be sea/black; value 2 = must be island/white.
           ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
           ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
@@ -3761,6 +3846,10 @@ function makeWidget() {
         return;
       }
       if (result?.partial && puzzleData?.type === 'norinori' && Array.isArray(result.grid)) {
+        applyGridPartialResult(result);
+        return;
+      }
+      if (result?.partial && puzzleData?.type === 'nurikabe' && Array.isArray(result.grid)) {
         applyGridPartialResult(result);
         return;
       }
@@ -4143,7 +4232,7 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && hr.hint?.type !== 'kurodoko' && hr.hint?.type !== 'mosaic' && hr.hint?.type !== 'norinori' && !hr.hint?.cells?.length) break;
+      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && hr.hint?.type !== 'kurodoko' && hr.hint?.type !== 'mosaic' && hr.hint?.type !== 'norinori' && hr.hint?.type !== 'nurikabe' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // getHint may lazily solve as a fallback (galaxies + aquarium);
@@ -4291,7 +4380,7 @@ function makeWidget() {
     // on pendingAutoSolve — on hard 30×30 dailies that solve can take >30 s,
     // while the propagation hint returns in ~1 ms. Other puzzle types still
     // need the cached solution for mistake comparison.
-    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi' || puzzleData.type === 'heyawake' || puzzleData.type === 'hitori' || puzzleData.type === 'kakurasu' || puzzleData.type === 'kurodoko' || puzzleData.type === 'mosaic' || puzzleData.type === 'norinori';
+    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi' || puzzleData.type === 'heyawake' || puzzleData.type === 'hitori' || puzzleData.type === 'kakurasu' || puzzleData.type === 'kurodoko' || puzzleData.type === 'mosaic' || puzzleData.type === 'norinori' || puzzleData.type === 'nurikabe';
     if (!skipAutoSolveGate && !puzzleData.solution && pendingAutoSolve) {
       setStatus('Solving...', 'info');
       await pendingAutoSolve;
