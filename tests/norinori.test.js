@@ -168,3 +168,20 @@ test('NorinoriSolver._applyDominoes: nB=0 with 0 live candidates → contradicti
   });
   assert.equal(s._applyDominoes(), false);
 });
+
+test('NorinoriSolver._applyCrossRegionDominate: cell adjacent to a region where every candidate touches it → forced white', () => {
+  // 2x3 grid, two row-regions.
+  // Region 0 (row 0): cells (0,0),(0,1),(0,2). Domino candidates:
+  //   (0,0)-(0,1) and (0,1)-(0,2). Both contain (0,1).
+  // Region 1 (row 1): cell (1,1) is 4-adjacent to (0,1) (cross-region).
+  //   Since both region-0 candidates touch (0,1), (1,1) must be white.
+  const s = new NorinoriSolver({
+    rows: 2, cols: 3,
+    rooms: [
+      { cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}] },
+      { cells: [{r: 1, c: 0}, {r: 1, c: 1}, {r: 1, c: 2}] },
+    ],
+  });
+  assert.equal(s._applyCrossRegionDominate(), true);
+  assert.equal(s.cellStatus[4], 2); // (1,1) forced white
+});

@@ -10468,6 +10468,63 @@ class NorinoriSolver {
     return true;
   }
 
+  _applyCrossRegionDominate() {
+    // Precompute live candidates per region (drop pairs with a white cell).
+    const liveCands = new Array(this.K);
+    for (let k = 0; k < this.K; k++) {
+      const cands = this.dominoCandidates[k];
+      const live = [];
+      for (let i = 0; i < cands.length; i++) {
+        const p = cands[i];
+        if (this.cellStatus[p[0]] === 2) continue;
+        if (this.cellStatus[p[1]] === 2) continue;
+        live.push(p);
+      }
+      liveCands[k] = live;
+    }
+    const total = this.rows * this.cols;
+    for (let idx = 0; idx < total; idx++) {
+      if (this.cellStatus[idx] !== 0) continue;
+      const r = (idx / this.cols) | 0;
+      const c = idx - r * this.cols;
+      const ownRoom = this.cellToRoom[idx];
+      // Group adjacent cross-region neighbours by their region.
+      const adjByRoom = new Map();
+      const ns = [];
+      if (r > 0) ns.push(idx - this.cols);
+      if (r < this.rows - 1) ns.push(idx + this.cols);
+      if (c > 0) ns.push(idx - 1);
+      if (c < this.cols - 1) ns.push(idx + 1);
+      for (let i = 0; i < ns.length; i++) {
+        const ni = ns[i];
+        const nr = this.cellToRoom[ni];
+        if (nr === ownRoom || nr < 0) continue;
+        let set = adjByRoom.get(nr);
+        if (!set) { set = new Set(); adjByRoom.set(nr, set); }
+        set.add(ni);
+      }
+      // For each adjacent region Y: if every live candidate touches the
+      // adjacency set → idx must be white.
+      for (const [yRoom, adjSet] of adjByRoom) {
+        const live = liveCands[yRoom];
+        if (live.length === 0) continue;
+        let allTouch = true;
+        for (let i = 0; i < live.length; i++) {
+          const p = live[i];
+          if (!adjSet.has(p[0]) && !adjSet.has(p[1])) {
+            allTouch = false;
+            break;
+          }
+        }
+        if (allTouch) {
+          if (!this._set(idx, 2)) return false;
+          break;
+        }
+      }
+    }
+    return true;
+  }
+
   _timeUp() {
     if (this.maxMs <= 0) return false;
     return (Date.now() - this._startedAt) > this.maxMs;
