@@ -2866,3 +2866,79 @@ test('NurikabeSolver: nurikabe5x5Easy fixture solves to a valid grid', () => {
                   r.grid[row+1][col] === 1 && r.grid[row+1][col+1] === 1),
         `2x2 black at (${row},${col})`);
 });
+
+test('NurikabeSolver: nurikabe20x20Monthly fixture solves within 30s to a valid grid', { timeout: 60000 }, () => {
+  const fixture = fixtures.nurikabe20x20Monthly;
+  NurikabeSolver.clearSolutionCache();
+  const s = new NurikabeSolver({
+    rows: fixture.rows,
+    cols: fixture.cols,
+    task: fixture.task,
+    maxMs: 30000,
+  });
+  const t0 = Date.now();
+  const r = s.solve();
+  const elapsed = Date.now() - t0;
+  assert.equal(r.solved, true, `expected solved in 30s, got ${r.solved} after ${elapsed}ms`);
+  assert.ok(elapsed <= 30000, `solve took ${elapsed}ms, exceeds 30s budget`);
+  const taskArr = fixture.task;
+  const N = fixture.rows * fixture.cols;
+  // 1. Each clue is part of an exact-N white island, single-clue.
+  const visited = new Uint8Array(N);
+  for (let row = 0; row < fixture.rows; row++) {
+    for (let col = 0; col < fixture.cols; col++) {
+      if (taskArr[row][col] <= 0) continue;
+      assert.equal(r.grid[row][col], 2);
+      const queue = [[row, col]];
+      visited[row * fixture.cols + col] = 1;
+      let size = 1, cluesInside = 1;
+      while (queue.length) {
+        const [cr, cc] = queue.shift();
+        for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nr = cr + dr, nc = cc + dc;
+          if (nr < 0 || nr >= fixture.rows || nc < 0 || nc >= fixture.cols) continue;
+          const ni = nr * fixture.cols + nc;
+          if (visited[ni]) continue;
+          if (r.grid[nr][nc] !== 2) continue;
+          visited[ni] = 1;
+          if (taskArr[nr][nc] > 0) cluesInside++;
+          size++;
+          queue.push([nr, nc]);
+        }
+      }
+      assert.equal(cluesInside, 1, `island at (${row},${col}) has ${cluesInside} clues`);
+      assert.equal(size, taskArr[row][col], `island size at (${row},${col})`);
+    }
+  }
+  // 2. No 2x2 BLACK.
+  for (let row = 0; row + 1 < fixture.rows; row++) {
+    for (let col = 0; col + 1 < fixture.cols; col++) {
+      assert.ok(!(r.grid[row][col] === 1 && r.grid[row][col+1] === 1 &&
+                  r.grid[row+1][col] === 1 && r.grid[row+1][col+1] === 1),
+        `2x2 BLACK at (${row},${col})`);
+    }
+  }
+  // 3. All BLACKs connected.
+  const seen = new Uint8Array(N);
+  let firstBlack = -1, blackCount = 0;
+  for (let i = 0; i < N; i++) {
+    const r2 = Math.floor(i / fixture.cols), c2 = i % fixture.cols;
+    if (r.grid[r2][c2] === 1) { blackCount++; if (firstBlack < 0) firstBlack = i; }
+  }
+  if (firstBlack >= 0) {
+    const q = [firstBlack]; seen[firstBlack] = 1; let s2 = 1;
+    while (q.length) {
+      const idx = q.shift();
+      const r2 = Math.floor(idx / fixture.cols), c2 = idx % fixture.cols;
+      for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr = r2 + dr, nc = c2 + dc;
+        if (nr < 0 || nr >= fixture.rows || nc < 0 || nc >= fixture.cols) continue;
+        const ni = nr * fixture.cols + nc;
+        if (seen[ni]) continue;
+        if (r.grid[nr][nc] !== 1) continue;
+        seen[ni] = 1; s2++; q.push(ni);
+      }
+    }
+    assert.equal(s2, blackCount, `sea disconnected: saw ${s2}/${blackCount} blacks`);
+  }
+});
