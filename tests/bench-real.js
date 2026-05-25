@@ -4,7 +4,7 @@
 // For each puzzle, runs 5 solves, reports min / median / max plus solver type,
 // solved flag, and search-node count where applicable.
 
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver } = require('../solver.js');
 const fixtures = require('./fixtures/real-puzzles.js');
 
 function heyawakeRoomsFromFixture(p) {
@@ -42,6 +42,16 @@ function buildSolver(p) {
   if (p.type === 'kakurasu') return new KakurasuSolver({ rows: p.rows, cols: p.cols, rowClues: p.rowClues, colClues: p.colClues });
   if (p.type === 'kurodoko') return new KurodokoSolver({ rows: p.rows, cols: p.cols, task: p.task });
   if (p.type === 'mosaic') return new MosaicSolver({ rows: p.rows, cols: p.cols, task: p.task });
+  if (p.type === 'norinori') {
+    const cellsByRoom = {};
+    for (let r = 0; r < p.rows; r++) for (let c = 0; c < p.cols; c++) {
+      const k = p.areas[r][c];
+      if (!cellsByRoom[k]) cellsByRoom[k] = [];
+      cellsByRoom[k].push({ r, c });
+    }
+    const rooms = Object.keys(cellsByRoom).sort((a, b) => +a - +b).map(k => ({ cells: cellsByRoom[k] }));
+    return new NorinoriSolver({ rows: p.rows, cols: p.cols, rooms });
+  }
   return null;
 }
 
@@ -61,6 +71,7 @@ for (const name of Object.keys(fixtures)) {
     KakurasuSolver.clearSolutionCache();
     KurodokoSolver.clearSolutionCache();
     MosaicSolver.clearSolutionCache();
+    NorinoriSolver.clearSolutionCache();
     buildSolver(p).solve(null);
   }
   const times = [];
@@ -68,8 +79,9 @@ for (const name of Object.keys(fixtures)) {
   let nodes = null;
   for (let i = 0; i < N; i++) {
     // GalaxiesSolver, HashiSolver, HeyawakeSolver, KakurasuSolver,
-    // KurodokoSolver, and MosaicSolver have static solution caches — clear
-    // them so each iteration measures a real solve rather than a cache hit.
+    // KurodokoSolver, MosaicSolver, and NorinoriSolver have static solution
+    // caches — clear them so each iteration measures a real solve rather than
+    // a cache hit.
     GalaxiesSolver.clearSolutionCache();
     HashiSolver.clearSolutionCache();
     HeyawakeSolver.clearSolutionCache();
@@ -77,6 +89,7 @@ for (const name of Object.keys(fixtures)) {
     KakurasuSolver.clearSolutionCache();
     KurodokoSolver.clearSolutionCache();
     MosaicSolver.clearSolutionCache();
+    NorinoriSolver.clearSolutionCache();
     const s = buildSolver(p);
     const t0 = process.hrtime.bigint();
     const r = s.solve(null);

@@ -1701,6 +1701,23 @@ function dumpPuzzleForBench() {
       };
     }
 
+    if (path.indexOf('/norinori/') !== -1 || g.slug === 'norinori') {
+      // Inline extraction: dumpPuzzleForBench is serialized via fn.toString()
+      // and run in MAIN world where it can't call readNorinoriData directly.
+      if (!g.areas || !g.areaPoints || !g.puzzleWidth || !g.puzzleHeight) {
+        return { error: 'norinori: missing areas/areaPoints/dims', diagnostic: diagnostic(g), path: path };
+      }
+      var nnRows = g.puzzleHeight, nnCols = g.puzzleWidth;
+      var nnAreas = [];
+      for (var nnr = 0; nnr < nnRows; nnr++) {
+        var srcRow = g.areas[nnr] || [];
+        var dstRow = new Array(nnCols);
+        for (var nnc = 0; nnc < nnCols; nnc++) dstRow[nnc] = srcRow[nnc] || 0;
+        nnAreas.push(dstRow);
+      }
+      return { type: 'norinori', rows: nnRows, cols: nnCols, areas: nnAreas, path: path };
+    }
+
     // Hashi: islands list, no grid clues. g.task is a flat array of island
     // descriptors, not a 2D grid — must come before any generic-fallback
     // 2D-grid path or the shape-walkers below will trip on it.

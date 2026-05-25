@@ -490,4 +490,22 @@ module.exports = {
       [ 0, -1,  4, -1, -1],
     ],
   },
+
+  // 6x6 Norinori normal, manually constructed from a known-valid puzzle.
+  // areas: 2D grid of region ids (0-indexed). Each region must have exactly
+  // 2 filled cells forming a domino (orthogonal pair) that does not touch
+  // any other filled domino except diagonally.
+  norinori6x6NormalReal: {
+    type: 'norinori',
+    rows: 6,
+    cols: 6,
+    areas: [
+      [0, 0, 1, 1, 1, 2],
+      [0, 0, 0, 1, 2, 2],
+      [3, 0, 0, 4, 4, 2],
+      [3, 0, 0, 5, 6, 6],
+      [3, 3, 0, 5, 6, 6],
+      [7, 7, 5, 5, 5, 6],
+    ],
+  },
 };
