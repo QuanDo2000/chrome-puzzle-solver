@@ -1199,6 +1199,13 @@ function heyawakeCacheKey(data) {
     const row = areas[r] || [];
     for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 1);
   }
+  if (data.rooms) {
+    for (const room of data.rooms) {
+      const t = room.target;
+      h ^= (t + 1) & 0xff;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+  }
   return 'heyawake-solution:' + (h >>> 0).toString(16);
 }
 
@@ -2187,13 +2194,19 @@ function makeWidget() {
     return (h >>> 0).toString(36);
   }
 
-  // Room-boundary (areas) stable signature for the heyawake static layer.
-  function heyawakeAreasSig(areas) {
+  // Room-boundary (areas) + target-numbers stable signature for the heyawake static layer.
+  function heyawakeAreasSig(areas, rooms) {
     if (!Array.isArray(areas) || areas.length === 0) return '0';
     let h = 0x811c9dc5;
     for (const row of areas) {
       for (const v of row) {
         h ^= (v + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+      }
+    }
+    if (Array.isArray(rooms)) {
+      for (const room of rooms) {
+        const t = room.target;
+        h ^= (t + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
       }
     }
     return (h >>> 0).toString(36);
@@ -2615,7 +2628,7 @@ function makeWidget() {
                       '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
-                      '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null);
+                      '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
       staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
@@ -3587,7 +3600,7 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && !hr.hint?.cells?.length) break;
+      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // getHint may lazily solve as a fallback (galaxies + aquarium);
