@@ -185,3 +185,24 @@ test('NorinoriSolver._applyCrossRegionDominate: cell adjacent to a region where 
   assert.equal(s._applyCrossRegionDominate(), true);
   assert.equal(s.cellStatus[4], 2); // (1,1) forced white
 });
+
+test('NorinoriSolver._propagate: cascades dominoes + cross-region rules', () => {
+  // 1x4 with two 2-cell regions. Each forces black domino → cross-region
+  // blacks adjacent → contradiction.
+  const s = new NorinoriSolver({
+    rows: 1, cols: 4,
+    rooms: [
+      { cells: [{r: 0, c: 0}, {r: 0, c: 1}] },
+      { cells: [{r: 0, c: 2}, {r: 0, c: 3}] },
+    ],
+  });
+  assert.equal(s._propagate(), false);
+});
+
+test('NorinoriSolver._propagate: returns true on a consistent single-region puzzle', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+  });
+  assert.equal(s._propagate(), true);
+});
