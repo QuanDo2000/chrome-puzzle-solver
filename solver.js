@@ -6975,9 +6975,9 @@ function computePuzzleDiff(type, grid, solution, stars) {
   if (!Array.isArray(grid) || !Array.isArray(solution)) return out;
   if (type === 'shikaku') return _shikakuDiff(grid, solution);
   if (type === 'galaxies') return _galaxiesDiff(grid, solution, stars);
-  // Heyawake: a cell is a mistake when the player has placed something there
-  // (its value is not 0 = "not yet placed") and that value differs from the solution.
-  if (type === 'heyawake') {
+  // Heyawake / Hitori: a cell is a mistake when the player has placed something
+  // there (its value is not 0 = "not yet placed") and that value differs from the solution.
+  if (type === 'heyawake' || type === 'hitori') {
     const rows = Math.min(grid.length, solution.length);
     for (let r = 0; r < rows; r++) {
       const gRow = grid[r] || [], sRow = solution[r] || [];
@@ -8635,7 +8635,134 @@ class HitoriSolver {
     }
     return true;
   }
+
+  _isComplete() {
+    for (let i = 0; i < this.rows * this.cols; i++) {
+      if (this.cellStatus[i] === 0) return false;
+    }
+    return true;
+  }
+
+  _emit() {
+    const grid = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = new Array(this.cols);
+      for (let c = 0; c < this.cols; c++) row[c] = this.cellStatus[r * this.cols + c];
+      grid.push(row);
+    }
+    return grid;
+  }
+
+  _pickBestUnknown() {
+    let bestIdx = -1;
+    let bestScore = -Infinity;
+    const total = this.rows * this.cols;
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const r = (i / this.cols) | 0;
+      const c = i - r * this.cols;
+      const v = this.task[i];
+      const rowBucket = this.rowBuckets[r].get(v);
+      const colBucket = this.colBuckets[c].get(v);
+      let bestTight = 0;
+      for (const idxs of [rowBucket, colBucket]) {
+        if (!idxs || idxs.length < 2) continue;
+        let unk = 0;
+        for (let j = 0; j < idxs.length; j++) {
+          if (this.cellStatus[idxs[j]] === 0) unk++;
+        }
+        const t = 1 / (unk + 1);
+        if (t > bestTight) bestTight = t;
+      }
+      let adj = 0;
+      if (r > 0 && this.cellStatus[i - this.cols] !== 0) adj++;
+      if (r < this.rows - 1 && this.cellStatus[i + this.cols] !== 0) adj++;
+      if (c > 0 && this.cellStatus[i - 1] !== 0) adj++;
+      if (c < this.cols - 1 && this.cellStatus[i + 1] !== 0) adj++;
+      const score = bestTight * 4 + adj;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    return bestIdx;
+  }
+
+  _backtrack() {
+    if (this._timeUp()) return false;
+    const idx = this._pickBestUnknown();
+    if (idx < 0) return this._isComplete();
+    this._depth++;
+    for (const v of [1, 2]) {
+      const mark = this.trail.length;
+      if (this._set(idx, v) && this._propagate() && this._backtrack()) {
+        this._depth--;
+        return true;
+      }
+      this._rollback(mark);
+      if (this._timeUp()) break;
+    }
+    this._depth--;
+    return false;
+  }
+
+  solve() {
+    const key = this._cacheKey();
+    const cached = HitoriSolver._solutionCache.get(key)
+                || HitoriSolver._partialCache.get(key);
+    if (cached) return this._cloneResult(cached);
+    this._startedAt = Date.now();
+    let result;
+    if (!this._propagate()) {
+      this._rollback(0);
+      result = { solved: false, grid: null };
+    } else if (this._isComplete()) {
+      result = { solved: true, grid: this._emit() };
+    } else if (this._backtrack()) {
+      result = { solved: true, grid: this._emit() };
+    } else {
+      const partial = this._emit();
+      result = this._timeUp()
+        ? { solved: false, grid: partial, error: 'timed out', partial: true }
+        : { solved: false, grid: null };
+    }
+    if (result.solved || result.partial) this._storeInCache(key, result);
+    return result;
+  }
+
+  _cacheKey() {
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(this.rows); mix(this.cols);
+    for (let i = 0; i < this.rows * this.cols; i++) mix(this.task[i]);
+    return h >>> 0;
+  }
+
+  _cloneResult(r) {
+    return {
+      solved: r.solved,
+      grid: r.grid ? r.grid.map(row => row.slice()) : null,
+      ...(r.error !== undefined ? { error: r.error } : {}),
+      ...(r.partial !== undefined ? { partial: r.partial } : {}),
+    };
+  }
+
+  _storeInCache(key, result) {
+    const m = result.partial ? HitoriSolver._partialCache : HitoriSolver._solutionCache;
+    const max = result.partial ? HitoriSolver._maxPartialCache : HitoriSolver._maxSolutionCache;
+    if (m.size >= max) {
+      const first = m.keys().next().value;
+      m.delete(first);
+    }
+    m.set(key, this._cloneResult(result));
+  }
 }
+
+HitoriSolver._solutionCache = new Map();
+HitoriSolver._maxSolutionCache = 50;
+HitoriSolver._partialCache = new Map();
+HitoriSolver._maxPartialCache = 20;
+HitoriSolver.clearSolutionCache = function() {
+  HitoriSolver._solutionCache.clear();
+  HitoriSolver._partialCache.clear();
+};
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, computePuzzleDiff };

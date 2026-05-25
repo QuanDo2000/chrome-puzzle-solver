@@ -186,3 +186,55 @@ test('HitoriSolver._propagate: returns false on contradictory input', () => {
   });
   assert.equal(s._propagate(), false);
 });
+
+test('HitoriSolver.solve: solves the recon 5x5', () => {
+  HitoriSolver.clearSolutionCache();
+  const task = [
+    [5,5,2,3,3],
+    [2,5,4,4,3],
+    [4,4,1,5,2],
+    [1,2,5,4,5],
+    [1,4,5,5,1],
+  ];
+  const expected = [
+    [2,1,2,2,1],
+    [2,2,2,1,2],
+    [2,1,2,2,2],
+    [2,2,1,2,2],
+    [1,2,2,1,2],
+  ];
+  const s = new HitoriSolver({ rows:5, cols:5, task });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.deepEqual(r.grid, expected);
+});
+
+test('HitoriSolver.solve: returns {solved:false, grid:null} on unsat', () => {
+  HitoriSolver.clearSolutionCache();
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+    initialState: [[2, 0, 2]],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, false);
+  assert.equal(r.grid, null);
+});
+
+test('HitoriSolver._solutionCache: cache hit returns deep copy', () => {
+  HitoriSolver.clearSolutionCache();
+  const task = [[5,5,2,3,3],[2,5,4,4,3],[4,4,1,5,2],[1,2,5,4,5],[1,4,5,5,1]];
+  const a = new HitoriSolver({ rows:5, cols:5, task }).solve();
+  a.grid[0][0] = 99;
+  const b = new HitoriSolver({ rows:5, cols:5, task }).solve();
+  assert.notEqual(b.grid[0][0], 99);
+});
+
+test('computePuzzleDiff hitori: flags wrong-color cells, ignores unknown', () => {
+  const { computePuzzleDiff } = require('../solver.js');
+  const solution = [[1, 2], [2, 1]];
+  const board = [[2, 2], [0, 1]];
+  const diff = computePuzzleDiff('hitori', board, solution);
+  assert.equal(diff.length, 1);
+  assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
+});
