@@ -168,3 +168,21 @@ test('HitoriSolver._applyConnectivity: skipped inside lookahead', () => {
   assert.equal(s._applyConnectivity(), true);
   assert.equal(s.cellStatus[4], 0);
 });
+
+test('HitoriSolver._propagate: cascades static + uniqueness', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+  });
+  assert.equal(s._propagate(), true);
+  assert.equal(s.cellStatus[1], 2);
+});
+
+test('HitoriSolver._propagate: returns false on contradictory input', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+    initialState: [[2, 0, 2]],
+  });
+  assert.equal(s._propagate(), false);
+});
