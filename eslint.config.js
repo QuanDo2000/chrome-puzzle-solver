@@ -60,6 +60,7 @@ const solverClasses = {
   HashiSolver: 'readonly',
   HeyawakeSolver: 'readonly',
   HitoriSolver: 'readonly',
+  KakurasuSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js

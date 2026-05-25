@@ -20,6 +20,7 @@ declare const SlitherlinkSolver: any;
 declare const HashiSolver: any;
 declare const HeyawakeSolver: any;
 declare const HitoriSolver: any;
+declare const KakurasuSolver: any;
 
 // Helpers from handler.js.
 // MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in
@@ -53,6 +54,9 @@ type MainWorldFn =
   | 'readHitoriData'
   | 'readHitoriState'
   | 'applyHitoriState'
+  | 'readKakurasuData'
+  | 'readKakurasuState'
+  | 'applyKakurasuState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
