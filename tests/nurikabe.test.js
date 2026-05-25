@@ -153,3 +153,41 @@ test('NurikabeSolver._applyIslandComplete: capacity < N → contradiction', () =
   });
   assert.equal(s._applyIslandComplete(), false);
 });
+
+test('NurikabeSolver._apply2x2: 4 blacks in 2x2 → contradiction', () => {
+  const s = new NurikabeSolver({
+    rows: 2, cols: 2,
+    task: [[-1, -1], [-1, -1]],
+    initialState: [[1, 1], [1, 1]],
+  });
+  assert.equal(s._apply2x2(), false);
+});
+
+test('NurikabeSolver._apply2x2: 3 blacks + 1 unknown in 2x2 → unknown forced WHITE', () => {
+  const s = new NurikabeSolver({
+    rows: 2, cols: 2,
+    task: [[-1, -1], [-1, -1]],
+    initialState: [[1, 1], [1, 0]],
+  });
+  assert.equal(s._apply2x2(), true);
+  assert.equal(s.cellStatus[3], 2);
+});
+
+test('NurikabeSolver._applyBlackCount: too many blacks → contradiction', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[2, -1, -1]],
+    initialState: [[2, 1, 1]],
+  });
+  assert.equal(s._applyBlackCount(), false);
+});
+
+test('NurikabeSolver._applyBlackCount: nB + nU == expected → all unknowns BLACK', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[1, -1, -1]],
+    initialState: [[2, 0, 1]],
+  });
+  assert.equal(s._applyBlackCount(), true);
+  assert.equal(s.cellStatus[1], 1);
+});

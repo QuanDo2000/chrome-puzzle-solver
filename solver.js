@@ -10980,6 +10980,53 @@ class NurikabeSolver {
     }
     return true;
   }
+
+  _apply2x2() {
+    for (let r = 0; r + 1 < this.rows; r++) {
+      for (let c = 0; c + 1 < this.cols; c++) {
+        const a = r * this.cols + c;
+        const cells = [a, a + 1, a + this.cols, a + this.cols + 1];
+        let nB = 0, nU = 0;
+        for (const ci of cells) {
+          if (this.cellStatus[ci] === 1) nB++;
+          else if (this.cellStatus[ci] === 0) nU++;
+        }
+        if (nB === 4) return false;
+        if (nB === 3 && nU === 1) {
+          for (const ci of cells) {
+            if (this.cellStatus[ci] === 0) {
+              if (!this._set(ci, 2)) return false;
+            }
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  _applyBlackCount() {
+    let nB = 0, nU = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (this.cellStatus[i] === 1) nB++;
+      else if (this.cellStatus[i] === 0) nU++;
+    }
+    if (nB > this.expectedBlacks) return false;
+    if (nB + nU < this.expectedBlacks) return false;
+    if (nB === this.expectedBlacks && nU > 0) {
+      for (let i = 0; i < this.N; i++) {
+        if (this.cellStatus[i] === 0) {
+          if (!this._set(i, 2)) return false;
+        }
+      }
+    } else if (nB + nU === this.expectedBlacks && nU > 0) {
+      for (let i = 0; i < this.N; i++) {
+        if (this.cellStatus[i] === 0) {
+          if (!this._set(i, 1)) return false;
+        }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
