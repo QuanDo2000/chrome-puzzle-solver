@@ -2393,6 +2393,15 @@ function makeWidget() {
     if (pd?.type === 'heyawake' && Array.isArray(pd.areas)) {
       drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, pd.rooms);
     }
+    if (pd?.type === 'hitori') {
+      // Outer border only — clue digits are on the dynamic layer (shading
+      // changes text colour, so they can't be cached here).
+      const borderW = Math.max(2, Math.floor(cellSize / 5));
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = borderW;
+      ctx.lineCap = 'square';
+      ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
+    }
     return c;
   }
 
@@ -2697,6 +2706,7 @@ function makeWidget() {
     const isShikaku = puzzleData?.type === 'shikaku';
     const isBinairo = puzzleData?.type === 'binairo';
     const isYinYang = puzzleData?.type === 'yinyang';
+    const isHitori = puzzleData?.type === 'hitori';
     const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
     if (isSlitherlink) {
       ctx.save();
@@ -2824,7 +2834,7 @@ function makeWidget() {
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const v = grid[r][c];
-          if (v === 0 && !isShikaku) continue;
+          if (v === 0 && !isShikaku && !isHitori) continue;
           if (v === -1 && isShikaku) continue;
           const x = c * cellSize, y = r * cellSize;
           if (isShikaku) {
@@ -2890,6 +2900,22 @@ function makeWidget() {
               ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
               ctx.fill();
             }
+          } else if (isHitori) {
+            // Hitori: every cell shows its clue digit; shaded cells (v=1)
+            // get a dark fill so the digit renders in light colour.
+            if (v === 1) {
+              ctx.fillStyle = '#1f2937';
+              ctx.fillRect(x, y, cellSize, cellSize);
+            }
+            const clueVal = pd?.task?.[r]?.[c] ?? 0;
+            const ch = (clueVal >= 10 && clueVal <= 35)
+              ? String.fromCharCode(clueVal + 87)
+              : String(clueVal);
+            ctx.font = `bold ${Math.floor(cellSize * 0.55)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = v === 1 ? '#f3f4f6' : '#1f2937';
+            ctx.fillText(ch, x + cellSize / 2, y + cellSize / 2);
           } else if (v === 1) {
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(x, y, cellSize, cellSize);
@@ -2994,6 +3020,8 @@ function makeWidget() {
       } else if (puzzleData?.type === 'heyawake') {
         // Heyawake hints are absolute cells (extraCells) — no row/column
         // band; the per-cell loop below paints each hint cell.
+      } else if (puzzleData?.type === 'hitori') {
+        // Hitori hints are absolute cells (extraCells) — no row/column band.
       } else if (hint.type === 'hashi') {
         // Hashi hint edges are already merged into grid.edges by
         // applyHintToGrid and painted by the dynamic-bridges branch above.
@@ -3041,6 +3069,12 @@ function makeWidget() {
           ctx.strokeStyle = '#2e86de';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
           ctx.strokeRect(sx, sy, side, side);
+        } else if (puzzleData?.type === 'hitori' && (cell.value === 1 || cell.value === 2)) {
+          // Hitori hint: value 1 = must be shaded, value 2 = must be white.
+          // Draw a blue ring inside the cell so the clue digit stays readable.
+          ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+          ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
         } else if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
           // For binairo hints, draw a translucent disc matching the target value
           // — outlined blue = "play a 1 here", full blue fill = "play a 0 here".
