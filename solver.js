@@ -10322,6 +10322,7 @@ class NorinoriSolver {
     this._depth = 0;
     this._inLookahead = false;
     this.maxMs = maxMs || 0;
+    this._buildDominoCandidates();
     this._startedAt = 0;
   }
 
@@ -10359,6 +10360,31 @@ class NorinoriSolver {
       const i = e & 0xffffff;
       const old = (e >>> 24) & 0xff;
       this.cellStatus[i] = old;
+    }
+  }
+
+  _buildDominoCandidates() {
+    this.dominoCandidates = new Array(this.K);
+    for (let k = 0; k < this.K; k++) {
+      const cells = this.roomCells[k];
+      const cellSet = new Set(Array.from(cells));
+      const pairs = [];
+      for (let i = 0; i < cells.length; i++) {
+        const idx = cells[i];
+        const r = (idx / this.cols) | 0;
+        const c = idx - r * this.cols;
+        // Down neighbour (in same region).
+        if (r + 1 < this.rows) {
+          const ni = idx + this.cols;
+          if (cellSet.has(ni)) pairs.push(new Int32Array([idx, ni]));
+        }
+        // Right neighbour (in same region).
+        if (c + 1 < this.cols) {
+          const ni = idx + 1;
+          if (cellSet.has(ni)) pairs.push(new Int32Array([idx, ni]));
+        }
+      }
+      this.dominoCandidates[k] = pairs;
     }
   }
 

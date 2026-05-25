@@ -66,3 +66,43 @@ test('NorinoriSolver: _set / _rollback round-trip', () => {
   s._rollback(mark);
   assert.equal(s.cellStatus[0], 0);
 });
+
+test('NorinoriSolver._buildDominoCandidates: 1x2 region has 1 candidate', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+  });
+  assert.equal(s.dominoCandidates[0].length, 1);
+  assert.deepEqual(Array.from(s.dominoCandidates[0][0]), [0, 1]);
+});
+
+test('NorinoriSolver._buildDominoCandidates: L-shaped region has 2 candidates', () => {
+  const s = new NorinoriSolver({
+    rows: 2, cols: 2,
+    rooms: [
+      { cells: [{r: 0, c: 0}, {r: 1, c: 0}, {r: 1, c: 1}] },
+      { cells: [{r: 0, c: 1}] },
+    ],
+  });
+  assert.equal(s.dominoCandidates[0].length, 2);
+});
+
+test('NorinoriSolver._buildDominoCandidates: 2x2 region has 4 candidates', () => {
+  const s = new NorinoriSolver({
+    rows: 2, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 1, c: 0}, {r: 1, c: 1}]}],
+  });
+  assert.equal(s.dominoCandidates[0].length, 4);
+});
+
+test('NorinoriSolver._buildDominoCandidates: isolated cell has 0 candidates', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 2,
+    rooms: [
+      { cells: [{r: 0, c: 0}] },
+      { cells: [{r: 0, c: 1}] },
+    ],
+  });
+  assert.equal(s.dominoCandidates[0].length, 0);
+  assert.equal(s.dominoCandidates[1].length, 0);
+});
