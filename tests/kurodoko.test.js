@@ -76,3 +76,26 @@ test('KurodokoSolver._applyVisibility: contradiction when clue impossible', () =
   });
   assert.equal(s._applyVisibility(), false);
 });
+
+test('KurodokoSolver._applyConnectivity: blacks splitting whites → contradiction', () => {
+  const s = new KurodokoSolver({
+    rows: 3, cols: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s.cellStatus[0] = 2; s.cellStatus[1] = 1; s.cellStatus[2] = 2;
+  s.cellStatus[3] = 1; s.cellStatus[4] = 1; s.cellStatus[5] = 1;
+  s.cellStatus[6] = 2; s.cellStatus[7] = 1; s.cellStatus[8] = 2;
+  assert.equal(s._applyConnectivity(), false);
+});
+
+test('KurodokoSolver._applyConnectivity: articulation unknown forced white', () => {
+  const s = new KurodokoSolver({
+    rows: 3, cols: 3,
+    task: [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  });
+  s.cellStatus[0] = 2; s.cellStatus[2] = 2;
+  s.cellStatus[3] = 1; s.cellStatus[5] = 1;
+  s.cellStatus[6] = 2; s.cellStatus[8] = 2;
+  assert.equal(s._applyConnectivity(), true);
+  assert.equal(s.cellStatus[4], 2);
+});
