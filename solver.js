@@ -11754,6 +11754,19 @@ class NurikabeSolver {
   }
 
   _propagate() {
+    if (!this._propagateFixpointOnly()) return false;
+    if (this._depth === 0 && !this._inLookahead) {
+      if (!this._applyShapeEnumeration()) return false;
+      if (this._dirtyShape) {
+        // Shape enumeration changed state — re-run cheaper fixpoint.
+        if (!this._propagateFixpointOnly()) return false;
+      }
+      if (!this._applyLookahead()) return false;
+    }
+    return true;
+  }
+
+  _propagateFixpointOnly() {
     let changed = true;
     while (changed) {
       if (this._timeUp()) return true;
@@ -11770,9 +11783,6 @@ class NurikabeSolver {
       if (!this._applySeaArticulation()) return false;
       if (!this._applyBlackCount()) return false;
       if (this.trail.length > mark) changed = true;
-    }
-    if (this._depth === 0 && !this._inLookahead) {
-      if (!this._applyLookahead()) return false;
     }
     return true;
   }
@@ -11963,6 +11973,7 @@ class NurikabeSolver {
       () => this._applySeaConnectivity(),
       () => this._applySeaArticulation(),
       () => this._applyBlackCount(),
+      () => this._applyShapeEnumeration(),
     ];
     for (const rule of rules) {
       if (!rule()) return null;
