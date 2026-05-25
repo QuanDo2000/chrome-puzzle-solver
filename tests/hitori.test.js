@@ -49,3 +49,46 @@ test('HitoriSolver._set / _rollback round-trip', () => {
   s._rollback(mark);
   assert.equal(s.cellStatus[0], 0);
 });
+
+test('HitoriSolver._buildStaticForcedWhites: sandwich X-Y-X forces middle white', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+  });
+  assert.ok(Array.from(s.staticForcedWhites).includes(1),
+    `expected idx 1 in staticForcedWhites; got ${Array.from(s.staticForcedWhites)}`);
+});
+
+test('HitoriSolver._buildStaticForcedWhites: triplet X-X-X forces middle white', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[7, 7, 7]],
+  });
+  assert.ok(Array.from(s.staticForcedWhites).includes(1));
+});
+
+test('HitoriSolver._buildStaticForcedWhites: vertical sandwich on column', () => {
+  const s = new HitoriSolver({
+    rows: 3, cols: 1,
+    task: [[5], [3], [5]],
+  });
+  assert.ok(Array.from(s.staticForcedWhites).includes(1));
+});
+
+test('HitoriSolver._applyStaticForcedWhites: writes forced-white cells', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+  });
+  assert.equal(s._applyStaticForcedWhites(), true);
+  assert.equal(s.cellStatus[1], 2);
+});
+
+test('HitoriSolver._applyStaticForcedWhites: existing black at forced-white spot → contradiction', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+    initialState: [[0, 1, 0]],
+  });
+  assert.equal(s._applyStaticForcedWhites(), false);
+});

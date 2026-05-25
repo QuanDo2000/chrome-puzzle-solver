@@ -8355,7 +8355,44 @@ class HitoriSolver {
     this._depth = 0;
     this._inLookahead = false;
     this.maxMs = maxMs || 0;
+    this._buildStaticForcedWhites();
     this._startedAt = 0;
+  }
+
+  _buildStaticForcedWhites() {
+    const forced = [];
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 1; c < this.cols - 1; c++) {
+        const left = this.task[r * this.cols + c - 1];
+        const right = this.task[r * this.cols + c + 1];
+        if (left === right) {
+          forced.push(r * this.cols + c);
+        }
+      }
+    }
+    for (let c = 0; c < this.cols; c++) {
+      for (let r = 1; r < this.rows - 1; r++) {
+        const up = this.task[(r - 1) * this.cols + c];
+        const down = this.task[(r + 1) * this.cols + c];
+        if (up === down) {
+          const idx = r * this.cols + c;
+          if (!forced.includes(idx)) forced.push(idx);
+        }
+      }
+    }
+    this.staticForcedWhites = new Int32Array(forced);
+  }
+
+  _applyStaticForcedWhites() {
+    for (let i = 0; i < this.staticForcedWhites.length; i++) {
+      const idx = this.staticForcedWhites[i];
+      if (this.cellStatus[idx] === 0) {
+        if (!this._set(idx, 2)) return false;
+      } else if (this.cellStatus[idx] !== 2) {
+        return false;
+      }
+    }
+    return true;
   }
 
   _set(idx, value) {
