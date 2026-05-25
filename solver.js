@@ -8356,6 +8356,7 @@ class HitoriSolver {
     this._inLookahead = false;
     this.maxMs = maxMs || 0;
     this._buildStaticForcedWhites();
+    this._buildBuckets();
     this._startedAt = 0;
   }
 
@@ -8381,6 +8382,65 @@ class HitoriSolver {
       }
     }
     this.staticForcedWhites = new Int32Array(forced);
+  }
+
+  _buildBuckets() {
+    this.rowBuckets = new Array(this.rows);
+    for (let r = 0; r < this.rows; r++) {
+      const m = new Map();
+      for (let c = 0; c < this.cols; c++) {
+        const idx = r * this.cols + c;
+        const v = this.task[idx];
+        if (!m.has(v)) m.set(v, []);
+        m.get(v).push(idx);
+      }
+      this.rowBuckets[r] = m;
+    }
+    this.colBuckets = new Array(this.cols);
+    for (let c = 0; c < this.cols; c++) {
+      const m = new Map();
+      for (let r = 0; r < this.rows; r++) {
+        const idx = r * this.cols + c;
+        const v = this.task[idx];
+        if (!m.has(v)) m.set(v, []);
+        m.get(v).push(idx);
+      }
+      this.colBuckets[c] = m;
+    }
+  }
+
+  _applyUniquenessBucket(idxs) {
+    let nW = 0, nU = 0;
+    for (let i = 0; i < idxs.length; i++) {
+      const v = this.cellStatus[idxs[i]];
+      if (v === 2) nW++;
+      else if (v === 0) nU++;
+    }
+    if (nW > 1) return false;
+    if (nW === 1 && nU > 0) {
+      for (let i = 0; i < idxs.length; i++) {
+        if (this.cellStatus[idxs[i]] === 0) {
+          if (!this._set(idxs[i], 1)) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  _applyUniqueness() {
+    for (let r = 0; r < this.rows; r++) {
+      for (const idxs of this.rowBuckets[r].values()) {
+        if (idxs.length < 2) continue;
+        if (!this._applyUniquenessBucket(idxs)) return false;
+      }
+    }
+    for (let c = 0; c < this.cols; c++) {
+      for (const idxs of this.colBuckets[c].values()) {
+        if (idxs.length < 2) continue;
+        if (!this._applyUniquenessBucket(idxs)) return false;
+      }
+    }
+    return true;
   }
 
   _applyStaticForcedWhites() {

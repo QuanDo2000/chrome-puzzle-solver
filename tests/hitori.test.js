@@ -92,3 +92,43 @@ test('HitoriSolver._applyStaticForcedWhites: existing black at forced-white spot
   });
   assert.equal(s._applyStaticForcedWhites(), false);
 });
+
+test('HitoriSolver._applyUniqueness: two whites with same value in row → contradiction', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[5, 3, 5]],
+    initialState: [[2, 0, 2]],
+  });
+  assert.equal(s._applyUniqueness(), false);
+});
+
+test('HitoriSolver._applyUniqueness: one white + one unknown same value → unknown forced black', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 4,
+    task: [[5, 3, 5, 2]],
+    initialState: [[2, 0, 0, 0]],
+  });
+  assert.equal(s._applyUniqueness(), true);
+  assert.equal(s.cellStatus[2], 1);
+});
+
+test('HitoriSolver._applyUniqueness: unique row values → no force', () => {
+  const s = new HitoriSolver({
+    rows: 1, cols: 3,
+    task: [[1, 2, 3]],
+  });
+  assert.equal(s._applyUniqueness(), true);
+  assert.equal(s.cellStatus[0], 0);
+  assert.equal(s.cellStatus[1], 0);
+  assert.equal(s.cellStatus[2], 0);
+});
+
+test('HitoriSolver._applyUniqueness: column uniqueness', () => {
+  const s = new HitoriSolver({
+    rows: 3, cols: 1,
+    task: [[5], [3], [5]],
+    initialState: [[2], [0], [0]],
+  });
+  assert.equal(s._applyUniqueness(), true);
+  assert.equal(s.cellStatus[2], 1);
+});
