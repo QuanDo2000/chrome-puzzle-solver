@@ -39,3 +39,5 @@ jobs:
       - run: node tests/bench-heyawake.js
       - run: node tests/bench-kakurasu.js
       - run: node tests/bench-kurodoko.js
+      - name: Bench Mosaic
+        run: node tests/bench-mosaic.js
