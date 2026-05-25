@@ -1689,6 +1689,18 @@ async function getHint(request = {}) {
         return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
       hint = { type: 'kakurasu', extraCells: hintCells, count: hintCells.length };
+    } else if (detectedGrid.type === 'kurodoko') {
+      if (solution && firstMismatch(grid, solution)) {
+        return { success: false, error: 'Current game state is wrong.' };
+      }
+      const solver = new KurodokoSolver({
+        rows, cols, task: detectedGrid.task,
+      });
+      const hintCells = solver.getHint(grid);
+      if (!hintCells || hintCells.length === 0) {
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+      }
+      hint = { type: 'kurodoko', extraCells: hintCells, count: hintCells.length };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1983,6 +1995,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...hitoriHintStatusNodes(h));
     } else if (puzzleData?.type === 'kakurasu') {
       setStatusNodes('info', prefix, ...kakurasuHintStatusNodes(h));
+    } else if (puzzleData?.type === 'kurodoko') {
+      setStatusNodes('info', prefix, ...kurodokoHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -2046,6 +2060,22 @@ function makeWidget() {
     if (cells.length === 1) {
       const cell = cells[0];
       const valueStr = cell.value === 1 ? 'filled' : 'empty';
+      return [
+        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
+        ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(cells.length)), ' cells can be deduced'];
+  }
+
+  // Kurodoko hints carry absolute cells in extraCells.
+  // cellStatus 1 = shaded (black), 2 = unshaded (white).
+  function kurodokoHintStatusNodes(h) {
+    const cells = h.extraCells || [];
+    if (cells.length === 0) return ['No hint available'];
+    if (cells.length === 1) {
+      const cell = cells[0];
+      const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
       return [
         'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
         ' must be ', bold(valueStr),
@@ -3532,6 +3562,10 @@ function makeWidget() {
         return;
       }
       if (result?.partial && puzzleData?.type === 'kakurasu' && Array.isArray(result.grid)) {
+        applyGridPartialResult(result);
+        return;
+      }
+      if (result?.partial && puzzleData?.type === 'kurodoko' && Array.isArray(result.grid)) {
         applyGridPartialResult(result);
         return;
       }
