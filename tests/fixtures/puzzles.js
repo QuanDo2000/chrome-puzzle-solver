@@ -234,4 +234,14 @@ module.exports = {
       [1,4,5,5,1],
     ],
   },
+
+  // 4x4 Kakurasu: row clues [2,7,9,6], col clues [4,8,9,5].
+  // Answer grid: 1-indexed cells value 1 or 2.
+  kakurasu4x4Easy: {
+    type: 'kakurasu',
+    rows: 4,
+    cols: 4,
+    rowClues: [2, 7, 9, 6],
+    colClues: [4, 8, 9, 5],
+  },
 };
