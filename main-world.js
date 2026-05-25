@@ -1212,6 +1212,67 @@ function applyKurodokoState(grid) {
   }
 }
 
+function readMosaicData() {
+  try {
+    var G = window.Game;
+    if (!G || !G.task || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth;
+    var task = [];
+    for (var r = 0; r < rows; r++) {
+      var row = G.task[r] || [];
+      var arr = new Array(cols);
+      for (var c = 0; c < cols; c++) {
+        var v = row[c];
+        arr[c] = (typeof v === 'number') ? v : -1;
+      }
+      task.push(arr);
+    }
+    return { rows: rows, cols: cols, task: task };
+  } catch (e) {
+    return null;
+  }
+}
+
+function readMosaicState(rows, cols) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return null;
+    var cs = G.currentState.cellStatus;
+    var grid = [];
+    for (var r = 0; r < rows; r++) {
+      var row = cs[r] || [];
+      var arr = new Array(cols);
+      for (var c = 0; c < cols; c++) arr[c] = row[c] || 0;
+      grid.push(arr);
+    }
+    return grid;
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyMosaicState(grid) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    var cs = G.currentState.cellStatus;
+    for (var r = 0; r < grid.length; r++) {
+      if (!cs[r]) cs[r] = [];
+      for (var c = 0; c < grid[r].length; c++) {
+        cs[r][c] = grid[r][c];
+      }
+    }
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    if (typeof G.render === 'function') G.render();
+    if (typeof G.redraw === 'function') G.redraw();
+    return true;
+  } catch (e) {
+    console.warn('Mosaic apply failed:', e);
+    return false;
+  }
+}
+
 function readHeyawakeData() {
   try {
     var G = window.Game;

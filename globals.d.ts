@@ -22,6 +22,7 @@ declare const HeyawakeSolver: any;
 declare const HitoriSolver: any;
 declare const KakurasuSolver: any;
 declare const KurodokoSolver: any;
+declare const MosaicSolver: any;
 
 // Helpers from handler.js.
 // MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in
@@ -61,6 +62,9 @@ type MainWorldFn =
   | 'readKurodokoData'
   | 'readKurodokoState'
   | 'applyKurodokoState'
+  | 'readMosaicData'
+  | 'readMosaicState'
+  | 'applyMosaicState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
