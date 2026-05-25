@@ -8047,6 +8047,99 @@ class HeyawakeSolver {
     }
     return true;
   }
+
+  _isComplete() {
+    for (let i = 0; i < this.rows * this.cols; i++) {
+      if (this.cellStatus[i] === 0) return false;
+    }
+    return true;
+  }
+
+  _emit() {
+    const grid = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = new Array(this.cols);
+      for (let c = 0; c < this.cols; c++) row[c] = this.cellStatus[r * this.cols + c];
+      grid.push(row);
+    }
+    return grid;
+  }
+
+  _pickBestUnknown() {
+    let bestIdx = -1;
+    let bestScore = -Infinity;
+    const total = this.rows * this.cols;
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const k = this.cellToRoom[i];
+      const cells = this.roomCells[k];
+      let nB = 0, nU = 0;
+      for (let j = 0; j < cells.length; j++) {
+        const v = this.cellStatus[cells[j]];
+        if (v === 1) nB++;
+        else if (v === 0) nU++;
+      }
+      let roomTightness = 0;
+      if (this.target[k] >= 0) {
+        const need = this.target[k] - nB;
+        const slack = Math.min(need, nU - need);
+        roomTightness = 1 / (Math.max(0, slack) + 1);
+      }
+      const r = (i / this.cols) | 0;
+      const c = i - r * this.cols;
+      let adj = 0;
+      if (r > 0 && this.cellStatus[i - this.cols] !== 0) adj++;
+      if (r < this.rows - 1 && this.cellStatus[i + this.cols] !== 0) adj++;
+      if (c > 0 && this.cellStatus[i - 1] !== 0) adj++;
+      if (c < this.cols - 1 && this.cellStatus[i + 1] !== 0) adj++;
+      let lt = 0;
+      const lcs = this.lineConstraintsByCell[i];
+      for (let j = 0; j < lcs.length; j++) {
+        const lcCells = this.lineConstraints[lcs[j]];
+        let u = 0;
+        for (let m = 0; m < lcCells.length; m++) {
+          if (this.cellStatus[lcCells[m]] === 0) u++;
+        }
+        if (u <= 2) lt++;
+      }
+      const score = roomTightness * 4 + adj + lt;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    return bestIdx;
+  }
+
+  _backtrack() {
+    if (this._timeUp()) return false;
+    const idx = this._pickBestUnknown();
+    if (idx < 0) return this._isComplete();
+    this._depth++;
+    for (const v of [1, 2]) {
+      const mark = this.trail.length;
+      if (this._set(idx, v) && this._propagate() && this._backtrack()) {
+        this._depth--;
+        return true;
+      }
+      this._rollback(mark);
+      if (this._timeUp()) break;
+    }
+    this._depth--;
+    return false;
+  }
+
+  solve() {
+    this._startedAt = Date.now();
+    if (!this._propagate()) {
+      this._rollback(0);
+      return { solved: false, grid: null };
+    }
+    if (this._isComplete()) return { solved: true, grid: this._emit() };
+    if (this._backtrack()) return { solved: true, grid: this._emit() };
+    const partial = this._emit();
+    if (this._timeUp()) {
+      return { solved: false, grid: partial, error: 'timed out', partial: true };
+    }
+    return { solved: false, grid: null };
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

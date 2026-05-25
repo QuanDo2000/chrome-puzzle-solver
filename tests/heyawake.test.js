@@ -347,3 +347,32 @@ test('HeyawakeSolver._applyLookahead: probes force unique survivors', () => {
   assert.equal(s._applyLookahead(), true);
   assert.equal(s.cellStatus[0], 1, 'cell 0 must be forced black via lookahead');
 });
+
+test('HeyawakeSolver.solve: 2x2 trivial puzzle (target 1 single room)', () => {
+  const s = new HeyawakeSolver({
+    rows: 2, cols: 2,
+    rooms: [
+      { cells: [
+        { r: 0, c: 0 }, { r: 0, c: 1 }, { r: 1, c: 0 }, { r: 1, c: 1 },
+      ], target: 1 },
+    ],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  let blacks = 0;
+  for (const row of r.grid) for (const v of row) {
+    if (v === 1) blacks++;
+    else assert.equal(v, 2);
+  }
+  assert.equal(blacks, 1);
+});
+
+test('HeyawakeSolver.solve: returns {solved:false, grid:null} on unsat', () => {
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 2,
+    rooms: [{ cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }], target: 2 }],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, false);
+  assert.equal(r.grid, null);
+});
