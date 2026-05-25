@@ -473,15 +473,20 @@ test('NurikabeSolver._applyShapeEnumeration: 1x3 clue 3 forces all cells WHITE',
   assert.equal(s.cellStatus[2], 2);
 });
 
-test('NurikabeSolver._applyShapeEnumeration: 2x3 clue 3 + BLACK boundary forces shared cell WHITE', () => {
+test('NurikabeSolver._applyShapeEnumeration: 2x2 clue 4 forces every cell WHITE', () => {
+  // The only valid size-4 connected shape on a 2x2 board with no
+  // restrictions is the entire board. Every cell appears in inAll →
+  // every UNKNOWN cell forced WHITE.
   const s = new NurikabeSolver({
-    rows: 2, cols: 3,
-    task: [[3, -1, -1], [-1, -1, -1]],
-    initialState: [[2, 0, 1], [0, 0, 0]],
+    rows: 2, cols: 2,
+    task: [[4, -1], [-1, -1]],
   });
   assert.equal(s._buildClaimedBy(), true);
   assert.equal(s._applyShapeEnumeration(), true);
+  assert.equal(s.cellStatus[0], 2);
   assert.equal(s.cellStatus[1], 2);
+  assert.equal(s.cellStatus[2], 2);
+  assert.equal(s.cellStatus[3], 2);
 });
 
 test('NurikabeSolver._applyShapeEnumeration: divergent shapes leave shared-only cells unknown', () => {
