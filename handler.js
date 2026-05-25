@@ -503,6 +503,53 @@ const hashiHandler = {
 
 registerHandler(hashiHandler);
 
+// ── Heyawake handler (puzzles-mobile.com/heyawake/) ───────────
+
+const heyawakeHandler = {
+  name: 'puzzles-mobile-heyawake',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/heyawake/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readHeyawakeData', []);
+    if (!data) return { ...result, error: 'No Heyawake task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'heyawake',
+      rows: data.rows,
+      cols: data.cols,
+      rooms: data.rooms,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readHeyawakeState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyHeyawakeState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Heyawake apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(heyawakeHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {

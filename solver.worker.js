@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -81,6 +81,15 @@ self.onmessage = function (e) {
         cols: extraData.cols,
         islands: extraData.islands,
         maxMs: 10000,
+      });
+      result = s.solve();
+    } else if (type === 'heyawake' && extraData) {
+      const s = new HeyawakeSolver({
+        rows: extraData.rows,
+        cols: extraData.cols,
+        rooms: extraData.rooms,
+        initialState: initialGrid || null,
+        maxMs: 30000,
       });
       result = s.solve();
     } else {
