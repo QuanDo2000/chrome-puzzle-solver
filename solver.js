@@ -10292,6 +10292,82 @@ MosaicSolver._maxSolutionCache = 50;
 MosaicSolver._partialCache = new Map();
 MosaicSolver._maxPartialCache = 20;
 
+class NorinoriSolver {
+  constructor(data) {
+    const { rows, cols, rooms, initialState, maxMs } = data;
+    this.rows = rows;
+    this.cols = cols;
+    this.K = rooms.length;
+    this.cellToRoom = new Int32Array(rows * cols).fill(-1);
+    this.roomCells = new Array(this.K);
+    for (let k = 0; k < this.K; k++) {
+      const cells = rooms[k].cells;
+      const arr = new Int32Array(cells.length);
+      for (let i = 0; i < cells.length; i++) {
+        const idx = cells[i].r * cols + cells[i].c;
+        arr[i] = idx;
+        this.cellToRoom[idx] = k;
+      }
+      this.roomCells[k] = arr;
+    }
+    this.cellStatus = new Uint8Array(rows * cols);
+    if (initialState) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          this.cellStatus[r * cols + c] = initialState[r][c];
+        }
+      }
+    }
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this.maxMs = maxMs || 0;
+    this._startedAt = 0;
+  }
+
+  _set(idx, value) {
+    const old = this.cellStatus[idx];
+    if (old === value) return true;
+    if (old !== 0) return false;
+    this.trail.push(idx | (old << 24));
+    this.cellStatus[idx] = value;
+    if (value === 1) {
+      const r = (idx / this.cols) | 0;
+      const c = idx - r * this.cols;
+      const ownRoom = this.cellToRoom[idx];
+      const ns = [];
+      if (r > 0) ns.push(idx - this.cols);
+      if (r < this.rows - 1) ns.push(idx + this.cols);
+      if (c > 0) ns.push(idx - 1);
+      if (c < this.cols - 1) ns.push(idx + 1);
+      for (let i = 0; i < ns.length; i++) {
+        const ni = ns[i];
+        if (this.cellToRoom[ni] === ownRoom) continue;
+        const nv = this.cellStatus[ni];
+        if (nv === 1) return false;
+        if (nv === 0) {
+          if (!this._set(ni, 2)) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  _rollback(mark) {
+    while (this.trail.length > mark) {
+      const e = this.trail.pop();
+      const i = e & 0xffffff;
+      const old = (e >>> 24) & 0xff;
+      this.cellStatus[i] = old;
+    }
+  }
+
+  _timeUp() {
+    if (this.maxMs <= 0) return false;
+    return (Date.now() - this._startedAt) > this.maxMs;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, computePuzzleDiff };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, computePuzzleDiff };
 }
