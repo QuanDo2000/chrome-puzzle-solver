@@ -9749,6 +9749,65 @@ KurodokoSolver.clearSolutionCache = function() {
   KurodokoSolver._partialCache.clear();
 };
 
+class MosaicSolver {
+  constructor(data) {
+    const { rows, cols, task, initialState, maxMs } = data;
+    this.rows = rows;
+    this.cols = cols;
+    this.task = new Int32Array(rows * cols);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        this.task[r * cols + c] = task[r][c];
+      }
+    }
+    const cluesList = [], cluesValuesList = [];
+    for (let i = 0; i < rows * cols; i++) {
+      if (this.task[i] !== -1) {
+        cluesList.push(i);
+        cluesValuesList.push(this.task[i]);
+      }
+    }
+    this.clues = new Int32Array(cluesList);
+    this.clueValues = new Int32Array(cluesValuesList);
+    this.cellStatus = new Uint8Array(rows * cols);
+    if (initialState) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          this.cellStatus[r * cols + c] = initialState[r][c];
+        }
+      }
+    }
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this.maxMs = maxMs || 0;
+    this._startedAt = 0;
+  }
+
+  _set(idx, value) {
+    const old = this.cellStatus[idx];
+    if (old === value) return true;
+    if (old !== 0) return false;
+    this.trail.push(idx | (old << 24));
+    this.cellStatus[idx] = value;
+    return true;
+  }
+
+  _rollback(mark) {
+    while (this.trail.length > mark) {
+      const e = this.trail.pop();
+      const i = e & 0xffffff;
+      const old = (e >>> 24) & 0xff;
+      this.cellStatus[i] = old;
+    }
+  }
+
+  _timeUp() {
+    if (this.maxMs <= 0) return false;
+    return (Date.now() - this._startedAt) > this.maxMs;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, computePuzzleDiff };
+  module.exports = { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, computePuzzleDiff };
 }
