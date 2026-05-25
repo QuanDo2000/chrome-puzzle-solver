@@ -4,7 +4,7 @@
 // For each puzzle, runs 5 solves, reports min / median / max plus solver type,
 // solved flag, and search-node count where applicable.
 
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver } = require('../solver.js');
 const fixtures = require('./fixtures/real-puzzles.js');
 
 function heyawakeRoomsFromFixture(p) {
@@ -41,6 +41,7 @@ function buildSolver(p) {
   if (p.type === 'hitori') return new HitoriSolver({ rows: p.rows, cols: p.cols, task: p.task });
   if (p.type === 'kakurasu') return new KakurasuSolver({ rows: p.rows, cols: p.cols, rowClues: p.rowClues, colClues: p.colClues });
   if (p.type === 'kurodoko') return new KurodokoSolver({ rows: p.rows, cols: p.cols, task: p.task });
+  if (p.type === 'mosaic') return new MosaicSolver({ rows: p.rows, cols: p.cols, task: p.task });
   return null;
 }
 
@@ -59,21 +60,23 @@ for (const name of Object.keys(fixtures)) {
     HitoriSolver.clearSolutionCache();
     KakurasuSolver.clearSolutionCache();
     KurodokoSolver.clearSolutionCache();
+    MosaicSolver.clearSolutionCache();
     buildSolver(p).solve(null);
   }
   const times = [];
   let solved = null;
   let nodes = null;
   for (let i = 0; i < N; i++) {
-    // GalaxiesSolver, HashiSolver, HeyawakeSolver, KakurasuSolver, and
-    // KurodokoSolver have static solution caches — clear them so each
-    // iteration measures a real solve rather than a cache hit.
+    // GalaxiesSolver, HashiSolver, HeyawakeSolver, KakurasuSolver,
+    // KurodokoSolver, and MosaicSolver have static solution caches — clear
+    // them so each iteration measures a real solve rather than a cache hit.
     GalaxiesSolver.clearSolutionCache();
     HashiSolver.clearSolutionCache();
     HeyawakeSolver.clearSolutionCache();
     HitoriSolver.clearSolutionCache();
     KakurasuSolver.clearSolutionCache();
     KurodokoSolver.clearSolutionCache();
+    MosaicSolver.clearSolutionCache();
     const s = buildSolver(p);
     const t0 = process.hrtime.bigint();
     const r = s.solve(null);

@@ -1593,6 +1593,24 @@ function dumpPuzzleForBench() {
       return { type: 'kurodoko', rows: kdRows, cols: kdCols, task: kdTask, path: path };
     }
 
+    if (path.indexOf('/mosaic/') !== -1 || g.slug === 'mosaic') {
+      if (!g.task || !g.puzzleWidth || !g.puzzleHeight) {
+        return { error: 'mosaic: missing task/dims', diagnostic: diagnostic(g), path: path };
+      }
+      var mcRows = g.puzzleHeight, mcCols = g.puzzleWidth;
+      var mcTask = [];
+      for (var mcr = 0; mcr < mcRows; mcr++) {
+        var srcRow = g.task[mcr] || [];
+        var dstRow = new Array(mcCols);
+        for (var mcc = 0; mcc < mcCols; mcc++) {
+          var v = srcRow[mcc];
+          dstRow[mcc] = (typeof v === 'number') ? v : -1;
+        }
+        mcTask.push(dstRow);
+      }
+      return { type: 'mosaic', rows: mcRows, cols: mcCols, task: mcTask, path: path };
+    }
+
     if (path.indexOf('/heyawake/') !== -1 || g.slug === 'heyawake') {
       // Inline extraction: dumpPuzzleForBench is serialized via fn.toString()
       // and run in MAIN world where it can't see readHeyawakeData. Pull the

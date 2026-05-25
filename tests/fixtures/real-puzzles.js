@@ -475,4 +475,19 @@ module.exports = {
     rowClues: [2, 7, 9, 6],
     colClues: [4, 8, 9, 5],
   },
+
+  // 5x5 Mosaic easy, constructed from known-valid puzzle data.
+  // task: -1=no clue, 0-9=count of filled cells in 3x3 neighbourhood.
+  mosaic5x5EasyReal: {
+    type: 'mosaic',
+    rows: 5,
+    cols: 5,
+    task: [
+      [-1,  4, -1, -1,  1],
+      [-1, -1, -1, -1, -1],
+      [-1, -1,  2,  3, -1],
+      [-1,  3, -1, -1,  2],
+      [ 0, -1,  4, -1, -1],
+    ],
+  },
 };
