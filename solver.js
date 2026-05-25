@@ -9856,6 +9856,51 @@ class MosaicSolver {
     }
     return true;
   }
+
+  _propagate() {
+    let changed = true;
+    while (changed) {
+      if (this._timeUp()) return true;
+      changed = false;
+      const mark = this.trail.length;
+      if (!this._applyClues()) return false;
+      if (this.trail.length > mark) changed = true;
+    }
+    if (this._depth === 0 && !this._inLookahead) {
+      if (!this._applyLookahead()) return false;
+    }
+    return true;
+  }
+
+  _applyLookahead() {
+    const total = this.rows * this.cols;
+    let changed = true;
+    while (changed) {
+      if (this._timeUp()) return true;
+      changed = false;
+      for (let i = 0; i < total; i++) {
+        if (this.cellStatus[i] !== 0) continue;
+        const survivors = [];
+        for (const v of [1, 2]) {
+          const mark = this.trail.length;
+          this._inLookahead = true;
+          const okSet = this._set(i, v);
+          const ok = okSet && this._propagate();
+          this._rollback(mark);
+          this._inLookahead = false;
+          if (ok) survivors.push(v);
+          if (survivors.length > 1) break;
+        }
+        if (survivors.length === 0) return false;
+        if (survivors.length === 1) {
+          if (!this._set(i, survivors[0])) return false;
+          if (!this._propagate()) return false;
+          changed = true;
+        }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

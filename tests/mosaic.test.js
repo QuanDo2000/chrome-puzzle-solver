@@ -105,3 +105,21 @@ test('MosaicSolver._applyClues: contradiction when K < known blacks', () => {
   });
   assert.equal(s._applyClues(), false);
 });
+
+test('MosaicSolver._propagate: cascades through overlapping clues', () => {
+  // K=0 at (0,0) forces (0,0)..(1,1) white. K=3 at (1,2) neighborhood has those whites
+  // + 2 unknowns; impossible to make 3 blacks → contradiction.
+  const s = new MosaicSolver({
+    rows: 2, cols: 3,
+    task: [[0,-1,-1],[-1,-1,3]],
+  });
+  assert.equal(s._propagate(), false);
+});
+
+test('MosaicSolver._propagate: returns true on consistent input', () => {
+  const s = new MosaicSolver({
+    rows: 3, cols: 3,
+    task: [[-1,-1,-1],[-1,9,-1],[-1,-1,-1]],
+  });
+  assert.equal(s._propagate(), true);
+});
