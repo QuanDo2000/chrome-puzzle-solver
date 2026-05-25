@@ -2455,6 +2455,31 @@ function makeWidget() {
       ctx.lineCap = 'square';
       ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
     }
+    if (pd?.type === 'kakurasu' && Array.isArray(pd.rowClues) && Array.isArray(pd.colClues)) {
+      // Outer border of the N×N playing area.
+      const borderW = Math.max(2, Math.floor(cellSize / 5));
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = borderW;
+      ctx.lineCap = 'square';
+      ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
+      // Row clues on the right edge: cell at (r, cols).
+      const fontPx = Math.max(8, Math.floor(cellSize * 0.5));
+      ctx.font = `bold ${fontPx}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#1f2937';
+      for (let r = 0; r < rows; r++) {
+        const cx = cols * cellSize + cellSize / 2;
+        const cy = r * cellSize + cellSize / 2;
+        ctx.fillText(String(pd.rowClues[r]), cx, cy);
+      }
+      // Column clues on the bottom edge: cell at (rows, c).
+      for (let cc = 0; cc < cols; cc++) {
+        const cx = cc * cellSize + cellSize / 2;
+        const cy = rows * cellSize + cellSize / 2;
+        ctx.fillText(String(pd.colClues[cc]), cx, cy);
+      }
+    }
     return c;
   }
 
@@ -2706,9 +2731,16 @@ function makeWidget() {
       rows = grid.length;
       cols = grid[0].length;
     }
+    const isKakurasu = puzzleData?.type === 'kakurasu';
     const bodyWidth = q('.ns-body').clientWidth || 300;
-    const cellSize = Math.min(Math.floor((bodyWidth - 4) / cols), Math.floor(350 / rows), 24);
+    // Kakurasu needs a (cols+1)×(rows+1) canvas: N×N play grid plus a right
+    // column for row clues and a bottom row for column clues.
+    const cellSizeDenC = isKakurasu ? cols + 1 : cols;
+    const cellSizeDenR = isKakurasu ? rows + 1 : rows;
+    const cellSize = Math.min(Math.floor((bodyWidth - 4) / cellSizeDenC), Math.floor(350 / cellSizeDenR), 24);
     const w = cols * cellSize, h = rows * cellSize;
+    const wFull = isKakurasu ? (cols + 1) * cellSize : w;
+    const hFull = isKakurasu ? (rows + 1) * cellSize : h;
 
     // Idempotent: ensure the preview is visible whether or not we redraw.
     previewWrap.classList.add('ns-visible');
@@ -2738,16 +2770,16 @@ function makeWidget() {
                       '|hi=' + hitoriTaskSig(pd?.type === 'hitori' ? pd.task : null) +
                       '|ka=' + kakurasuCluesSig(pd?.type === 'kakurasu' ? pd.rowClues : null, pd?.type === 'kakurasu' ? pd.colClues : null);
     if (staticSig !== staticLayerSig) {
-      latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
-      staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
+      latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull);
+      staticLayer = buildStaticLayer(rows, cols, cellSize, wFull, hFull, pd);
       staticLayerSig = staticSig;
     }
 
-    canvas.width = w; canvas.height = h;
+    canvas.width = wFull; canvas.height = hFull;
     const ctx = canvas.getContext('2d');
 
     ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, wFull, hFull);
     // Lattice goes UNDER dynamic fills so filled cells hide the grey
     // cell-border lines inside them. Region borders + galaxy stars come
     // from the second static layer below, painted on top.
@@ -2972,6 +3004,25 @@ function makeWidget() {
             ctx.textBaseline = 'middle';
             ctx.fillStyle = v === 2 ? '#f3f4f6' : '#1f2937';
             ctx.fillText(ch, x + cellSize / 2, y + cellSize / 2);
+          } else if (isKakurasu) {
+            // Kakurasu: v=1 filled (dark square inset), v=2 crossed (two
+            // diagonal strokes), v=0 unknown (empty — handled by early-bail
+            // check above but also fine to fall through to nothing).
+            if (v === 1) {
+              const pad = Math.max(2, Math.floor(cellSize * 0.1));
+              ctx.fillStyle = '#1f2937';
+              ctx.fillRect(x + pad, y + pad, cellSize - 2 * pad, cellSize - 2 * pad);
+            } else if (v === 2) {
+              const pad = Math.max(3, Math.floor(cellSize * 0.25));
+              ctx.strokeStyle = '#9ca3af';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(x + pad, y + pad);
+              ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
+              ctx.moveTo(x + cellSize - pad, y + pad);
+              ctx.lineTo(x + pad, y + cellSize - pad);
+              ctx.stroke();
+            }
           } else if (v === 1) {
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(x, y, cellSize, cellSize);
@@ -3078,6 +3129,8 @@ function makeWidget() {
         // band; the per-cell loop below paints each hint cell.
       } else if (puzzleData?.type === 'hitori') {
         // Hitori hints are absolute cells (extraCells) — no row/column band.
+      } else if (isKakurasu) {
+        // Kakurasu hints are absolute cells (extraCells) — no row/column band.
       } else if (hint.type === 'hashi') {
         // Hashi hint edges are already merged into grid.edges by
         // applyHintToGrid and painted by the dynamic-bridges branch above.
@@ -3130,6 +3183,12 @@ function makeWidget() {
           // (dark cell), so use the darker blue ring; value 1 = must be
           // shaded (light cell), so use the lighter blue ring.
           ctx.strokeStyle = cell.value === 2 ? '#3b82f6' : '#60a5fa';
+          ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+          ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+        } else if (isKakurasu && (cell.value === 1 || cell.value === 2)) {
+          // Kakurasu hint: value 1 = must be filled (darker blue ring),
+          // value 2 = must be crossed (lighter blue ring).
+          ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
           ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
         } else if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
