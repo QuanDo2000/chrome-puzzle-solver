@@ -8869,7 +8869,39 @@ class KakurasuSolver {
     this._depth = 0;
     this._inLookahead = false;
     this.maxMs = maxMs || 0;
+    this._buildMaskDomains();
     this._startedAt = 0;
+  }
+
+  _buildMaskDomains() {
+    this.rowMasksActive = new Array(this.rows);
+    for (let r = 0; r < this.rows; r++) {
+      const target = this.rowClues[r];
+      const masks = [];
+      const limit = 1 << this.cols;
+      for (let m = 0; m < limit; m++) {
+        let sum = 0;
+        for (let c = 0; c < this.cols; c++) {
+          if (m & (1 << c)) sum += (c + 1);
+        }
+        if (sum === target) masks.push(m);
+      }
+      this.rowMasksActive[r] = masks;
+    }
+    this.colMasksActive = new Array(this.cols);
+    for (let c = 0; c < this.cols; c++) {
+      const target = this.colClues[c];
+      const masks = [];
+      const limit = 1 << this.rows;
+      for (let m = 0; m < limit; m++) {
+        let sum = 0;
+        for (let r = 0; r < this.rows; r++) {
+          if (m & (1 << r)) sum += (r + 1);
+        }
+        if (sum === target) masks.push(m);
+      }
+      this.colMasksActive[c] = masks;
+    }
   }
 
   _set(idx, value) {

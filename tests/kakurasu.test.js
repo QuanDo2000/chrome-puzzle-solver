@@ -33,3 +33,39 @@ test('KakurasuSolver: _set / _rollback round-trip', () => {
   s._rollback(cm, 0);
   assert.equal(s.cellStatus[0], 0);
 });
+
+test('KakurasuSolver._buildMaskDomains: row mask 1×3 clue=4', () => {
+  const s = new KakurasuSolver({
+    rows: 1, cols: 3,
+    rowClues: [4],
+    colClues: [1, 0, 0],
+  });
+  assert.deepEqual(Array.from(s.rowMasksActive[0]).sort(), [0b101]);
+});
+
+test('KakurasuSolver._buildMaskDomains: row clue=0 → only empty mask', () => {
+  const s = new KakurasuSolver({
+    rows: 1, cols: 3,
+    rowClues: [0],
+    colClues: [0, 0, 0],
+  });
+  assert.deepEqual(Array.from(s.rowMasksActive[0]), [0]);
+});
+
+test('KakurasuSolver._buildMaskDomains: clue exceeds max sum → no masks', () => {
+  const s = new KakurasuSolver({
+    rows: 1, cols: 3,
+    rowClues: [100],
+    colClues: [0, 0, 0],
+  });
+  assert.equal(s.rowMasksActive[0].length, 0);
+});
+
+test('KakurasuSolver._buildMaskDomains: 4×4 recon row 0 clue=2 → only col 1 filled', () => {
+  const s = new KakurasuSolver({
+    rows: 4, cols: 4,
+    rowClues: [2, 7, 9, 6],
+    colClues: [4, 8, 9, 5],
+  });
+  assert.deepEqual(Array.from(s.rowMasksActive[0]).sort(), [0b0010]);
+});
