@@ -2929,9 +2929,11 @@ function makeWidget() {
               ctx.fill();
             }
           } else if (isHitori) {
-            // Hitori: every cell shows its clue digit; shaded cells (v=1)
-            // get a dark fill so the digit renders in light colour.
-            if (v === 1) {
+            // Hitori: every cell shows its clue digit. Reversed convention —
+            // unshaded cells (v=2) get the dark fill (digit in light colour),
+            // shaded cells (v=1) stay light with a dark digit. Unknown (v=0)
+            // stays light/neutral so the initial board is fully readable.
+            if (v === 2) {
               ctx.fillStyle = '#1f2937';
               ctx.fillRect(x, y, cellSize, cellSize);
             }
@@ -2942,7 +2944,7 @@ function makeWidget() {
             ctx.font = `bold ${Math.floor(cellSize * 0.55)}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillStyle = v === 1 ? '#f3f4f6' : '#1f2937';
+            ctx.fillStyle = v === 2 ? '#f3f4f6' : '#1f2937';
             ctx.fillText(ch, x + cellSize / 2, y + cellSize / 2);
           } else if (v === 1) {
             ctx.fillStyle = '#1f2937';
@@ -3098,9 +3100,10 @@ function makeWidget() {
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
           ctx.strokeRect(sx, sy, side, side);
         } else if (puzzleData?.type === 'hitori' && (cell.value === 1 || cell.value === 2)) {
-          // Hitori hint: value 1 = must be shaded, value 2 = must be white.
-          // Draw a blue ring inside the cell so the clue digit stays readable.
-          ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
+          // Hitori hint (reversed convention): value 2 = must be unshaded
+          // (dark cell), so use the darker blue ring; value 1 = must be
+          // shaded (light cell), so use the lighter blue ring.
+          ctx.strokeStyle = cell.value === 2 ? '#3b82f6' : '#60a5fa';
           ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
           ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
         } else if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
