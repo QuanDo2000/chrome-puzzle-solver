@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, computePuzzleDiff } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, computePuzzleDiff } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -2737,4 +2737,17 @@ test('KurodokoSolver: kurodoko5x5Easy fixture matches golden', () => {
   const r = s.solve();
   assert.equal(r.solved, true);
   assert.deepEqual(r.grid, golden.kurodoko5x5Easy);
+});
+
+test('MosaicSolver: mosaic5x5Easy fixture matches golden', () => {
+  const fixture = fixtures.mosaic5x5Easy;
+  MosaicSolver.clearSolutionCache();
+  const s = new MosaicSolver({
+    rows: fixture.rows,
+    cols: fixture.cols,
+    task: fixture.task,
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.deepEqual(r.grid, golden.mosaic5x5Easy);
 });
