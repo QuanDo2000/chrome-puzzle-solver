@@ -106,3 +106,65 @@ test('NorinoriSolver._buildDominoCandidates: isolated cell has 0 candidates', ()
   assert.equal(s.dominoCandidates[0].length, 0);
   assert.equal(s.dominoCandidates[1].length, 0);
 });
+
+test('NorinoriSolver._applyDominoes: nB=2 non-adjacent → contradiction', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 3,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}]}],
+    initialState: [[1, 0, 1]],
+  });
+  assert.equal(s._applyDominoes(), false);
+});
+
+test('NorinoriSolver._applyDominoes: nB=2 adjacent → other cells forced white', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 3,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}]}],
+    initialState: [[1, 1, 0]],
+  });
+  assert.equal(s._applyDominoes(), true);
+  assert.equal(s.cellStatus[2], 2);
+});
+
+test('NorinoriSolver._applyDominoes: nB=1 with only one same-region neighbour → force partner', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+    initialState: [[1, 0]],
+  });
+  assert.equal(s._applyDominoes(), true);
+  assert.equal(s.cellStatus[1], 1);
+});
+
+test('NorinoriSolver._applyDominoes: nB=0 with only one live candidate → both cells forced black', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+  });
+  assert.equal(s._applyDominoes(), true);
+  assert.equal(s.cellStatus[0], 1);
+  assert.equal(s.cellStatus[1], 1);
+});
+
+test('NorinoriSolver._applyDominoes: nB=0, multiple candidates → cell in every candidate forced black', () => {
+  const s = new NorinoriSolver({
+    rows: 2, cols: 2,
+    rooms: [
+      { cells: [{r: 0, c: 0}, {r: 1, c: 0}, {r: 1, c: 1}] },
+      { cells: [{r: 0, c: 1}] },
+    ],
+  });
+  assert.equal(s._applyDominoes(), true);
+  assert.equal(s.cellStatus[2], 1);
+  assert.equal(s.cellStatus[0], 0);
+  assert.equal(s.cellStatus[3], 0);
+});
+
+test('NorinoriSolver._applyDominoes: nB=0 with 0 live candidates → contradiction', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+    initialState: [[2, 2]],
+  });
+  assert.equal(s._applyDominoes(), false);
+});

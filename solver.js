@@ -10388,6 +10388,86 @@ class NorinoriSolver {
     }
   }
 
+  _applyDominoes() {
+    for (let k = 0; k < this.K; k++) {
+      const cells = this.roomCells[k];
+      let nB = 0, nU = 0;
+      const blacks = [];
+      for (let i = 0; i < cells.length; i++) {
+        const v = this.cellStatus[cells[i]];
+        if (v === 1) { nB++; blacks.push(cells[i]); }
+        else if (v === 0) nU++;
+      }
+      if (nB > 2) return false;
+      if (nB === 2) {
+        const dr = Math.abs(((blacks[0] / this.cols) | 0) - ((blacks[1] / this.cols) | 0));
+        const dc = Math.abs((blacks[0] % this.cols) - (blacks[1] % this.cols));
+        if (dr + dc !== 1) return false;
+        for (let i = 0; i < cells.length; i++) {
+          if (this.cellStatus[cells[i]] === 0) {
+            if (!this._set(cells[i], 2)) return false;
+          }
+        }
+        continue;
+      }
+      if (nB === 1) {
+        const bidx = blacks[0];
+        const r = (bidx / this.cols) | 0;
+        const c = bidx - r * this.cols;
+        const partners = [];
+        const ns = [];
+        if (r > 0) ns.push(bidx - this.cols);
+        if (r < this.rows - 1) ns.push(bidx + this.cols);
+        if (c > 0) ns.push(bidx - 1);
+        if (c < this.cols - 1) ns.push(bidx + 1);
+        for (let i = 0; i < ns.length; i++) {
+          const ni = ns[i];
+          if (this.cellToRoom[ni] !== k) continue;
+          if (this.cellStatus[ni] === 2) continue;
+          partners.push(ni);
+        }
+        if (partners.length === 0) return false;
+        if (partners.length === 1) {
+          if (!this._set(partners[0], 1)) return false;
+        }
+        const keep = new Set([bidx, ...partners]);
+        for (let i = 0; i < cells.length; i++) {
+          if (keep.has(cells[i])) continue;
+          if (this.cellStatus[cells[i]] === 0) {
+            if (!this._set(cells[i], 2)) return false;
+          }
+        }
+        continue;
+      }
+      // nB === 0
+      const candidates = this.dominoCandidates[k];
+      const live = [];
+      for (let i = 0; i < candidates.length; i++) {
+        const p = candidates[i];
+        if (this.cellStatus[p[0]] === 2) continue;
+        if (this.cellStatus[p[1]] === 2) continue;
+        live.push(p);
+      }
+      if (live.length === 0 && candidates.length > 0) return false;
+      const counts = new Map();
+      for (const p of live) {
+        counts.set(p[0], (counts.get(p[0]) || 0) + 1);
+        counts.set(p[1], (counts.get(p[1]) || 0) + 1);
+      }
+      for (let i = 0; i < cells.length; i++) {
+        const ci = cells[i];
+        if (this.cellStatus[ci] !== 0) continue;
+        const c = counts.get(ci) || 0;
+        if (c === 0) {
+          if (!this._set(ci, 2)) return false;
+        } else if (c === live.length) {
+          if (!this._set(ci, 1)) return false;
+        }
+      }
+    }
+    return true;
+  }
+
   _timeUp() {
     if (this.maxMs <= 0) return false;
     return (Date.now() - this._startedAt) > this.maxMs;
