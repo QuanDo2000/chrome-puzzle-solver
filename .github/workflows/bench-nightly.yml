@@ -38,3 +38,4 @@ jobs:
       - run: node tests/bench-hitori.js
       - run: node tests/bench-heyawake.js
       - run: node tests/bench-kakurasu.js
+      - run: node tests/bench-kurodoko.js
