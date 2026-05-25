@@ -736,6 +736,54 @@ const mosaicHandler = {
 
 registerHandler(mosaicHandler);
 
+// ── Norinori handler ──────────────────────────────────────────
+
+const norinoriHandler = {
+  name: 'puzzles-mobile-norinori',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/norinori/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readNorinoriData', []);
+    if (!data) return { ...result, error: 'No Norinori task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'norinori',
+      rows: data.rows,
+      cols: data.cols,
+      areas: data.areas,
+      rooms: data.rooms,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readNorinoriState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyNorinoriState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Norinori apply failed' };
+  },
+};
+
+registerHandler(norinoriHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
