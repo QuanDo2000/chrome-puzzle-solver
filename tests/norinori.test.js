@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { NorinoriSolver } = require('../solver.js');
+const { NorinoriSolver, computePuzzleDiff } = require('../solver.js');
 
 test('NorinoriSolver: constructor mirrors rooms and cellToRoom', () => {
   const s = new NorinoriSolver({
@@ -205,4 +205,73 @@ test('NorinoriSolver._propagate: returns true on a consistent single-region puzz
     rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
   });
   assert.equal(s._propagate(), true);
+});
+
+test('NorinoriSolver.solve: solves the recon 6x6', () => {
+  NorinoriSolver.clearSolutionCache();
+  const areas = [
+    [0,0,1,1,1,2],
+    [0,0,0,1,2,2],
+    [3,0,0,4,4,2],
+    [3,0,0,5,6,6],
+    [3,3,0,5,6,6],
+    [7,7,5,5,5,6],
+  ];
+  const cellsByRoom = {};
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) {
+    const k = areas[r][c];
+    if (!cellsByRoom[k]) cellsByRoom[k] = [];
+    cellsByRoom[k].push({r, c});
+  }
+  const rooms = Object.keys(cellsByRoom).sort((a, b) => +a - +b)
+    .map(k => ({cells: cellsByRoom[k]}));
+  const s = new NorinoriSolver({rows: 6, cols: 6, rooms, maxMs: 5000});
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  for (const room of rooms) {
+    const blacks = [];
+    for (const cell of room.cells) {
+      if (r.grid[cell.r][cell.c] === 1) blacks.push(cell);
+    }
+    assert.equal(blacks.length, 2);
+    const dr = Math.abs(blacks[0].r - blacks[1].r);
+    const dc = Math.abs(blacks[0].c - blacks[1].c);
+    assert.equal(dr + dc, 1);
+  }
+});
+
+test('NorinoriSolver.solve: unsat returns {solved:false, grid:null}', () => {
+  NorinoriSolver.clearSolutionCache();
+  // 1x4 with two 2-cell regions: each forces a domino that's cross-region
+  // adjacent → unsat.
+  const s = new NorinoriSolver({
+    rows: 1, cols: 4,
+    rooms: [
+      { cells: [{r: 0, c: 0}, {r: 0, c: 1}] },
+      { cells: [{r: 0, c: 2}, {r: 0, c: 3}] },
+    ],
+  });
+  const r = s.solve();
+  assert.equal(r.solved, false);
+  assert.equal(r.grid, null);
+});
+
+test('NorinoriSolver._solutionCache: cache hit returns deep copy', () => {
+  NorinoriSolver.clearSolutionCache();
+  const opts = {
+    rows: 1, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+  };
+  const a = new NorinoriSolver(opts).solve();
+  a.grid[0][0] = 99;
+  const b = new NorinoriSolver(opts).solve();
+  assert.notEqual(b.grid[0][0], 99);
+});
+
+test('computePuzzleDiff norinori: flags wrong-color cells, ignores unknown', () => {
+  const solution = [[1, 2], [2, 1]];
+  const board = [[2, 2], [0, 1]];
+  const diff = computePuzzleDiff('norinori', board, solution);
+  assert.equal(diff.length, 1);
+  assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
 });

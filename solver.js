@@ -6977,7 +6977,7 @@ function computePuzzleDiff(type, grid, solution, stars) {
   if (type === 'galaxies') return _galaxiesDiff(grid, solution, stars);
   // Heyawake / Hitori: a cell is a mistake when the player has placed something
   // there (its value is not 0 = "not yet placed") and that value differs from the solution.
-  if (type === 'heyawake' || type === 'hitori' || type === 'kakurasu' || type === 'kurodoko' || type === 'mosaic') {
+  if (type === 'heyawake' || type === 'hitori' || type === 'kakurasu' || type === 'kurodoko' || type === 'mosaic' || type === 'norinori') {
     const rows = Math.min(grid.length, solution.length);
     for (let r = 0; r < rows; r++) {
       const gRow = grid[r] || [], sRow = solution[r] || [];
@@ -10576,6 +10576,119 @@ class NorinoriSolver {
       }
     }
     return true;
+  }
+
+  _isComplete() {
+    for (let i = 0; i < this.rows * this.cols; i++) {
+      if (this.cellStatus[i] === 0) return false;
+    }
+    return true;
+  }
+
+  _emit() {
+    const grid = [];
+    for (let r = 0; r < this.rows; r++) {
+      const row = new Array(this.cols);
+      for (let c = 0; c < this.cols; c++) row[c] = this.cellStatus[r * this.cols + c];
+      grid.push(row);
+    }
+    return grid;
+  }
+
+  _pickBestUnknown() {
+    let bestIdx = -1, bestScore = Infinity;
+    const total = this.rows * this.cols;
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      const k = this.cellToRoom[i];
+      const cands = this.dominoCandidates[k];
+      let live = 0;
+      for (let j = 0; j < cands.length; j++) {
+        if (this.cellStatus[cands[j][0]] === 2) continue;
+        if (this.cellStatus[cands[j][1]] === 2) continue;
+        live++;
+      }
+      if (live < bestScore) { bestScore = live; bestIdx = i; }
+    }
+    return bestIdx;
+  }
+
+  _backtrack() {
+    if (this._timeUp()) return false;
+    const idx = this._pickBestUnknown();
+    if (idx < 0) return this._isComplete();
+    this._depth++;
+    for (const v of [1, 2]) {
+      const mark = this.trail.length;
+      if (this._set(idx, v) && this._propagate() && this._backtrack()) {
+        this._depth--;
+        return true;
+      }
+      this._rollback(mark);
+      if (this._timeUp()) break;
+    }
+    this._depth--;
+    return false;
+  }
+
+  solve() {
+    const key = this._cacheKey();
+    const cached = NorinoriSolver._solutionCache.get(key)
+                || NorinoriSolver._partialCache.get(key);
+    if (cached) return this._cloneResult(cached);
+    this._startedAt = Date.now();
+    let result;
+    if (!this._propagate()) {
+      this._rollback(0);
+      result = { solved: false, grid: null };
+    } else if (this._isComplete()) {
+      result = { solved: true, grid: this._emit() };
+    } else if (this._backtrack()) {
+      result = { solved: true, grid: this._emit() };
+    } else {
+      const partial = this._emit();
+      result = this._timeUp()
+        ? { solved: false, grid: partial, error: 'timed out', partial: true }
+        : { solved: false, grid: null };
+    }
+    if (result.solved || result.partial) this._storeInCache(key, result);
+    return result;
+  }
+
+  static _solutionCache = new Map();
+  static _maxSolutionCache = 50;
+  static _partialCache = new Map();
+  static _maxPartialCache = 20;
+  static clearSolutionCache() {
+    NorinoriSolver._solutionCache.clear();
+    NorinoriSolver._partialCache.clear();
+  }
+
+  _cacheKey() {
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(this.rows); mix(this.cols); mix(this.K);
+    for (let i = 0; i < this.rows * this.cols; i++) mix(this.cellToRoom[i]);
+    return h >>> 0;
+  }
+
+  _cloneResult(r) {
+    return {
+      solved: r.solved,
+      grid: r.grid ? r.grid.map(row => row.slice()) : null,
+      ...(r.error !== undefined ? { error: r.error } : {}),
+      ...(r.partial !== undefined ? { partial: r.partial } : {}),
+    };
+  }
+
+  _storeInCache(key, result) {
+    const m = result.partial ? NorinoriSolver._partialCache : NorinoriSolver._solutionCache;
+    const max = result.partial ? NorinoriSolver._maxPartialCache : NorinoriSolver._maxSolutionCache;
+    if (m.size >= max) {
+      const first = m.keys().next().value;
+      m.delete(first);
+    }
+    m.set(key, this._cloneResult(result));
   }
 }
 
