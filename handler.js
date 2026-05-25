@@ -598,6 +598,52 @@ const hitoriHandler = {
 
 registerHandler(hitoriHandler);
 
+// ── Kakurasu handler (puzzles-mobile.com/kakurasu/) ────────────
+
+const kakurasuHandler = {
+  name: 'puzzles-mobile-kakurasu',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/kakurasu/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readKakurasuData', []);
+    if (!data) return { ...result, error: 'No Kakurasu task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'kakurasu',
+      rows: data.rows,
+      cols: data.cols,
+      rowClues: data.rowClues,
+      colClues: data.colClues,
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readKakurasuState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyKakurasuState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Kakurasu apply failed' };
+  },
+};
+
+registerHandler(kakurasuHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
