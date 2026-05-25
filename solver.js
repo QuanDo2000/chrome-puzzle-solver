@@ -8159,6 +8159,31 @@ class HeyawakeSolver {
     HeyawakeSolver._partialCache.clear();
   }
 
+  getHint(initialState) {
+    const total = this.rows * this.cols;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        this.cellStatus[r * this.cols + c] = initialState[r][c];
+      }
+    }
+    const before = new Uint8Array(total);
+    for (let i = 0; i < total; i++) before[i] = this.cellStatus[i];
+    this.trail = [];
+    this._depth = 0;
+    this._inLookahead = false;
+    this._startedAt = Date.now();
+    if (!this._propagate()) return null;
+    const hints = [];
+    for (let i = 0; i < total; i++) {
+      if (before[i] === 0 && this.cellStatus[i] !== 0) {
+        const r = (i / this.cols) | 0;
+        const c = i - r * this.cols;
+        hints.push({ row: r, col: c, value: this.cellStatus[i] });
+      }
+    }
+    return hints.length ? hints : null;
+  }
+
   _cacheKey() {
     let h = 0x811c9dc5;
     const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };

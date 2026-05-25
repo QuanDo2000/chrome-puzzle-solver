@@ -392,3 +392,32 @@ test('HeyawakeSolver._solutionCache: cache hit returns a deep copy', () => {
   assert.equal(b.solved, true);
   assert.notEqual(b.grid[0][0], 99);
 });
+
+test('HeyawakeSolver.getHint: returns forced cells on an empty solvable board', () => {
+  HeyawakeSolver.clearSolutionCache();
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 3,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }], target: 1 },
+      { cells: [{ r: 0, c: 2 }], target: 1 },
+    ],
+  });
+  const hint = s.getHint([[0, 0, 0]]);
+  assert.ok(Array.isArray(hint));
+  assert.ok(hint.length >= 1);
+  const c2 = hint.find(h => h.row === 0 && h.col === 2);
+  assert.ok(c2, `cell (0,2) should be in hint; got ${JSON.stringify(hint)}`);
+  assert.equal(c2.value, 1);
+});
+
+test('HeyawakeSolver.getHint: returns null when state is already fully solved', () => {
+  HeyawakeSolver.clearSolutionCache();
+  const s = new HeyawakeSolver({
+    rows: 1, cols: 3,
+    rooms: [
+      { cells: [{ r: 0, c: 0 }, { r: 0, c: 1 }], target: 1 },
+      { cells: [{ r: 0, c: 2 }], target: 1 },
+    ],
+  });
+  assert.equal(s.getHint([[1, 2, 1]]), null);
+});
