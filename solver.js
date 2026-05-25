@@ -11379,6 +11379,36 @@ class NurikabeSolver {
         if (this._shapeInAny[i]) couldBeWhite[i] = 1;
       }
     }
+    // Cross-clue exclusion. _bfsReachable holds the union of clue reaches
+    // computed by _applyUnreachable; couldBeWhite holds the union of cells
+    // that appeared in at least one enumerated shape across all clues.
+    // Any UNKNOWN cell in the reach union but with couldBeWhite[i] === 0
+    // must be BLACK — no clue can claim it for an island.
+    const reachUnion = this._bfsReachable;
+    for (let i = 0; i < this.N; i++) {
+      if (this.cellStatus[i] !== 0) continue;
+      if (this.isWall[i]) continue;
+      if (!reachUnion[i]) continue;
+      if (couldBeWhite[i]) continue;
+      // Skip when the cell is only in the reach of clues we couldn't
+      // enumerate (over MAX_ENUMERATED_CLUE_SIZE). For those, our shape
+      // catalog is empty, so couldBeWhite is empty by construction even
+      // though the cell could legitimately end up WHITE.
+      let hasReachableEnumerable = false;
+      const r = (i / this.cols) | 0;
+      const c = i - r * this.cols;
+      for (const clue of this.clues) {
+        if (clue.size > NurikabeSolver.MAX_ENUMERATED_CLUE_SIZE) continue;
+        const cr = (clue.idx / this.cols) | 0;
+        const cc = clue.idx - cr * this.cols;
+        if (Math.abs(cr - r) + Math.abs(cc - c) <= clue.size - 1) {
+          hasReachableEnumerable = true;
+          break;
+        }
+      }
+      if (!hasReachableEnumerable) continue;
+      if (!this._set(i, 1)) return false;
+    }
     return true;
   }
 

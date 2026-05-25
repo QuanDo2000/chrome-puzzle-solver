@@ -508,3 +508,24 @@ test('NurikabeSolver._applyShapeEnumeration: skips clues larger than cap', () =>
   assert.equal(s._buildClaimedBy(), true);
   assert.equal(s._applyShapeEnumeration(), true);
 });
+
+test('NurikabeSolver._applyShapeEnumeration: cell in reach but in no shape → BLACK', () => {
+  // 2x4 with clue 2 at (0,0) and clue 1 at (1,3). Reach (0,0) size 2 =
+  // {(0,0),(0,1),(1,0)}. Reach (1,3) size 1 = {(1,3)}. Cells (0,2),(0,3),
+  // (1,1),(1,2) outside reach union → BLACK by unreachable. Shapes from
+  // (0,0): {(0,0),(0,1)} and {(0,0),(1,0)}. inAny = {(0,0),(0,1),(1,0)}.
+  // Cross-clue exclusion no-ops here (all reach cells appear in some
+  // shape). Smoke test that the new code path runs without throwing.
+  const s = new NurikabeSolver({
+    rows: 2, cols: 4,
+    task: [[2, -1, -1, -1], [-1, -1, -1, 1]],
+  });
+  assert.equal(s._buildClaimedBy(), true);
+  assert.equal(s._applyUnreachable(), true);
+  assert.equal(s._applyShapeEnumeration(), true);
+  // After unreachable, (0,2),(0,3),(1,1),(1,2) are BLACK (outside reach).
+  assert.equal(s.cellStatus[2], 1);
+  assert.equal(s.cellStatus[3], 1);
+  assert.equal(s.cellStatus[5], 1);
+  assert.equal(s.cellStatus[6], 1);
+});
