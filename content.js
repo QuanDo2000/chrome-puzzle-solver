@@ -964,6 +964,9 @@ function solveExtraData() {
   if (data.type === 'hitori') {
     return { rows: data.rows, cols: data.cols, task: data.task };
   }
+  if (data.type === 'kakurasu') {
+    return { rows: data.rows, cols: data.cols, rowClues: data.rowClues, colClues: data.colClues };
+  }
   return null;
 }
 
@@ -978,7 +981,7 @@ function solveExtraData() {
 //     localStorage quota (~5 MB per origin).
 const SOLUTION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SOLUTION_CACHE_MAX = 50;
-const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:', 'hashi-solution:', 'heyawake-solution:', 'hitori-solution:'];
+const SOLUTION_KEY_PREFIXES = ['galaxies-solution:', 'aquarium-solution:', 'nonogram-solution:', 'binairo-solution:', 'shikaku-solution:', 'yinyang-solution:', 'slitherlink-solution:', 'hashi-solution:', 'heyawake-solution:', 'hitori-solution:', 'kakurasu-solution:'];
 
 function isSolutionCacheKey(key) {
   return typeof key === 'string' && SOLUTION_KEY_PREFIXES.some(p => key.startsWith(p));
@@ -1222,6 +1225,17 @@ function hitoriCacheKey(data) {
   return 'hitori-solution:' + (h >>> 0).toString(16);
 }
 
+function kakurasuCacheKey(data) {
+  if (data?.type !== 'kakurasu' || !data.rowClues || !data.colClues) return null;
+  let h = 0x811c9dc5;
+  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+  mix(0x4B); // 'K' nameplate
+  mix(data.rows); mix(data.cols);
+  for (const v of data.rowClues) mix(v + 1);
+  for (const v of data.colClues) mix(v + 1);
+  return 'kakurasu-solution:' + (h >>> 0).toString(16);
+}
+
 function getCachedGridSolution(data) {
   const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
     : data?.type === 'nonogram' ? nonogramCacheKey(data)
@@ -1232,6 +1246,7 @@ function getCachedGridSolution(data) {
     : data?.type === 'hashi' ? hashiCacheKey(data)
     : data?.type === 'heyawake' ? heyawakeCacheKey(data)
     : data?.type === 'hitori' ? hitoriCacheKey(data)
+    : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
     : null;
   if (!key) return null;
   try {
@@ -1270,6 +1285,7 @@ function cacheGridSolution(data, grid) {
     : data?.type === 'hashi' ? hashiCacheKey(data)
     : data?.type === 'heyawake' ? heyawakeCacheKey(data)
     : data?.type === 'hitori' ? hitoriCacheKey(data)
+    : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
     : null;
   if (!key) return;
   try {
@@ -1728,6 +1744,7 @@ const SUPPORTED_PUZZLES = [
   { name: 'Hashi',        url: 'https://www.puzzles-mobile.com/hashi/' },
   { name: 'Heyawake',    url: 'https://www.puzzles-mobile.com/heyawake/' },
   { name: 'Hitori',       url: 'https://www.puzzles-mobile.com/hitori/' },
+  { name: 'Kakurasu',     url: 'https://www.puzzles-mobile.com/kakurasu/' },
   { name: 'Nonogram',     url: 'https://www.puzzles-mobile.com/nonograms/' },
   { name: 'Shikaku',      url: 'https://www.puzzles-mobile.com/shikaku/' },
   { name: 'Slitherlink',  url: 'https://www.puzzles-mobile.com/loop/' },
@@ -2266,6 +2283,14 @@ function makeWidget() {
     return (h >>> 0).toString(16);
   }
 
+  function kakurasuCluesSig(rowClues, colClues) {
+    if (!rowClues || !colClues) return '0';
+    let h = 0x811c9dc5;
+    for (const v of rowClues) { h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0; }
+    for (const v of colClues) { h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0; }
+    return (h >>> 0).toString(16);
+  }
+
   // Room-boundary (areas) + target-numbers stable signature for the heyawake static layer.
   function heyawakeAreasSig(areas, rooms) {
     if (!Array.isArray(areas) || areas.length === 0) return '0';
@@ -2630,7 +2655,7 @@ function makeWidget() {
   }
 
   function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi' || pd?.type === 'heyawake' || pd?.type === 'hitori') return;
+    if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi' || pd?.type === 'heyawake' || pd?.type === 'hitori' || pd?.type === 'kakurasu') return;
     ctx.save();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -2710,7 +2735,8 @@ function makeWidget() {
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
                       '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
-                      '|hi=' + hitoriTaskSig(pd?.type === 'hitori' ? pd.task : null);
+                      '|hi=' + hitoriTaskSig(pd?.type === 'hitori' ? pd.task : null) +
+                      '|ka=' + kakurasuCluesSig(pd?.type === 'kakurasu' ? pd.rowClues : null, pd?.type === 'kakurasu' ? pd.colClues : null);
     if (staticSig !== staticLayerSig) {
       latticeLayer = buildLatticeLayer(rows, cols, cellSize, w, h);
       staticLayer = buildStaticLayer(rows, cols, cellSize, w, h, pd);
@@ -3862,7 +3888,7 @@ function makeWidget() {
     // on pendingAutoSolve — on hard 30×30 dailies that solve can take >30 s,
     // while the propagation hint returns in ~1 ms. Other puzzle types still
     // need the cached solution for mistake comparison.
-    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi' || puzzleData.type === 'heyawake' || puzzleData.type === 'hitori';
+    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi' || puzzleData.type === 'heyawake' || puzzleData.type === 'hitori' || puzzleData.type === 'kakurasu';
     if (!skipAutoSolveGate && !puzzleData.solution && pendingAutoSolve) {
       setStatus('Solving...', 'info');
       await pendingAutoSolve;
