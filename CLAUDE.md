@@ -463,6 +463,63 @@ edges, flag any with non-zero count where the solution has 0 (extra
 bridges drawn that shouldn't exist). Zero-bridge entries on the board
 are never flagged (analogous to UNKNOWN slitherlink edges).
 
+### Norinori encoding
+
+`/norinori/*` has `NorinoriSolver` + `norinoriHandler`. Same cell encoding
+as Heyawake-family (0=unknown, 1=black, 2=white). Region-partitioned via
+`G.areas` + `G.areaPoints`, **no `areaTask`** — every region has the
+same target.
+
+**Rules (per the site's bundled `getErrors`, NOT textbook Norinori):**
+1. Each region has exactly 2 black cells (`r[i] > 2` → blockMany; reachable-
+   count < 2 → blockFew).
+2. No 3-in-row of blacks (`check3InARow`).
+3. No 2×2 with 3+ blacks (`check2x2`).
+4. Every black has at least one black neighbour at completion (`checkSolo`
+   flags a black whose neighbours are all status=2).
+
+Combined, these imply blacks tile in 1×2 / 2×1 dominoes — but **dominoes
+may span regions.** A region's 2 blacks can be 1 internal domino, OR 2
+endpoints of separate cross-region dominoes (each paired with a black in
+an adjacent region). Textbook Norinori's "no cross-region adjacency"
+rule **does not apply** on this site. The 30×30 daily relies on this:
+several rooms (e.g. 2-cell forced-domino regions next to 3-cell L
+regions) become infeasible under strict rules but solvable when
+cross-region pairs are allowed.
+
+Solver propagation (fixpoint of four rules):
+- `_applyRegionCount` — region nB>2 → contradiction; nB+nU<2 →
+  contradiction; nB=2 → other unknowns forced WHITE; nB+nU=2 → both
+  unknowns forced BLACK.
+- `_apply2x2` — any 2×2 with nB>2 → contradiction; nB=2 with unknowns →
+  unknowns forced WHITE.
+- `_apply3InRow` — any 3-cell horizontal or vertical line with nB=3 →
+  contradiction; nB=2 with the third cell unknown → forced WHITE.
+- `_applyNeighborConstraints` — black with >1 black neighbour →
+  contradiction (L or 3-in-row); black with 1 black neighbour → other
+  neighbours forced WHITE; black with 0 black neighbours and 0 unknown
+  neighbours → contradiction (solo); black with 0 black neighbours and
+  exactly 1 unknown neighbour → that neighbour forced BLACK.
+
+`_set` is a plain trail-record assign — **no cascade**. After local rules
+stall, at top-level only (`_depth === 0`, `_inLookahead` re-entry guard)
+runs 1-step lookahead. Most-constrained variable for backtracking
+prefers cells with the most KNOWN neighbours (more local constraints =
+higher score).
+
+Don't reintroduce `dominoCandidates`, `_applyDominoes` (per-region
+domino enumeration), or `_applyCrossRegionDominate` — those encoded the
+textbook rule that the site does not enforce, and they make the 30×30
+daily provably unsolvable.
+
+Static `_solutionCache` keyed on FNV-1a of `(rows, cols, cellToRoom[])`,
+50-entry LRU; 20-entry partial LRU. Worker `maxMs=30s`. MAIN-world:
+`readNorinoriData/readNorinoriState/applyNorinoriState`, twins of
+Heyawake; hints reuse generic `applyHintCells`. Loop done-check needs no
+special arm. Preview: dynamic cells (1=dark inset, 2=× cross); region
+borders cached in `staticLayer` (`|nn=` segment); diff is per-cell same as
+other cell-state puzzles.
+
 ### Binairo: triples inline, duplicates at completion
 
 `_applyBalance` and `_applyUniqueness` call `_wouldCreateTriple` before each

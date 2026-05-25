@@ -10322,35 +10322,19 @@ class NorinoriSolver {
     this._depth = 0;
     this._inLookahead = false;
     this.maxMs = maxMs || 0;
-    this._buildDominoCandidates();
     this._startedAt = 0;
   }
 
+  // Rules enforced (per puzzles-mobile.com's getErrors): each region has
+  // exactly 2 black cells; no 3-in-row of blacks; no 2x2 with 3+ blacks;
+  // every black has at least one black neighbor (no solo). These imply
+  // blacks form dominoes that may span regions.
   _set(idx, value) {
     const old = this.cellStatus[idx];
     if (old === value) return true;
     if (old !== 0) return false;
     this.trail.push(idx | (old << 24));
     this.cellStatus[idx] = value;
-    if (value === 1) {
-      const r = (idx / this.cols) | 0;
-      const c = idx - r * this.cols;
-      const ownRoom = this.cellToRoom[idx];
-      const ns = [];
-      if (r > 0) ns.push(idx - this.cols);
-      if (r < this.rows - 1) ns.push(idx + this.cols);
-      if (c > 0) ns.push(idx - 1);
-      if (c < this.cols - 1) ns.push(idx + 1);
-      for (let i = 0; i < ns.length; i++) {
-        const ni = ns[i];
-        if (this.cellToRoom[ni] === ownRoom) continue;
-        const nv = this.cellStatus[ni];
-        if (nv === 1) return false;
-        if (nv === 0) {
-          if (!this._set(ni, 2)) return false;
-        }
-      }
-    }
     return true;
   }
 
@@ -10363,161 +10347,130 @@ class NorinoriSolver {
     }
   }
 
-  _buildDominoCandidates() {
-    this.dominoCandidates = new Array(this.K);
+  _applyRegionCount() {
     for (let k = 0; k < this.K; k++) {
       const cells = this.roomCells[k];
-      const cellSet = new Set(Array.from(cells));
-      const pairs = [];
-      for (let i = 0; i < cells.length; i++) {
-        const idx = cells[i];
-        const r = (idx / this.cols) | 0;
-        const c = idx - r * this.cols;
-        // Down neighbour (in same region).
-        if (r + 1 < this.rows) {
-          const ni = idx + this.cols;
-          if (cellSet.has(ni)) pairs.push(new Int32Array([idx, ni]));
-        }
-        // Right neighbour (in same region).
-        if (c + 1 < this.cols) {
-          const ni = idx + 1;
-          if (cellSet.has(ni)) pairs.push(new Int32Array([idx, ni]));
-        }
-      }
-      this.dominoCandidates[k] = pairs;
-    }
-  }
-
-  _applyDominoes() {
-    for (let k = 0; k < this.K; k++) {
-      const cells = this.roomCells[k];
-      let nB = 0;
-      const blacks = [];
+      let nB = 0, nU = 0;
       for (let i = 0; i < cells.length; i++) {
         const v = this.cellStatus[cells[i]];
-        if (v === 1) { nB++; blacks.push(cells[i]); }
+        if (v === 1) nB++;
+        else if (v === 0) nU++;
       }
       if (nB > 2) return false;
+      if (nB + nU < 2) return false;
       if (nB === 2) {
-        const dr = Math.abs(((blacks[0] / this.cols) | 0) - ((blacks[1] / this.cols) | 0));
-        const dc = Math.abs((blacks[0] % this.cols) - (blacks[1] % this.cols));
-        if (dr + dc !== 1) return false;
         for (let i = 0; i < cells.length; i++) {
           if (this.cellStatus[cells[i]] === 0) {
             if (!this._set(cells[i], 2)) return false;
           }
         }
-        continue;
-      }
-      if (nB === 1) {
-        const bidx = blacks[0];
-        const r = (bidx / this.cols) | 0;
-        const c = bidx - r * this.cols;
-        const partners = [];
-        const ns = [];
-        if (r > 0) ns.push(bidx - this.cols);
-        if (r < this.rows - 1) ns.push(bidx + this.cols);
-        if (c > 0) ns.push(bidx - 1);
-        if (c < this.cols - 1) ns.push(bidx + 1);
-        for (let i = 0; i < ns.length; i++) {
-          const ni = ns[i];
-          if (this.cellToRoom[ni] !== k) continue;
-          if (this.cellStatus[ni] === 2) continue;
-          partners.push(ni);
-        }
-        if (partners.length === 0) return false;
-        if (partners.length === 1) {
-          if (!this._set(partners[0], 1)) return false;
-        }
-        const keep = new Set([bidx, ...partners]);
+      } else if (nB + nU === 2) {
         for (let i = 0; i < cells.length; i++) {
-          if (keep.has(cells[i])) continue;
           if (this.cellStatus[cells[i]] === 0) {
-            if (!this._set(cells[i], 2)) return false;
+            if (!this._set(cells[i], 1)) return false;
           }
-        }
-        continue;
-      }
-      // nB === 0
-      const candidates = this.dominoCandidates[k];
-      const live = [];
-      for (let i = 0; i < candidates.length; i++) {
-        const p = candidates[i];
-        if (this.cellStatus[p[0]] === 2) continue;
-        if (this.cellStatus[p[1]] === 2) continue;
-        live.push(p);
-      }
-      if (live.length === 0) return false;
-      const counts = new Map();
-      for (const p of live) {
-        counts.set(p[0], (counts.get(p[0]) || 0) + 1);
-        counts.set(p[1], (counts.get(p[1]) || 0) + 1);
-      }
-      for (let i = 0; i < cells.length; i++) {
-        const ci = cells[i];
-        if (this.cellStatus[ci] !== 0) continue;
-        const c = counts.get(ci) || 0;
-        if (c === 0) {
-          if (!this._set(ci, 2)) return false;
-        } else if (c === live.length) {
-          if (!this._set(ci, 1)) return false;
         }
       }
     }
     return true;
   }
 
-  _applyCrossRegionDominate() {
-    // Precompute live candidates per region (drop pairs with a white cell).
-    const liveCands = new Array(this.K);
-    for (let k = 0; k < this.K; k++) {
-      const cands = this.dominoCandidates[k];
-      const live = [];
-      for (let i = 0; i < cands.length; i++) {
-        const p = cands[i];
-        if (this.cellStatus[p[0]] === 2) continue;
-        if (this.cellStatus[p[1]] === 2) continue;
-        live.push(p);
-      }
-      liveCands[k] = live;
-    }
-    const total = this.rows * this.cols;
-    for (let idx = 0; idx < total; idx++) {
-      if (this.cellStatus[idx] !== 0) continue;
-      const r = (idx / this.cols) | 0;
-      const c = idx - r * this.cols;
-      const ownRoom = this.cellToRoom[idx];
-      // Group adjacent cross-region neighbours by their region.
-      const adjByRoom = new Map();
-      const ns = [];
-      if (r > 0) ns.push(idx - this.cols);
-      if (r < this.rows - 1) ns.push(idx + this.cols);
-      if (c > 0) ns.push(idx - 1);
-      if (c < this.cols - 1) ns.push(idx + 1);
-      for (let i = 0; i < ns.length; i++) {
-        const ni = ns[i];
-        const nr = this.cellToRoom[ni];
-        if (nr === ownRoom || nr < 0) continue;
-        let set = adjByRoom.get(nr);
-        if (!set) { set = new Set(); adjByRoom.set(nr, set); }
-        set.add(ni);
-      }
-      // For each adjacent region Y: if every live candidate touches the
-      // adjacency set → idx must be white.
-      for (const [yRoom, adjSet] of adjByRoom) {
-        const live = liveCands[yRoom];
-        if (live.length === 0) continue;
-        let allTouch = true;
-        for (let i = 0; i < live.length; i++) {
-          const p = live[i];
-          if (!adjSet.has(p[0]) && !adjSet.has(p[1])) {
-            allTouch = false;
-            break;
+  _apply2x2() {
+    for (let r = 0; r + 1 < this.rows; r++) {
+      for (let c = 0; c + 1 < this.cols; c++) {
+        const a = r * this.cols + c;
+        const cells = [a, a + 1, a + this.cols, a + this.cols + 1];
+        let nB = 0, nU = 0;
+        for (let i = 0; i < 4; i++) {
+          const v = this.cellStatus[cells[i]];
+          if (v === 1) nB++;
+          else if (v === 0) nU++;
+        }
+        if (nB > 2) return false;
+        if (nB === 2 && nU > 0) {
+          for (let i = 0; i < 4; i++) {
+            if (this.cellStatus[cells[i]] === 0) {
+              if (!this._set(cells[i], 2)) return false;
+            }
           }
         }
-        if (allTouch) {
-          if (!this._set(idx, 2)) return false;
-          break;
+      }
+    }
+    return true;
+  }
+
+  _apply3InRow() {
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c + 2 < this.cols; c++) {
+        const a = r * this.cols + c;
+        const cells = [a, a + 1, a + 2];
+        let nB = 0, nU = 0;
+        for (let i = 0; i < 3; i++) {
+          const v = this.cellStatus[cells[i]];
+          if (v === 1) nB++;
+          else if (v === 0) nU++;
+        }
+        if (nB === 3) return false;
+        if (nB === 2 && nU > 0) {
+          for (let i = 0; i < 3; i++) {
+            if (this.cellStatus[cells[i]] === 0) {
+              if (!this._set(cells[i], 2)) return false;
+            }
+          }
+        }
+      }
+    }
+    for (let c = 0; c < this.cols; c++) {
+      for (let r = 0; r + 2 < this.rows; r++) {
+        const a = r * this.cols + c;
+        const cells = [a, a + this.cols, a + 2 * this.cols];
+        let nB = 0, nU = 0;
+        for (let i = 0; i < 3; i++) {
+          const v = this.cellStatus[cells[i]];
+          if (v === 1) nB++;
+          else if (v === 0) nU++;
+        }
+        if (nB === 3) return false;
+        if (nB === 2 && nU > 0) {
+          for (let i = 0; i < 3; i++) {
+            if (this.cellStatus[cells[i]] === 0) {
+              if (!this._set(cells[i], 2)) return false;
+            }
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  _applyNeighborConstraints() {
+    const total = this.rows * this.cols;
+    for (let i = 0; i < total; i++) {
+      if (this.cellStatus[i] !== 1) continue;
+      const r = (i / this.cols) | 0;
+      const c = i - r * this.cols;
+      const ns = [];
+      if (r > 0) ns.push(i - this.cols);
+      if (r < this.rows - 1) ns.push(i + this.cols);
+      if (c > 0) ns.push(i - 1);
+      if (c < this.cols - 1) ns.push(i + 1);
+      let nB = 0, nU = 0, uIdx = -1;
+      for (let j = 0; j < ns.length; j++) {
+        const nv = this.cellStatus[ns[j]];
+        if (nv === 1) nB++;
+        else if (nv === 0) { nU++; uIdx = ns[j]; }
+      }
+      if (nB > 1) return false;
+      if (nB === 1) {
+        for (let j = 0; j < ns.length; j++) {
+          if (this.cellStatus[ns[j]] === 0) {
+            if (!this._set(ns[j], 2)) return false;
+          }
+        }
+      } else {
+        if (nU === 0) return false;
+        if (nU === 1) {
+          if (!this._set(uIdx, 1)) return false;
         }
       }
     }
@@ -10535,8 +10488,10 @@ class NorinoriSolver {
       if (this._timeUp()) return true;
       changed = false;
       const mark = this.trail.length;
-      if (!this._applyDominoes()) return false;
-      if (!this._applyCrossRegionDominate()) return false;
+      if (!this._applyRegionCount()) return false;
+      if (!this._apply2x2()) return false;
+      if (!this._apply3InRow()) return false;
+      if (!this._applyNeighborConstraints()) return false;
       if (this.trail.length > mark) changed = true;
     }
     if (this._depth === 0 && !this._inLookahead) {
@@ -10595,19 +10550,18 @@ class NorinoriSolver {
   }
 
   _pickBestUnknown() {
-    let bestIdx = -1, bestScore = Infinity;
+    let bestIdx = -1, bestScore = -1;
     const total = this.rows * this.cols;
     for (let i = 0; i < total; i++) {
       if (this.cellStatus[i] !== 0) continue;
-      const k = this.cellToRoom[i];
-      const cands = this.dominoCandidates[k];
-      let live = 0;
-      for (let j = 0; j < cands.length; j++) {
-        if (this.cellStatus[cands[j][0]] === 2) continue;
-        if (this.cellStatus[cands[j][1]] === 2) continue;
-        live++;
-      }
-      if (live < bestScore) { bestScore = live; bestIdx = i; }
+      const r = (i / this.cols) | 0;
+      const c = i - r * this.cols;
+      let score = 0;
+      if (r > 0 && this.cellStatus[i - this.cols] !== 0) score++;
+      if (r < this.rows - 1 && this.cellStatus[i + this.cols] !== 0) score++;
+      if (c > 0 && this.cellStatus[i - 1] !== 0) score++;
+      if (c < this.cols - 1 && this.cellStatus[i + 1] !== 0) score++;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
     }
     return bestIdx;
   }
@@ -10706,12 +10660,22 @@ class NorinoriSolver {
       return out;
     };
 
-    if (!this._applyDominoes()) return null;
+    if (!this._applyRegionCount()) return null;
     {
       const h = collectChanged();
       if (h.length) return h;
     }
-    if (!this._applyCrossRegionDominate()) return null;
+    if (!this._apply2x2()) return null;
+    {
+      const h = collectChanged();
+      if (h.length) return h;
+    }
+    if (!this._apply3InRow()) return null;
+    {
+      const h = collectChanged();
+      if (h.length) return h;
+    }
+    if (!this._applyNeighborConstraints()) return null;
     {
       const h = collectChanged();
       if (h.length) return h;

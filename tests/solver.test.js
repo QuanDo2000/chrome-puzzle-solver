@@ -30,6 +30,51 @@ function norinoriRoomsFromFixture(fixture) {
     .map(k => ({cells: cellsByRoom[k]}));
 }
 
+// Validate a Norinori solution against the site's four rules: per-region
+// count==2, no 3-in-row, no 2x2 with 3+ blacks, no solo black.
+function validateNorinoriSolution(grid, rooms) {
+  const rows = grid.length, cols = grid[0].length;
+  for (const room of rooms) {
+    let nB = 0;
+    for (const cell of room.cells) if (grid[cell.r][cell.c] === 1) nB++;
+    if (nB !== 2) return `region count != 2 (got ${nB})`;
+  }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c + 2 < cols; c++) {
+      if (grid[r][c] === 1 && grid[r][c+1] === 1 && grid[r][c+2] === 1)
+        return `horizontal 3-in-row at (${r},${c})`;
+    }
+  }
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r + 2 < rows; r++) {
+      if (grid[r][c] === 1 && grid[r+1][c] === 1 && grid[r+2][c] === 1)
+        return `vertical 3-in-row at (${r},${c})`;
+    }
+  }
+  for (let r = 0; r + 1 < rows; r++) {
+    for (let c = 0; c + 1 < cols; c++) {
+      let n = 0;
+      if (grid[r][c] === 1) n++;
+      if (grid[r][c+1] === 1) n++;
+      if (grid[r+1][c] === 1) n++;
+      if (grid[r+1][c+1] === 1) n++;
+      if (n > 2) return `2x2 with ${n} blacks at (${r},${c})`;
+    }
+  }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] !== 1) continue;
+      let hasBlackNbr = false;
+      if (r > 0 && grid[r-1][c] === 1) hasBlackNbr = true;
+      if (r < rows - 1 && grid[r+1][c] === 1) hasBlackNbr = true;
+      if (c > 0 && grid[r][c-1] === 1) hasBlackNbr = true;
+      if (c < cols - 1 && grid[r][c+1] === 1) hasBlackNbr = true;
+      if (!hasBlackNbr) return `solo black at (${r},${c})`;
+    }
+  }
+  return null;
+}
+
 // Roundtrip through JSON to match the capture script's representation: drops
 // non-numeric properties some solvers attach to grid arrays (e.g. Galaxies
 // stores its galaxies array as a side-property on the grid).
@@ -2765,15 +2810,17 @@ test('MosaicSolver: mosaic5x5Easy fixture matches golden', () => {
   assert.deepEqual(r.grid, golden.mosaic5x5Easy);
 });
 
-test('NorinoriSolver: norinori6x6Normal fixture matches golden', () => {
+test('NorinoriSolver: norinori6x6Normal fixture solves to a valid grid', () => {
   const fixture = fixtures.norinori6x6Normal;
+  const rooms = norinoriRoomsFromFixture(fixture);
   NorinoriSolver.clearSolutionCache();
   const s = new NorinoriSolver({
     rows: fixture.rows,
     cols: fixture.cols,
-    rooms: norinoriRoomsFromFixture(fixture),
+    rooms,
   });
   const r = s.solve();
   assert.equal(r.solved, true);
-  assert.deepEqual(r.grid, golden.norinori6x6Normal);
+  const err = validateNorinoriSolution(r.grid, rooms);
+  assert.equal(err, null, `solution invalid: ${err}`);
 });

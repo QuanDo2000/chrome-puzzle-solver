@@ -3,6 +3,47 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { NorinoriSolver, computePuzzleDiff } = require('../solver.js');
 
+// Validates a Norinori solution against the four site rules (per
+// puzzles-mobile.com's getErrors): exactly 2 blacks per region, no
+// 3-in-row of blacks, no 2x2 with 3+ blacks, every black has at least
+// one black neighbour. Dominos may span regions.
+function validate(grid, rooms) {
+  const rows = grid.length, cols = grid[0].length;
+  for (const room of rooms) {
+    let nB = 0;
+    for (const cell of room.cells) if (grid[cell.r][cell.c] === 1) nB++;
+    if (nB !== 2) return `region count != 2 (got ${nB})`;
+  }
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c + 2 < cols; c++)
+      if (grid[r][c] === 1 && grid[r][c+1] === 1 && grid[r][c+2] === 1)
+        return `h-3-in-row at (${r},${c})`;
+  for (let c = 0; c < cols; c++)
+    for (let r = 0; r + 2 < rows; r++)
+      if (grid[r][c] === 1 && grid[r+1][c] === 1 && grid[r+2][c] === 1)
+        return `v-3-in-row at (${r},${c})`;
+  for (let r = 0; r + 1 < rows; r++)
+    for (let c = 0; c + 1 < cols; c++) {
+      let n = 0;
+      if (grid[r][c] === 1) n++;
+      if (grid[r][c+1] === 1) n++;
+      if (grid[r+1][c] === 1) n++;
+      if (grid[r+1][c+1] === 1) n++;
+      if (n > 2) return `2x2 with ${n} blacks at (${r},${c})`;
+    }
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] !== 1) continue;
+      let has = false;
+      if (r > 0 && grid[r-1][c] === 1) has = true;
+      if (r < rows - 1 && grid[r+1][c] === 1) has = true;
+      if (c > 0 && grid[r][c-1] === 1) has = true;
+      if (c < cols - 1 && grid[r][c+1] === 1) has = true;
+      if (!has) return `solo black at (${r},${c})`;
+    }
+  return null;
+}
+
 test('NorinoriSolver: constructor mirrors rooms and cellToRoom', () => {
   const s = new NorinoriSolver({
     rows: 2, cols: 2,
@@ -19,43 +60,6 @@ test('NorinoriSolver: constructor mirrors rooms and cellToRoom', () => {
   assert.equal(s.cellToRoom[3], 1);
 });
 
-test('NorinoriSolver: _set black forces CROSS-region neighbours to white', () => {
-  const s = new NorinoriSolver({
-    rows: 2, cols: 3,
-    rooms: [
-      { cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}] },
-      { cells: [{r: 1, c: 0}, {r: 1, c: 1}, {r: 1, c: 2}] },
-    ],
-  });
-  assert.equal(s._set(1, 1), true);
-  assert.equal(s.cellStatus[1], 1);
-  assert.equal(s.cellStatus[4], 2);
-  assert.equal(s.cellStatus[0], 0);
-  assert.equal(s.cellStatus[2], 0);
-});
-
-test('NorinoriSolver: _set cross-region black-on-black → contradiction', () => {
-  const s = new NorinoriSolver({
-    rows: 2, cols: 2,
-    rooms: [
-      { cells: [{r: 0, c: 0}, {r: 0, c: 1}] },
-      { cells: [{r: 1, c: 0}, {r: 1, c: 1}] },
-    ],
-    initialState: [[1, 0], [0, 0]],
-  });
-  assert.equal(s._set(2, 1), false);
-});
-
-test('NorinoriSolver: _set same-region black-adjacent is OK (domino)', () => {
-  const s = new NorinoriSolver({
-    rows: 1, cols: 2,
-    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
-    initialState: [[1, 0]],
-  });
-  assert.equal(s._set(1, 1), true);
-  assert.equal(s.cellStatus[1], 1);
-});
-
 test('NorinoriSolver: _set / _rollback round-trip', () => {
   const s = new NorinoriSolver({
     rows: 1, cols: 2,
@@ -67,152 +71,169 @@ test('NorinoriSolver: _set / _rollback round-trip', () => {
   assert.equal(s.cellStatus[0], 0);
 });
 
-test('NorinoriSolver._buildDominoCandidates: 1x2 region has 1 candidate', () => {
+test('NorinoriSolver: _set does not cascade (cross-region adjacency allowed)', () => {
+  // Two 2-cell regions stacked. Placing one black no longer forces the
+  // cross-region neighbour to white — that constraint is gone in the
+  // relaxed-rule solver (cross-region dominoes are legal).
   const s = new NorinoriSolver({
-    rows: 1, cols: 2,
-    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
-  });
-  assert.equal(s.dominoCandidates[0].length, 1);
-  assert.deepEqual(Array.from(s.dominoCandidates[0][0]), [0, 1]);
-});
-
-test('NorinoriSolver._buildDominoCandidates: L-shaped region has 2 candidates', () => {
-  const s = new NorinoriSolver({
-    rows: 2, cols: 2,
-    rooms: [
-      { cells: [{r: 0, c: 0}, {r: 1, c: 0}, {r: 1, c: 1}] },
-      { cells: [{r: 0, c: 1}] },
-    ],
-  });
-  assert.equal(s.dominoCandidates[0].length, 2);
-});
-
-test('NorinoriSolver._buildDominoCandidates: 2x2 region has 4 candidates', () => {
-  const s = new NorinoriSolver({
-    rows: 2, cols: 2,
-    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 1, c: 0}, {r: 1, c: 1}]}],
-  });
-  assert.equal(s.dominoCandidates[0].length, 4);
-});
-
-test('NorinoriSolver._buildDominoCandidates: isolated cell has 0 candidates', () => {
-  const s = new NorinoriSolver({
-    rows: 1, cols: 2,
+    rows: 2, cols: 1,
     rooms: [
       { cells: [{r: 0, c: 0}] },
-      { cells: [{r: 0, c: 1}] },
+      { cells: [{r: 1, c: 0}] },
     ],
   });
-  assert.equal(s.dominoCandidates[0].length, 0);
-  assert.equal(s.dominoCandidates[1].length, 0);
+  assert.equal(s._set(0, 1), true);
+  assert.equal(s.cellStatus[0], 1);
+  assert.equal(s.cellStatus[1], 0);
 });
 
-test('NorinoriSolver._applyDominoes: nB=2 non-adjacent → contradiction', () => {
-  const s = new NorinoriSolver({
-    rows: 1, cols: 3,
-    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}]}],
-    initialState: [[1, 0, 1]],
-  });
-  assert.equal(s._applyDominoes(), false);
-});
-
-test('NorinoriSolver._applyDominoes: nB=2 adjacent → other cells forced white', () => {
+test('NorinoriSolver._applyRegionCount: nB=2 forces remaining unknowns white', () => {
   const s = new NorinoriSolver({
     rows: 1, cols: 3,
     rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}]}],
     initialState: [[1, 1, 0]],
   });
-  assert.equal(s._applyDominoes(), true);
+  assert.equal(s._applyRegionCount(), true);
   assert.equal(s.cellStatus[2], 2);
 });
 
-test('NorinoriSolver._applyDominoes: nB=1 with only one same-region neighbour → force partner', () => {
+test('NorinoriSolver._applyRegionCount: nB>2 → contradiction', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 4,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}, {r: 0, c: 3}]}],
+    initialState: [[1, 1, 1, 0]],
+  });
+  assert.equal(s._applyRegionCount(), false);
+});
+
+test('NorinoriSolver._applyRegionCount: nB+nU<2 → contradiction (room cannot reach 2 blacks)', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 3,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}]}],
+    initialState: [[2, 2, 0]],
+  });
+  assert.equal(s._applyRegionCount(), false);
+});
+
+test('NorinoriSolver._applyRegionCount: when only 2 cells remain available → both forced black', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 3,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}]}],
+    initialState: [[2, 0, 0]],
+  });
+  assert.equal(s._applyRegionCount(), true);
+  assert.equal(s.cellStatus[1], 1);
+  assert.equal(s.cellStatus[2], 1);
+});
+
+test('NorinoriSolver._apply2x2: 2 blacks force the other 2 cells white', () => {
+  const s = new NorinoriSolver({
+    rows: 2, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 1, c: 0}, {r: 1, c: 1}]}],
+    initialState: [[1, 1], [0, 0]],
+  });
+  assert.equal(s._apply2x2(), true);
+  assert.equal(s.cellStatus[2], 2);
+  assert.equal(s.cellStatus[3], 2);
+});
+
+test('NorinoriSolver._apply2x2: 3 blacks → contradiction', () => {
+  const s = new NorinoriSolver({
+    rows: 2, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 1, c: 0}, {r: 1, c: 1}]}],
+    initialState: [[1, 1], [1, 0]],
+  });
+  assert.equal(s._apply2x2(), false);
+});
+
+test('NorinoriSolver._apply3InRow: 2 horizontal blacks adjacent + unknown extension → forced white', () => {
+  const s = new NorinoriSolver({
+    rows: 1, cols: 4,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}, {r: 0, c: 3}]}],
+    initialState: [[1, 1, 0, 0]],
+  });
+  assert.equal(s._apply3InRow(), true);
+  assert.equal(s.cellStatus[2], 2);
+});
+
+test('NorinoriSolver._apply3InRow: 3 vertical blacks → contradiction', () => {
+  const s = new NorinoriSolver({
+    rows: 3, cols: 1,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 1, c: 0}, {r: 2, c: 0}]}],
+    initialState: [[1], [1], [1]],
+  });
+  assert.equal(s._apply3InRow(), false);
+});
+
+test('NorinoriSolver._applyNeighborConstraints: black with 1 black neighbour forces other neighbours white', () => {
+  // 1x3: black at (0,0) and (0,1). (0,2) is unknown — must be white because
+  // (0,1) already has its one black partner.
+  const s = new NorinoriSolver({
+    rows: 1, cols: 3,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}]}],
+    initialState: [[1, 1, 0]],
+  });
+  assert.equal(s._applyNeighborConstraints(), true);
+  assert.equal(s.cellStatus[2], 2);
+});
+
+test('NorinoriSolver._applyNeighborConstraints: black with 0 black + 1 unknown neighbour → unknown forced black', () => {
+  // 1x2: black at (0,0). (0,1) is its only neighbour — must be black.
   const s = new NorinoriSolver({
     rows: 1, cols: 2,
     rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
     initialState: [[1, 0]],
   });
-  assert.equal(s._applyDominoes(), true);
+  assert.equal(s._applyNeighborConstraints(), true);
   assert.equal(s.cellStatus[1], 1);
 });
 
-test('NorinoriSolver._applyDominoes: nB=0 with only one live candidate → both cells forced black', () => {
+test('NorinoriSolver._applyNeighborConstraints: black with 2 black neighbours → contradiction (L-shape)', () => {
+  // 2x2: (0,0)=B, (0,1)=B, (1,0)=B. (0,0) has 2 black neighbours.
   const s = new NorinoriSolver({
-    rows: 1, cols: 2,
-    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
+    rows: 2, cols: 2,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 1, c: 0}, {r: 1, c: 1}]}],
+    initialState: [[1, 1], [1, 0]],
   });
-  assert.equal(s._applyDominoes(), true);
-  assert.equal(s.cellStatus[0], 1);
-  assert.equal(s.cellStatus[1], 1);
+  assert.equal(s._applyNeighborConstraints(), false);
 });
 
-test('NorinoriSolver._applyDominoes: nB=0, multiple candidates → cell in every candidate forced black', () => {
-  // 2x3 grid: room0 = L-shape {(0,0),(1,0),(1,1)}, room1 = {(0,1),(0,2),(1,2)}.
-  // Room0 candidates: (0,0)-(1,0) and (1,0)-(1,1). (1,0) is in both → forced black.
-  // Room1 is a valid 3-cell room with its own candidates.
+test('NorinoriSolver._applyNeighborConstraints: solo black (all neighbours white) → contradiction', () => {
+  // 1x3: middle cell black, both neighbours white.
   const s = new NorinoriSolver({
-    rows: 2, cols: 3,
-    rooms: [
-      { cells: [{r: 0, c: 0}, {r: 1, c: 0}, {r: 1, c: 1}] },
-      { cells: [{r: 0, c: 1}, {r: 0, c: 2}, {r: 1, c: 2}] },
-    ],
+    rows: 1, cols: 3,
+    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}]}],
+    initialState: [[2, 1, 2]],
   });
-  assert.equal(s._applyDominoes(), true);
-  // (1,0) = index 3 is in every room0 candidate → forced black
-  assert.equal(s.cellStatus[3], 1);
-  // (0,0) = index 0 and (1,1) = index 4 are not in every candidate → still unknown
-  assert.equal(s.cellStatus[0], 0);
-  assert.equal(s.cellStatus[4], 0);
+  assert.equal(s._applyNeighborConstraints(), false);
 });
 
-test('NorinoriSolver._applyDominoes: nB=0 with 0 live candidates → contradiction', () => {
-  const s = new NorinoriSolver({
-    rows: 1, cols: 2,
-    rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
-    initialState: [[2, 2]],
-  });
-  assert.equal(s._applyDominoes(), false);
-});
-
-test('NorinoriSolver._applyCrossRegionDominate: cell adjacent to a region where every candidate touches it → forced white', () => {
-  // 2x3 grid, two row-regions.
-  // Region 0 (row 0): cells (0,0),(0,1),(0,2). Domino candidates:
-  //   (0,0)-(0,1) and (0,1)-(0,2). Both contain (0,1).
-  // Region 1 (row 1): cell (1,1) is 4-adjacent to (0,1) (cross-region).
-  //   Since both region-0 candidates touch (0,1), (1,1) must be white.
-  const s = new NorinoriSolver({
-    rows: 2, cols: 3,
-    rooms: [
-      { cells: [{r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}] },
-      { cells: [{r: 1, c: 0}, {r: 1, c: 1}, {r: 1, c: 2}] },
-    ],
-  });
-  assert.equal(s._applyCrossRegionDominate(), true);
-  assert.equal(s.cellStatus[4], 2); // (1,1) forced white
-});
-
-test('NorinoriSolver._propagate: cascades dominoes + cross-region rules', () => {
-  // 1x4 with two 2-cell regions. Each forces black domino → cross-region
-  // blacks adjacent → contradiction.
-  const s = new NorinoriSolver({
-    rows: 1, cols: 4,
-    rooms: [
-      { cells: [{r: 0, c: 0}, {r: 0, c: 1}] },
-      { cells: [{r: 0, c: 2}, {r: 0, c: 3}] },
-    ],
-  });
-  assert.equal(s._propagate(), false);
-});
-
-test('NorinoriSolver._propagate: returns true on a consistent single-region puzzle', () => {
+test('NorinoriSolver._propagate: 1x2 region forces both cells black', () => {
   const s = new NorinoriSolver({
     rows: 1, cols: 2,
     rooms: [{cells: [{r: 0, c: 0}, {r: 0, c: 1}]}],
   });
   assert.equal(s._propagate(), true);
+  assert.equal(s.cellStatus[0], 1);
+  assert.equal(s.cellStatus[1], 1);
 });
 
-test('NorinoriSolver.solve: solves the recon 6x6', () => {
+test('NorinoriSolver._propagate: two stacked 2-cell regions form a valid 2-by-1 cross-region pair pattern', () => {
+  // 2 rows x 1 col, each row is its own region. Cross-region blacks are
+  // legal now, so this solves: both cells black, vertical 2x1 domino
+  // spans both regions.
+  const s = new NorinoriSolver({
+    rows: 2, cols: 1,
+    rooms: [
+      { cells: [{r: 0, c: 0}] },
+      { cells: [{r: 1, c: 0}] },
+    ],
+  });
+  // 1-cell regions can never have 2 blacks → propagate flags this.
+  assert.equal(s._propagate(), false);
+});
+
+test('NorinoriSolver.solve: solves the recon 6x6 to a valid grid', () => {
   NorinoriSolver.clearSolutionCache();
   const areas = [
     [0,0,1,1,1,2],
@@ -233,27 +254,17 @@ test('NorinoriSolver.solve: solves the recon 6x6', () => {
   const s = new NorinoriSolver({rows: 6, cols: 6, rooms, maxMs: 5000});
   const r = s.solve();
   assert.equal(r.solved, true);
-  for (const room of rooms) {
-    const blacks = [];
-    for (const cell of room.cells) {
-      if (r.grid[cell.r][cell.c] === 1) blacks.push(cell);
-    }
-    assert.equal(blacks.length, 2);
-    const dr = Math.abs(blacks[0].r - blacks[1].r);
-    const dc = Math.abs(blacks[0].c - blacks[1].c);
-    assert.equal(dr + dc, 1);
-  }
+  const err = validate(r.grid, rooms);
+  assert.equal(err, null, `solution invalid: ${err}`);
 });
 
-test('NorinoriSolver.solve: unsat returns {solved:false, grid:null}', () => {
+test('NorinoriSolver.solve: unsat (1-cell regions can never reach 2 blacks)', () => {
   NorinoriSolver.clearSolutionCache();
-  // 1x4 with two 2-cell regions: each forces a domino that's cross-region
-  // adjacent → unsat.
   const s = new NorinoriSolver({
-    rows: 1, cols: 4,
+    rows: 1, cols: 2,
     rooms: [
-      { cells: [{r: 0, c: 0}, {r: 0, c: 1}] },
-      { cells: [{r: 0, c: 2}, {r: 0, c: 3}] },
+      { cells: [{r: 0, c: 0}] },
+      { cells: [{r: 0, c: 1}] },
     ],
   });
   const r = s.solve();

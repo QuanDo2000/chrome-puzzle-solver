@@ -41,31 +41,46 @@ function generateRectangularRooms(rows, cols, seed) {
 }
 
 function validate(rows, cols, rooms, areas, grid) {
+  // Rule 1: each region has exactly 2 black cells.
   for (const room of rooms) {
-    const blacks = [];
-    for (const cell of room.cells) {
-      if (grid[cell.r][cell.c] === 1) blacks.push(cell);
-    }
-    if (blacks.length !== 2) return `rule 1 count: region has ${blacks.length} blacks`;
-    const dr = Math.abs(blacks[0].r - blacks[1].r);
-    const dc = Math.abs(blacks[0].c - blacks[1].c);
-    if (dr + dc !== 1) return `rule 1 domino: blacks not adjacent`;
+    let nB = 0;
+    for (const cell of room.cells) if (grid[cell.r][cell.c] === 1) nB++;
+    if (nB !== 2) return `rule 1: region has ${nB} blacks`;
   }
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    if (grid[r][c] !== 1) continue;
-    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-      const nr = r + dr, nc = c + dc;
-      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-      if (grid[nr][nc] !== 1) continue;
-      if (areas[r][c] !== areas[nr][nc]) {
-        return `rule 2: cross-region blacks at (${r},${c})-(${nr},${nc})`;
-      }
+  // Rule 2: no 3-in-row.
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c + 2 < cols; c++)
+      if (grid[r][c] === 1 && grid[r][c+1] === 1 && grid[r][c+2] === 1)
+        return `rule 2: h-3-in-row at (${r},${c})`;
+  for (let c = 0; c < cols; c++)
+    for (let r = 0; r + 2 < rows; r++)
+      if (grid[r][c] === 1 && grid[r+1][c] === 1 && grid[r+2][c] === 1)
+        return `rule 2: v-3-in-row at (${r},${c})`;
+  // Rule 3: no 2x2 with 3+ blacks.
+  for (let r = 0; r + 1 < rows; r++)
+    for (let c = 0; c + 1 < cols; c++) {
+      let n = 0;
+      if (grid[r][c] === 1) n++;
+      if (grid[r][c+1] === 1) n++;
+      if (grid[r+1][c] === 1) n++;
+      if (grid[r+1][c+1] === 1) n++;
+      if (n > 2) return `rule 3: 2x2 with ${n} blacks at (${r},${c})`;
     }
-  }
+  // Rule 4: every black has at least one black neighbour.
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] !== 1) continue;
+      let hasB = false;
+      if (r > 0 && grid[r-1][c] === 1) hasB = true;
+      if (r < rows - 1 && grid[r+1][c] === 1) hasB = true;
+      if (c > 0 && grid[r][c-1] === 1) hasB = true;
+      if (c < cols - 1 && grid[r][c+1] === 1) hasB = true;
+      if (!hasB) return `rule 4: solo black at (${r},${c})`;
+    }
   return null;
 }
 
-test('NorinoriSolver fuzz: solved boards satisfy both rules', () => {
+test('NorinoriSolver fuzz: solved boards satisfy all four site rules', () => {
   NorinoriSolver.clearSolutionCache();
   let solved = 0;
   for (let seed = 1; seed <= 30; seed++) {

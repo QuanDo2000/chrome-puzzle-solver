@@ -1715,7 +1715,37 @@ function dumpPuzzleForBench() {
         for (var nnc = 0; nnc < nnCols; nnc++) dstRow[nnc] = srcRow[nnc] || 0;
         nnAreas.push(dstRow);
       }
-      return { type: 'norinori', rows: nnRows, cols: nnCols, areas: nnAreas, path: path };
+      // Diagnostic: areaPoints (live region cell lists) and cellStatus.
+      var nnAreaPoints = [];
+      for (var nnk = 0; nnk < g.areaPoints.length; nnk++) {
+        var pts = g.areaPoints[nnk] || [];
+        var ptsOut = [];
+        for (var nnp = 0; nnp < pts.length; nnp++) {
+          ptsOut.push({row: pts[nnp].row, col: pts[nnp].col});
+        }
+        nnAreaPoints.push(ptsOut);
+      }
+      var nnCellStatus = null;
+      if (g.currentState && g.currentState.cellStatus) {
+        nnCellStatus = [];
+        for (var nncr = 0; nncr < nnRows; nncr++) {
+          var csRow = g.currentState.cellStatus[nncr] || [];
+          var csOut = new Array(nnCols);
+          for (var nncc = 0; nncc < nnCols; nncc++) csOut[nncc] = csRow[nncc] || 0;
+          nnCellStatus.push(csOut);
+        }
+      }
+      return {
+        type: 'norinori',
+        rows: nnRows,
+        cols: nnCols,
+        areas: nnAreas,
+        areaPoints: nnAreaPoints,
+        cellStatus: nnCellStatus,
+        task: g.task,
+        areaTask: g.areaTask,
+        path: path
+      };
     }
 
     // Hashi: islands list, no grid clues. g.task is a flat array of island
