@@ -69,3 +69,37 @@ test('KakurasuSolver._buildMaskDomains: 4×4 recon row 0 clue=2 → only col 1 f
   });
   assert.deepEqual(Array.from(s.rowMasksActive[0]).sort(), [0b0010]);
 });
+
+test('KakurasuSolver._applyLines: single-mask row forces every cell', () => {
+  const s = new KakurasuSolver({
+    rows: 1, cols: 4,
+    rowClues: [2],
+    colClues: [0, 1, 0, 0],
+  });
+  assert.equal(s._applyLines(), true);
+  assert.equal(s.cellStatus[0], 2);  // (0,0) cross
+  assert.equal(s.cellStatus[1], 1);  // (0,1) filled
+  assert.equal(s.cellStatus[2], 2);
+  assert.equal(s.cellStatus[3], 2);
+});
+
+test('KakurasuSolver._applyLines: empty row mask list → contradiction', () => {
+  const s = new KakurasuSolver({
+    rows: 1, cols: 3,
+    rowClues: [100],
+    colClues: [0, 0, 0],
+  });
+  assert.equal(s._applyLines(), false);
+});
+
+test('KakurasuSolver._applyLines: mask narrowing under known cell', () => {
+  const s = new KakurasuSolver({
+    rows: 1, cols: 3,
+    rowClues: [3],
+    colClues: [1, 2, 0],
+    initialState: [[0, 0, 2]],
+  });
+  assert.equal(s._applyLines(), true);
+  assert.equal(s.cellStatus[0], 1);
+  assert.equal(s.cellStatus[1], 1);
+});

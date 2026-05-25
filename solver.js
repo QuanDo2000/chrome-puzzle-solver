@@ -8927,6 +8927,80 @@ class KakurasuSolver {
     }
   }
 
+  _narrowLine(axis, lineIdx, active) {
+    const kept = [];
+    for (let i = 0; i < active.length; i++) {
+      const m = active[i];
+      let ok = true;
+      if (axis === 0) {
+        const r = lineIdx;
+        for (let c = 0; c < this.cols; c++) {
+          const cs = this.cellStatus[r * this.cols + c];
+          const bit = (m >> c) & 1;
+          if (cs === 1 && !bit) { ok = false; break; }
+          if (cs === 2 && bit)  { ok = false; break; }
+        }
+      } else {
+        const c = lineIdx;
+        for (let r = 0; r < this.rows; r++) {
+          const cs = this.cellStatus[r * this.cols + c];
+          const bit = (m >> r) & 1;
+          if (cs === 1 && !bit) { ok = false; break; }
+          if (cs === 2 && bit)  { ok = false; break; }
+        }
+      }
+      if (ok) kept.push(m);
+      else this.maskTrail.push({ axis, lineIdx, mask: m });
+    }
+    return kept;
+  }
+
+  _applyLines() {
+    for (let r = 0; r < this.rows; r++) {
+      const before = this.rowMasksActive[r];
+      if (before.length === 0) return false;
+      const active = this._narrowLine(0, r, before);
+      this.rowMasksActive[r] = active;
+      if (active.length === 0) return false;
+      let inter = active[0], union = active[0];
+      for (let i = 1; i < active.length; i++) {
+        inter &= active[i];
+        union |= active[i];
+      }
+      for (let c = 0; c < this.cols; c++) {
+        const bitMask = 1 << c;
+        const idx = r * this.cols + c;
+        if ((inter & bitMask) && this.cellStatus[idx] === 0) {
+          if (!this._set(idx, 1)) return false;
+        } else if (!(union & bitMask) && this.cellStatus[idx] === 0) {
+          if (!this._set(idx, 2)) return false;
+        }
+      }
+    }
+    for (let c = 0; c < this.cols; c++) {
+      const before = this.colMasksActive[c];
+      if (before.length === 0) continue;
+      const active = this._narrowLine(1, c, before);
+      this.colMasksActive[c] = active;
+      if (active.length === 0) return false;
+      let inter = active[0], union = active[0];
+      for (let i = 1; i < active.length; i++) {
+        inter &= active[i];
+        union |= active[i];
+      }
+      for (let r = 0; r < this.rows; r++) {
+        const bitMask = 1 << r;
+        const idx = r * this.cols + c;
+        if ((inter & bitMask) && this.cellStatus[idx] === 0) {
+          if (!this._set(idx, 1)) return false;
+        } else if (!(union & bitMask) && this.cellStatus[idx] === 0) {
+          if (!this._set(idx, 2)) return false;
+        }
+      }
+    }
+    return true;
+  }
+
   _timeUp() {
     if (this.maxMs <= 0) return false;
     return (Date.now() - this._startedAt) > this.maxMs;
