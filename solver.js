@@ -11347,6 +11347,113 @@ class NurikabeSolver {
     return blacksSeen === blackCount;
   }
 
+  // For each UNKNOWN cell that is an articulation point in the
+  // {BLACK ∪ UNKNOWN} \ walls graph, verify removing it strands at least
+  // one BLACK component from another. If so, the cell must be BLACK —
+  // otherwise the final sea (which must be a single component) would be
+  // disconnected. Skipped during lookahead (cheaper rules handle that
+  // path).
+  _applySeaArticulation() {
+    if (this._inLookahead) return true;
+    const N = this.N;
+    const cols = this.cols, rows = this.rows;
+    const isWall = this.isWall;
+    const cellStatus = this.cellStatus;
+
+    let firstBlack = -1;
+    let blackCount = 0;
+    for (let i = 0; i < N; i++) {
+      if (cellStatus[i] === 1) {
+        if (firstBlack < 0) firstBlack = i;
+        blackCount++;
+      }
+    }
+    if (firstBlack < 0 || blackCount < 2) return true;
+
+    const disc = new Int32Array(N).fill(-1);
+    const low = new Int32Array(N).fill(-1);
+    const parent = new Int32Array(N).fill(-1);
+    const isArt = new Uint8Array(N);
+    const stack = new Int32Array(N);
+    const childIter = new Int32Array(N);
+    let timer = 0;
+
+    const passable = (i) => !isWall[i] && (cellStatus[i] === 1 || cellStatus[i] === 0);
+
+    let sp = 0;
+    stack[sp++] = firstBlack;
+    disc[firstBlack] = low[firstBlack] = timer++;
+    let rootChildren = 0;
+
+    while (sp > 0) {
+      const u = stack[sp - 1];
+      const ci = childIter[u]++;
+      const r = (u / cols) | 0;
+      const c = u - r * cols;
+      let v = -1;
+      if (ci === 0 && r > 0) v = u - cols;
+      else if (ci === 1 && r < rows - 1) v = u + cols;
+      else if (ci === 2 && c > 0) v = u - 1;
+      else if (ci === 3 && c < cols - 1) v = u + 1;
+
+      if (ci >= 4) {
+        sp--;
+        const p = parent[u];
+        if (p >= 0) {
+          if (low[u] < low[p]) low[p] = low[u];
+          if (low[u] >= disc[p] && parent[p] !== -1) isArt[p] = 1;
+        }
+        continue;
+      }
+      if (v < 0 || !passable(v)) continue;
+      if (disc[v] === -1) {
+        parent[v] = u;
+        disc[v] = low[v] = timer++;
+        stack[sp++] = v;
+        if (u === firstBlack) rootChildren++;
+      } else if (v !== parent[u]) {
+        if (disc[v] < low[u]) low[u] = disc[v];
+      }
+    }
+    if (rootChildren > 1) isArt[firstBlack] = 1;
+
+    const visited = this._bfsVisited;
+    const queue = this._bfsQueue;
+    for (let u = 0; u < N; u++) {
+      if (!isArt[u]) continue;
+      if (cellStatus[u] !== 0) continue;
+      visited.fill(0);
+      let qH = 0, qT = 0;
+      if (u === firstBlack) continue;
+      visited[u] = 1;
+      visited[firstBlack] = 1;
+      queue[qT++] = firstBlack;
+      let seen = (cellStatus[firstBlack] === 1) ? 1 : 0;
+      while (qH < qT) {
+        const idx = queue[qH++];
+        const rr = (idx / cols) | 0;
+        const cc = idx - rr * cols;
+        const tryN = (ni) => {
+          if (visited[ni]) return;
+          if (isWall[ni]) return;
+          const v = cellStatus[ni];
+          if (v === 2) return;
+          visited[ni] = 1;
+          if (v === 1) seen++;
+          queue[qT++] = ni;
+        };
+        if (rr > 0) tryN(idx - cols);
+        if (rr < rows - 1) tryN(idx + cols);
+        if (cc > 0) tryN(idx - 1);
+        if (cc < cols - 1) tryN(idx + 1);
+      }
+      if (seen < blackCount) {
+        if (!this._set(u, 1)) return false;
+      }
+    }
+    return true;
+  }
+
   _propagate() {
     let changed = true;
     while (changed) {
@@ -11361,6 +11468,7 @@ class NurikabeSolver {
       if (!this._applyIslandComplete()) return false;
       if (!this._apply2x2()) return false;
       if (!this._applySeaConnectivity()) return false;
+      if (!this._applySeaArticulation()) return false;
       if (!this._applyBlackCount()) return false;
       if (this.trail.length > mark) changed = true;
     }
@@ -11554,6 +11662,7 @@ class NurikabeSolver {
       () => this._applyIslandComplete(),
       () => this._apply2x2(),
       () => this._applySeaConnectivity(),
+      () => this._applySeaArticulation(),
       () => this._applyBlackCount(),
     ];
     for (const rule of rules) {

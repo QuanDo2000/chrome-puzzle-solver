@@ -417,3 +417,46 @@ test('NurikabeSolver._applyFrontierForce: WHITE cell claimed by another clue blo
   assert.equal(s.cellStatus[1], 0);
   assert.equal(s.cellStatus[3], 0);
 });
+
+test('NurikabeSolver._applySeaArticulation: cut UNKNOWN between two BLACKs → BLACK', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[-1, -1, -1]],
+    initialState: [[1, 0, 1]],
+  });
+  assert.equal(s._applySeaArticulation(), true);
+  assert.equal(s.cellStatus[1], 1);
+});
+
+test('NurikabeSolver._applySeaArticulation: no BLACK cells yet → returns true, no force', () => {
+  const s = new NurikabeSolver({
+    rows: 3, cols: 3,
+    task: [[1, -1, -1], [-1, -1, -1], [-1, -1, 1]],
+  });
+  assert.equal(s._applySeaArticulation(), true);
+  for (let i = 0; i < 9; i++) {
+    if (s.task[i] > 0) assert.equal(s.cellStatus[i], 2);
+    else assert.equal(s.cellStatus[i], 0);
+  }
+});
+
+test('NurikabeSolver._applySeaArticulation: alternative route exists → no force', () => {
+  const s = new NurikabeSolver({
+    rows: 2, cols: 3,
+    task: [[-1, -1, -1], [-1, -1, -1]],
+    initialState: [[1, 0, 1], [0, 0, 0]],
+  });
+  assert.equal(s._applySeaArticulation(), true);
+  assert.equal(s.cellStatus[1], 0);
+});
+
+test('NurikabeSolver._applySeaArticulation: skipped during lookahead', () => {
+  const s = new NurikabeSolver({
+    rows: 1, cols: 3,
+    task: [[-1, -1, -1]],
+    initialState: [[1, 0, 1]],
+  });
+  s._inLookahead = true;
+  assert.equal(s._applySeaArticulation(), true);
+  assert.equal(s.cellStatus[1], 0);
+});
