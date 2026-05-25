@@ -35,3 +35,4 @@ jobs:
       - run: node tests/bench-yinyang.js
       - run: node tests/bench-slitherlink.js
       - run: node tests/bench-hashi.js
+      - run: node tests/bench-heyawake.js
