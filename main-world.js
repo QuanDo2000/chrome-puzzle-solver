@@ -1512,6 +1512,26 @@ function dumpPuzzleForBench() {
                rowClues: rowClues, colClues: colClues, path: path };
     }
 
+    if (path.indexOf('/kurodoko/') !== -1 || g.slug === 'kurodoko') {
+      // INLINE extraction: dumpPuzzleForBench is serialized via fn.toString()
+      // and run in MAIN world where it can't call readKurodokoData directly.
+      if (!g.task || !g.puzzleWidth || !g.puzzleHeight) {
+        return { error: 'kurodoko: missing task/dims', diagnostic: diagnostic(g), path: path };
+      }
+      var kdRows = g.puzzleHeight, kdCols = g.puzzleWidth;
+      var kdTask = [];
+      for (var kdr = 0; kdr < kdRows; kdr++) {
+        var srcRow = g.task[kdr] || [];
+        var dstRow = new Array(kdCols);
+        for (var kdc = 0; kdc < kdCols; kdc++) {
+          var v = srcRow[kdc];
+          dstRow[kdc] = (typeof v === 'number') ? v : -1;
+        }
+        kdTask.push(dstRow);
+      }
+      return { type: 'kurodoko', rows: kdRows, cols: kdCols, task: kdTask, path: path };
+    }
+
     if (path.indexOf('/heyawake/') !== -1 || g.slug === 'heyawake') {
       // Inline extraction: dumpPuzzleForBench is serialized via fn.toString()
       // and run in MAIN world where it can't see readHeyawakeData. Pull the

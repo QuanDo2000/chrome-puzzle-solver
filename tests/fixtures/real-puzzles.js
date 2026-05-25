@@ -452,6 +452,21 @@ module.exports = {
     areaTask: [1, -1, -1, 2, 1, -1, 0, -1, 3, 1, -1],
   },
 
+  // 5x5 Kurodoko easy, manually constructed from known-valid puzzle data.
+  // task: -1=blank, >=0=clue (required visible count including the cell itself).
+  kurodoko5x5EasyReal: {
+    type: 'kurodoko',
+    rows: 5,
+    cols: 5,
+    task: [
+      [-1, -1, -1,  6, -1],
+      [-1,  4, -1,  7, -1],
+      [-1, -1, -1, -1, -1],
+      [-1,  5, -1,  8, -1],
+      [-1,  5, -1, -1, -1],
+    ],
+  },
+
   // 4x4 Kakurasu easy, captured from puzzles-mobile.com/kakurasu/random/4x4-easy.
   kakurasu4x4EasyReal: {
     type: 'kakurasu',
