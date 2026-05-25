@@ -93,10 +93,15 @@ test('KakurasuSolver._applyLines: empty row mask list → contradiction', () => 
 });
 
 test('KakurasuSolver._applyLines: mask narrowing under known cell', () => {
+  // 1×3, row clue=3. Subsets summing to 3: {1,2}→0b011 (cols 0,1 filled),
+  // {3}→0b100 (col 2 filled). Known cross at (0,2) eliminates 0b100,
+  // leaving 0b011 → cells 0,1 forced filled. Col clues match that
+  // solution: col 0 has row 0 filled (weight 1) → clue 1; col 1 same →
+  // clue 1; col 2 empty → clue 0.
   const s = new KakurasuSolver({
     rows: 1, cols: 3,
     rowClues: [3],
-    colClues: [1, 2, 0],
+    colClues: [1, 1, 0],
     initialState: [[0, 0, 2]],
   });
   assert.equal(s._applyLines(), true);

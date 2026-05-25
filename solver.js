@@ -8979,7 +8979,7 @@ class KakurasuSolver {
     }
     for (let c = 0; c < this.cols; c++) {
       const before = this.colMasksActive[c];
-      if (before.length === 0) continue;
+      if (before.length === 0) return false;
       const active = this._narrowLine(1, c, before);
       this.colMasksActive[c] = active;
       if (active.length === 0) return false;
