@@ -1634,6 +1634,16 @@ async function getHint(request = {}) {
       // Pack as extraCells so hintAbsoluteCells passes them through unchanged
       // (hint.cells uses row/col index arithmetic that breaks for absolute shapes).
       hint = { type: 'heyawake', extraCells: hintCells, count: hintCells.length };
+    } else if (detectedGrid.type === 'hitori') {
+      if (solution && firstMismatch(grid, solution)) {
+        return { success: false, error: 'Current game state is wrong.' };
+      }
+      const solver = new HitoriSolver({ rows, cols, task: detectedGrid.task });
+      const hintCells = solver.getHint(grid);
+      if (!hintCells || hintCells.length === 0) {
+        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+      }
+      hint = { type: 'hitori', extraCells: hintCells, count: hintCells.length };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -1922,6 +1932,8 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...hashiHintStatusNodes(h));
     } else if (puzzleData?.type === 'heyawake') {
       setStatusNodes('info', prefix, ...heyawakeHintStatusNodes(h));
+    } else if (puzzleData?.type === 'hitori') {
+      setStatusNodes('info', prefix, ...hitoriHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -1953,6 +1965,22 @@ function makeWidget() {
     if (cells.length === 1) {
       const cell = cells[0];
       const valueStr = cell.value === 1 ? 'black' : 'white';
+      return [
+        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
+        ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(cells.length)), ' cells can be deduced'];
+  }
+
+  // Hitori hints carry absolute cells in extraCells.
+  // cellStatus 1 = shaded (black), 2 = unshaded (circled/white).
+  function hitoriHintStatusNodes(h) {
+    const cells = h.extraCells || [];
+    if (cells.length === 0) return ['No hint available'];
+    if (cells.length === 1) {
+      const cell = cells[0];
+      const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
       return [
         'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
         ' must be ', bold(valueStr),
@@ -3294,9 +3322,13 @@ function makeWidget() {
         applyHashiPartialResult(result);
         return;
       }
-      // Generic 2D-grid partial: any cell-state puzzle (heyawake first)
+      // Generic 2D-grid partial: any cell-state puzzle (heyawake, hitori)
       // that emits {partial:true, grid:[...]} on timeout.
       if (result?.partial && puzzleData?.type === 'heyawake' && Array.isArray(result.grid)) {
+        applyGridPartialResult(result);
+        return;
+      }
+      if (result?.partial && puzzleData?.type === 'hitori' && Array.isArray(result.grid)) {
         applyGridPartialResult(result);
         return;
       }
@@ -3679,7 +3711,7 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && !hr.hint?.cells?.length) break;
+      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // getHint may lazily solve as a fallback (galaxies + aquarium);
