@@ -10765,6 +10765,9 @@ class NurikabeSolver {
     this._bfsReachList = new Int32Array(this.N);
     this._bfsMembersList = new Int32Array(this.N);
     this._bfsFrontierList = new Int32Array(this.N);
+    // claimedBy[i] = clue idx that owns this WHITE cell, or -1 if not yet
+    // claimed (UNKNOWN/BLACK/wall, or WHITE not yet attached to a clue).
+    this._claimedBy = new Int32Array(this.N);
 
     // Force clue cells WHITE.
     for (const clue of this.clues) {
@@ -10984,17 +10987,23 @@ class NurikabeSolver {
     const isWall = this.isWall;
     const cellStatus = this.cellStatus;
     const task = this.task;
+    const claimedBy = this._claimedBy;
     while (qHead < qTail) {
       const entry = queue[qHead++];
       const idx = entry & ~WHITE_BIT;
       const whiteSoFar = (entry & WHITE_BIT) !== 0;
       const r = (idx / cols) | 0;
       const c = idx - r * cols;
+      // Helper inlined four times for the four neighbour directions. A cell
+      // is enterable iff: not yet reached, not a wall, not BLACK, not a
+      // different clue cell, and not WHITE-claimed by a different clue
+      // (since that would belong to that clue's island, not this one).
       if (r > 0) {
         const ni = idx - cols;
         if (!reachable[ni] && !isWall[ni]) {
           const v = cellStatus[ni];
-          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx)) {
+          const o = claimedBy[ni];
+          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx) && (o === -1 || o === clueIdx)) {
             reachable[ni] = 1;
             reachList[reachCount++] = ni;
             const stillWhite = whiteSoFar && v === 2;
@@ -11007,7 +11016,8 @@ class NurikabeSolver {
         const ni = idx + cols;
         if (!reachable[ni] && !isWall[ni]) {
           const v = cellStatus[ni];
-          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx)) {
+          const o = claimedBy[ni];
+          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx) && (o === -1 || o === clueIdx)) {
             reachable[ni] = 1;
             reachList[reachCount++] = ni;
             const stillWhite = whiteSoFar && v === 2;
@@ -11020,7 +11030,8 @@ class NurikabeSolver {
         const ni = idx - 1;
         if (!reachable[ni] && !isWall[ni]) {
           const v = cellStatus[ni];
-          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx)) {
+          const o = claimedBy[ni];
+          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx) && (o === -1 || o === clueIdx)) {
             reachable[ni] = 1;
             reachList[reachCount++] = ni;
             const stillWhite = whiteSoFar && v === 2;
@@ -11033,7 +11044,8 @@ class NurikabeSolver {
         const ni = idx + 1;
         if (!reachable[ni] && !isWall[ni]) {
           const v = cellStatus[ni];
-          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx)) {
+          const o = claimedBy[ni];
+          if (v !== 1 && (task[ni] <= 0 || ni === clueIdx) && (o === -1 || o === clueIdx)) {
             reachable[ni] = 1;
             reachList[reachCount++] = ni;
             const stillWhite = whiteSoFar && v === 2;
@@ -11156,6 +11168,71 @@ class NurikabeSolver {
     return true;
   }
 
+  // Populate `_claimedBy[i] = clue.idx` for every WHITE cell reachable
+  // from `clue` via a path of WHITE cells (blocked by BLACK, walls, and
+  // other clue cells). Returns false if a WHITE cell would be claimed by
+  // two different clues (an island holding two clues — unsat).
+  _buildClaimedBy() {
+    const claimedBy = this._claimedBy;
+    claimedBy.fill(-1);
+    const queue = this._bfsQueue;
+    const cols = this.cols, rows = this.rows;
+    for (const clue of this.clues) {
+      claimedBy[clue.idx] = clue.idx;
+      let qHead = 0, qTail = 0;
+      queue[qTail++] = clue.idx;
+      while (qHead < qTail) {
+        const idx = queue[qHead++];
+        const r = (idx / cols) | 0;
+        const c = idx - r * cols;
+        const visit = (ni) => {
+          if (this.isWall[ni]) return true;
+          if (this.cellStatus[ni] !== 2) return true;
+          if (this.task[ni] > 0 && ni !== clue.idx) return true;
+          if (claimedBy[ni] === clue.idx) return true;
+          if (claimedBy[ni] !== -1) return false; // two clues claim this WHITE cell
+          claimedBy[ni] = clue.idx;
+          queue[qTail++] = ni;
+          return true;
+        };
+        if (r > 0 && !visit(idx - cols)) return false;
+        if (r < rows - 1 && !visit(idx + cols)) return false;
+        if (c > 0 && !visit(idx - 1)) return false;
+        if (c < cols - 1 && !visit(idx + 1)) return false;
+      }
+    }
+    return true;
+  }
+
+  // For each UNKNOWN cell, count how many distinct clue-owned WHITE
+  // components touch it. ≥2 → cell must be BLACK (going WHITE would merge
+  // two islands).
+  _applyIslandMerge() {
+    const claimedBy = this._claimedBy;
+    const cols = this.cols, rows = this.rows;
+    for (let i = 0; i < this.N; i++) {
+      if (this.isWall[i]) continue;
+      if (this.cellStatus[i] !== 0) continue;
+      const r = (i / cols) | 0;
+      const c = i - r * cols;
+      let firstOwner = -1, secondOwner = -1;
+      const check = (ni) => {
+        const o = claimedBy[ni];
+        if (o < 0) return;
+        if (firstOwner < 0) { firstOwner = o; return; }
+        if (o !== firstOwner) secondOwner = o;
+      };
+      if (r > 0) check(i - cols);
+      if (r < rows - 1) check(i + cols);
+      if (c > 0) check(i - 1);
+      if (c < cols - 1) check(i + 1);
+      if (secondOwner >= 0) {
+        if (!this._set(i, 1)) return false;
+      }
+    }
+    return true;
+  }
+
   _applySeaConnectivity() {
     if (this._inLookahead) return true;
     let firstBlack = -1, blackCount = 0;
@@ -11221,6 +11298,8 @@ class NurikabeSolver {
       changed = false;
       const mark = this.trail.length;
       if (!this._applyClueAdjacency()) return false;
+      if (!this._buildClaimedBy()) return false;
+      if (!this._applyIslandMerge()) return false;
       if (!this._applyUnreachable()) return false;
       if (!this._applyIslandComplete()) return false;
       if (!this._apply2x2()) return false;
@@ -11412,6 +11491,7 @@ class NurikabeSolver {
 
     const rules = [
       () => this._applyClueAdjacency(),
+      () => { return this._buildClaimedBy() && this._applyIslandMerge(); },
       () => this._applyUnreachable(),
       () => this._applyIslandComplete(),
       () => this._apply2x2(),
