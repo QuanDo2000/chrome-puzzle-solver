@@ -10448,7 +10448,7 @@ class NorinoriSolver {
         if (this.cellStatus[p[1]] === 2) continue;
         live.push(p);
       }
-      if (live.length === 0 && candidates.length > 0) return false;
+      if (live.length === 0) return false;
       const counts = new Map();
       for (const p of live) {
         counts.set(p[0], (counts.get(p[0]) || 0) + 1);

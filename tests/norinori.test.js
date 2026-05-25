@@ -147,17 +147,22 @@ test('NorinoriSolver._applyDominoes: nB=0 with only one live candidate → both 
 });
 
 test('NorinoriSolver._applyDominoes: nB=0, multiple candidates → cell in every candidate forced black', () => {
+  // 2x3 grid: room0 = L-shape {(0,0),(1,0),(1,1)}, room1 = {(0,1),(0,2),(1,2)}.
+  // Room0 candidates: (0,0)-(1,0) and (1,0)-(1,1). (1,0) is in both → forced black.
+  // Room1 is a valid 3-cell room with its own candidates.
   const s = new NorinoriSolver({
-    rows: 2, cols: 2,
+    rows: 2, cols: 3,
     rooms: [
       { cells: [{r: 0, c: 0}, {r: 1, c: 0}, {r: 1, c: 1}] },
-      { cells: [{r: 0, c: 1}] },
+      { cells: [{r: 0, c: 1}, {r: 0, c: 2}, {r: 1, c: 2}] },
     ],
   });
   assert.equal(s._applyDominoes(), true);
-  assert.equal(s.cellStatus[2], 1);
+  // (1,0) = index 3 is in every room0 candidate → forced black
+  assert.equal(s.cellStatus[3], 1);
+  // (0,0) = index 0 and (1,1) = index 4 are not in every candidate → still unknown
   assert.equal(s.cellStatus[0], 0);
-  assert.equal(s.cellStatus[3], 0);
+  assert.equal(s.cellStatus[4], 0);
 });
 
 test('NorinoriSolver._applyDominoes: nB=0 with 0 live candidates → contradiction', () => {
