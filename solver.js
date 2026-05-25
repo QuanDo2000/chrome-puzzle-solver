@@ -6975,6 +6975,22 @@ function computePuzzleDiff(type, grid, solution, stars) {
   if (!Array.isArray(grid) || !Array.isArray(solution)) return out;
   if (type === 'shikaku') return _shikakuDiff(grid, solution);
   if (type === 'galaxies') return _galaxiesDiff(grid, solution, stars);
+  // Heyawake: a cell is a mistake when the player has placed something there
+  // (its value is not 0 = "not yet placed") and that value differs from the solution.
+  if (type === 'heyawake') {
+    const rows = Math.min(grid.length, solution.length);
+    for (let r = 0; r < rows; r++) {
+      const gRow = grid[r] || [], sRow = solution[r] || [];
+      const cols = Math.min(gRow.length, sRow.length);
+      for (let c = 0; c < cols; c++) {
+        const g = gRow[c], s = sRow[c];
+        if (g !== 0 && g !== undefined && g !== s) {
+          out.push({ row: r, col: c, expected: s, actual: g });
+        }
+      }
+    }
+    return out;
+  }
   // Nonogram, Aquarium, Binairo, Yin-Yang: a cell is a mistake when the
   // player has placed something there (its value is not 0 = "not yet
   // placed") and that value differs from the solution.

@@ -421,3 +421,15 @@ test('HeyawakeSolver.getHint: returns null when state is already fully solved', 
   });
   assert.equal(s.getHint([[1, 2, 1]]), null);
 });
+
+test('computePuzzleDiff heyawake: flags wrong-color cells, ignores unknown', () => {
+  const { computePuzzleDiff } = require('../solver.js');
+  const solution = [[1, 2], [2, 1]];
+  const board = [
+    [2, 2],
+    [0, 1],
+  ];
+  const diff = computePuzzleDiff('heyawake', board, solution);
+  assert.equal(diff.length, 1);
+  assert.deepEqual(diff[0], { row: 0, col: 0, expected: 1, actual: 2 });
+});
