@@ -274,4 +274,20 @@ module.exports = {
       [0,-1,4,-1,-1],
     ],
   },
+
+  // 6x6 Norinori: 8 rooms with unique solution. Each room has exactly one
+  // white cell; the rest must be black. Solution: [[2,2,1,1,2,1],[2,2,2,2,2,1],[1,2,2,1,1,2],[1,2,1,2,2,1],[2,2,1,2,2,1],[1,1,2,1,1,2]]
+  norinori6x6Normal: {
+    type: 'norinori',
+    rows: 6,
+    cols: 6,
+    areas: [
+      [0,0,1,1,1,2],
+      [0,0,0,1,2,2],
+      [3,0,0,4,4,2],
+      [3,0,0,5,6,6],
+      [3,3,0,5,6,6],
+      [7,7,5,5,5,6],
+    ],
+  },
 };

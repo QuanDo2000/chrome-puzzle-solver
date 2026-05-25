@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, computePuzzleDiff } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, computePuzzleDiff } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
 
@@ -15,6 +15,19 @@ function heyawakeRoomsFromFixture(fixture) {
     }
   }
   return areaTask.map((target, k) => ({ cells: cellsPerRoom[k], target }));
+}
+
+function norinoriRoomsFromFixture(fixture) {
+  const cellsByRoom = {};
+  for (let r = 0; r < fixture.rows; r++) {
+    for (let c = 0; c < fixture.cols; c++) {
+      const k = fixture.areas[r][c];
+      if (!cellsByRoom[k]) cellsByRoom[k] = [];
+      cellsByRoom[k].push({r, c});
+    }
+  }
+  return Object.keys(cellsByRoom).sort((a, b) => +a - +b)
+    .map(k => ({cells: cellsByRoom[k]}));
 }
 
 // Roundtrip through JSON to match the capture script's representation: drops
@@ -2750,4 +2763,17 @@ test('MosaicSolver: mosaic5x5Easy fixture matches golden', () => {
   const r = s.solve();
   assert.equal(r.solved, true);
   assert.deepEqual(r.grid, golden.mosaic5x5Easy);
+});
+
+test('NorinoriSolver: norinori6x6Normal fixture matches golden', () => {
+  const fixture = fixtures.norinori6x6Normal;
+  NorinoriSolver.clearSolutionCache();
+  const s = new NorinoriSolver({
+    rows: fixture.rows,
+    cols: fixture.cols,
+    rooms: norinoriRoomsFromFixture(fixture),
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.deepEqual(r.grid, golden.norinori6x6Normal);
 });
