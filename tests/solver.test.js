@@ -1,8 +1,21 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, computePuzzleDiff } = require('../solver.js');
+const { NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, computePuzzleDiff } = require('../solver.js');
 const fixtures = require('./fixtures/puzzles.js');
 const golden = require('./golden.js');
+
+function heyawakeRoomsFromFixture(fixture) {
+  const { rows, cols, areas, areaTask } = fixture;
+  const cellsPerRoom = {};
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const k = areas[r][c];
+      if (!cellsPerRoom[k]) cellsPerRoom[k] = [];
+      cellsPerRoom[k].push({ r, c });
+    }
+  }
+  return areaTask.map((target, k) => ({ cells: cellsPerRoom[k], target }));
+}
 
 // Roundtrip through JSON to match the capture script's representation: drops
 // non-numeric properties some solvers attach to grid arrays (e.g. Galaxies
@@ -2670,4 +2683,18 @@ test('HashiSolver: hashi7x7Easy matches golden', () => {
   const result = new HashiSolver(p).solve();
   assert.deepEqual(result, golden.hashi7x7Easy);
   HashiSolver.clearSolutionCache();
+});
+
+test('HeyawakeSolver: heyawake6x6Easy fixture solves to a unique valid grid', () => {
+  const fixture = fixtures.heyawake6x6Easy;
+  HeyawakeSolver.clearSolutionCache();
+  const s = new HeyawakeSolver({
+    rows: fixture.rows,
+    cols: fixture.cols,
+    rooms: heyawakeRoomsFromFixture(fixture),
+  });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  const expected = golden.heyawake6x6Easy;
+  assert.deepEqual(r.grid, expected);
 });

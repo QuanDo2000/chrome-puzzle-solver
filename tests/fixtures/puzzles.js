@@ -185,6 +185,24 @@ module.exports = {
     ],
   },
 
+  // 6x6 Heyawake: 11 rooms (ids 0-10) with targets; verifies that the
+  // solver correctly places blacks subject to room saturation, adjacency,
+  // line-crossing, and white-connectivity rules.
+  heyawake6x6Easy: {
+    type: 'heyawake',
+    rows: 6,
+    cols: 6,
+    areas: [
+      [0, 1, 2, 3, 3, 3],
+      [4, 4, 2, 3, 3, 3],
+      [5, 5, 5, 5, 6, 7],
+      [8, 8, 8, 9, 6, 7],
+      [8, 8, 8, 10, 10, 7],
+      [8, 8, 8, 10, 10, 7],
+    ],
+    areaTask: [1, -1, -1, 2, 1, -1, 0, -1, 3, 1, -1],
+  },
+
   // 7x7 Hashi captured from a real recon dump. Exercises both single and
   // double bridges plus crossing exclusion.
   hashi7x7Easy: {
