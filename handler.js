@@ -784,6 +784,51 @@ const norinoriHandler = {
 
 registerHandler(norinoriHandler);
 
+const nurikabeHandler = {
+  name: 'puzzles-mobile-nurikabe',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/nurikabe/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readNurikabeData', []);
+    if (!data) return { ...result, error: 'No Nurikabe task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'nurikabe',
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readNurikabeState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyNurikabeState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Nurikabe apply failed' };
+  },
+};
+
+registerHandler(nurikabeHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
