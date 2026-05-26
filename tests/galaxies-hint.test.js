@@ -86,11 +86,7 @@ function loadWidgetSources() {
   ctx.globalThis = ctx;
   ctx.self = ctx;
   vm.createContext(ctx);
-  // solver.js was split into one file per puzzle under src/solvers/. Each
-  // file's top-level class becomes a global in the vm context (the CJS
-  // export block is a no-op when `module` is undefined). Load all 16 +
-  // then handler.js + content.js — same shape the browser's concatenated
-  // dist/solver.js produces.
+  // Solver source files
   const solverDir = path.join(REPO, 'src', 'solvers');
   const solverFiles = fs.readdirSync(solverDir)
     .filter(f => f.endsWith('.js') && f !== 'index.js')
@@ -98,6 +94,16 @@ function loadWidgetSources() {
   for (const fullPath of solverFiles) {
     vm.runInContext(fs.readFileSync(fullPath, 'utf8'), ctx,
       { filename: path.basename(fullPath) });
+  }
+  // Widget source files (extracted by Phase 1 / Phase 2 of the
+  // content.js split). Order matches the bundler.
+  const widgetDir = path.join(REPO, 'src', 'widget');
+  const widgetOrder = ['state.js', 'worker.js', 'cache.js',
+                        'galaxies-hint.js', 'hint.js'];
+  for (const f of widgetOrder) {
+    const fp = path.join(widgetDir, f);
+    if (!fs.existsSync(fp)) continue;
+    vm.runInContext(fs.readFileSync(fp, 'utf8'), ctx, { filename: f });
   }
   for (const file of ['handler.js', 'content.js']) {
     vm.runInContext(fs.readFileSync(path.join(REPO, file), 'utf8'), ctx,
