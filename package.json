@@ -7,7 +7,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "capture": "node tests/capture.js",
-    "build": "rm -rf dist && mkdir -p dist/icons && cp manifest.json background.js main-world.js content.js handler.js solver.js solver.worker.js dist/ && cp icons/icon-16.png icons/icon-32.png icons/icon-48.png icons/icon-128.png dist/icons/",
+    "build": "rm -rf dist && mkdir -p dist/icons && node scripts/build-solver-bundle.js && cp manifest.json background.js main-world.js content.js handler.js solver.worker.js dist/ && cp icons/icon-16.png icons/icon-32.png icons/icon-48.png icons/icon-128.png dist/icons/",
     "bench:binairo": "node tests/bench-binairo.js",
     "bench:shikaku": "node tests/bench-shikaku.js",
     "bench:yinyang": "node tests/bench-yinyang.js",

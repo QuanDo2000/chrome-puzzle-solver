@@ -26,6 +26,12 @@ declare const MosaicSolver: any;
 declare const NorinoriSolver: any;
 declare const NurikabeSolver: any;
 
+// JSDoc typedefs referenced by per-puzzle solver files in src/solvers/.
+// The originals lived as JSDoc @typedef in the old monolithic solver.js
+// header; declaring them here keeps tsc clean after the split.
+type SolveResult = any;
+type Star = any;
+
 // Helpers from handler.js.
 // MainWorldFn mirrors EXEC_MAIN_ALLOWLIST in background.js — a typo in
 // callMainWorld('readGameClue', ...) typechecks against `string` but silently

@@ -91,11 +91,19 @@ module.exports = [
   // main-world.js legitimately needs `var` for legacy compat with the host
   // page's expectations, so we DON'T enforce these globally.
   {
-    files: ['solver.js'],
+    // Includes:
+    //   - Root solver.js shim (CommonJS require → src/solvers/index.js).
+    //   - src/solvers/*.js — per-puzzle source files (module.exports each).
+    //   - src/solvers/index.js — CommonJS aggregator (require + module).
+    //   - scripts/*.js — Node-only build scripts.
+    files: ['solver.js', 'src/solvers/**/*.js', 'scripts/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'script',
-      globals: { module: 'readonly', console: 'readonly' },
+      globals: {
+        module: 'readonly', require: 'readonly', console: 'readonly',
+        __dirname: 'readonly', __filename: 'readonly', process: 'readonly',
+      },
     },
     rules: {
       ...sharedRules,
