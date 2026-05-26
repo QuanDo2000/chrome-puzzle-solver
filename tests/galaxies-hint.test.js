@@ -102,6 +102,7 @@ function loadWidgetSources() {
                         'galaxies-hint.js', 'hint.js', 'preview.js',
                         'widget.js',
                         'puzzles/nonogram.js',
+                        'puzzles/binairo.js',
                         'puzzles/index.js'];
   for (const f of widgetOrder) {
     const fp = path.join(widgetDir, f);

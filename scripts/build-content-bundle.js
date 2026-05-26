@@ -17,6 +17,7 @@ const WIDGET_FILES = [
   'preview.js',
   'widget.js',
   'puzzles/nonogram.js',
+  'puzzles/binairo.js',
   'puzzles/index.js',
 ];
 

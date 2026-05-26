@@ -6,7 +6,9 @@
 // keeps the file loadable both in the bundle (where prior siblings
 // supply the consts) and in vm-context Node tests (where this file may
 // be loaded standalone — the registry stays empty in that case).
-const PUZZLES = (typeof nonogram !== 'undefined') ? { [nonogram.type]: nonogram } : {};
+const PUZZLES = {};
+if (typeof nonogram !== 'undefined') PUZZLES[nonogram.type] = nonogram;
+if (typeof binairo !== 'undefined') PUZZLES[binairo.type] = binairo;
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { PUZZLES };

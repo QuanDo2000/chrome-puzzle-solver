@@ -298,6 +298,9 @@ module.exports = [
         // src/widget/puzzles/nonogram.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         nonogram: 'readonly',
+        // src/widget/puzzles/binairo.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        binairo: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
