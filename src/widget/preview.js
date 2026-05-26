@@ -76,15 +76,6 @@ function hashiIslandsSig(islands) {
   return (h >>> 0).toString(36);
 }
 
-function hitoriTaskSig(task) {
-  if (!task) return '0';
-  let h = 0x811c9dc5;
-  for (const row of task) for (const v of row) {
-    h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(16);
-}
-
 function kakurasuCluesSig(rowClues, colClues) {
   if (!rowClues || !colClues) return '0';
   let h = 0x811c9dc5;
@@ -322,15 +313,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
     // Norinori has the same room-boundary structure as Heyawake but no
     // target numbers — call the shared helper with rooms=null.
     drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, null);
-  }
-  if (pd?.type === 'hitori') {
-    // Outer border only — clue digits are on the dynamic layer (shading
-    // changes text colour, so they can't be cached here).
-    const borderW = Math.max(2, Math.floor(cellSize / 5));
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = borderW;
-    ctx.lineCap = 'square';
-    ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
   }
   if (pd?.type === 'kakurasu' && Array.isArray(pd.rowClues) && Array.isArray(pd.colClues)) {
     // Outer border of the N×N playing area.
@@ -607,7 +589,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
                       '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
-                      '|hi=' + hitoriTaskSig(pd?.type === 'hitori' ? pd.task : null) +
                       '|ka=' + kakurasuCluesSig(pd?.type === 'kakurasu' ? pd.rowClues : null, pd?.type === 'kakurasu' ? pd.colClues : null) +
                       '|kd=' + kurodokoTaskSig(pd?.type === 'kurodoko' ? pd.task : null) +
                       '|mc=' + mosaicTaskSig(pd?.type === 'mosaic' ? pd.task : null) +
@@ -829,24 +810,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
             ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
             ctx.fill();
           }
-        } else if (isHitori) {
-          // Hitori: every cell shows its clue digit. Reversed convention —
-          // unshaded cells (v=2) get the dark fill (digit in light colour),
-          // shaded cells (v=1) stay light with a dark digit. Unknown (v=0)
-          // stays light/neutral so the initial board is fully readable.
-          if (v === 2) {
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(x, y, cellSize, cellSize);
-          }
-          const clueVal = pd?.task?.[r]?.[c] ?? 0;
-          const ch = (clueVal >= 10 && clueVal <= 35)
-            ? String.fromCharCode(clueVal + 87)
-            : String(clueVal);
-          ctx.font = `bold ${Math.floor(cellSize * 0.55)}px sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = v === 2 ? '#f3f4f6' : '#1f2937';
-          ctx.fillText(ch, x + cellSize / 2, y + cellSize / 2);
         } else if (isKakurasu) {
           // Kakurasu: v=1 filled (dark square inset), v=2 crossed (two
           // diagonal strokes), v=0 unknown (empty — handled by early-bail
@@ -1260,7 +1223,7 @@ if (typeof module !== 'undefined' && module.exports) {
     hintIdCounter, hintIdCache,
     hintSig, FNV_OFFSET, FNV_PRIME,
     regionMapSig, shikakuCluesSig,
-    slitherlinkCluesSig, hashiIslandsSig, hitoriTaskSig,
+    slitherlinkCluesSig, hashiIslandsSig,
     kakurasuCluesSig, kurodokoTaskSig, mosaicTaskSig,
     norinoriAreasSig, nurikabeTaskSig, heyawakeAreasSig,
     gridDataSig,

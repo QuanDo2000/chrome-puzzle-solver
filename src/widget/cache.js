@@ -211,16 +211,6 @@ function heyawakeCacheKey(data) {
   return 'heyawake-solution:' + (h >>> 0).toString(16);
 }
 
-function hitoriCacheKey(data) {
-  if (data?.type !== 'hitori' || !data.task) return null;
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x49); // 'I' nameplate
-  mix(data.rows); mix(data.cols);
-  for (const row of data.task) for (const v of row) mix(v + 1);
-  return 'hitori-solution:' + (h >>> 0).toString(16);
-}
-
 function kakurasuCacheKey(data) {
   if (data?.type !== 'kakurasu' || !data.rowClues || !data.colClues) return null;
   let h = 0x811c9dc5;
@@ -282,7 +272,6 @@ function getCachedGridSolution(data) {
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : data?.type === 'heyawake' ? heyawakeCacheKey(data)
-      : data?.type === 'hitori' ? hitoriCacheKey(data)
       : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
       : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
       : data?.type === 'mosaic' ? mosaicCacheKey(data)
@@ -327,7 +316,6 @@ function cacheGridSolution(data, grid) {
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : data?.type === 'heyawake' ? heyawakeCacheKey(data)
-      : data?.type === 'hitori' ? hitoriCacheKey(data)
       : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
       : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
       : data?.type === 'mosaic' ? mosaicCacheKey(data)
@@ -458,7 +446,7 @@ if (typeof module !== 'undefined' && module.exports) {
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
     aquariumCacheKey, shikakuCacheKey,
     hashiCacheKey, yinYangCacheKey, slitherlinkCacheKey,
-    heyawakeCacheKey, hitoriCacheKey, kakurasuCacheKey,
+    heyawakeCacheKey, kakurasuCacheKey,
     kurodokoCacheKey, mosaicCacheKey, norinoriCacheKey, nurikabeCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,

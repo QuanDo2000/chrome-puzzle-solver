@@ -199,8 +199,6 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...hashiHintStatusNodes(h));
     } else if (puzzleData?.type === 'heyawake') {
       setStatusNodes('info', prefix, ...heyawakeHintStatusNodes(h));
-    } else if (puzzleData?.type === 'hitori') {
-      setStatusNodes('info', prefix, ...hitoriHintStatusNodes(h));
     } else if (puzzleData?.type === 'kakurasu') {
       setStatusNodes('info', prefix, ...kakurasuHintStatusNodes(h));
     } else if (puzzleData?.type === 'kurodoko') {
@@ -225,22 +223,6 @@ function makeWidget() {
     if (cells.length === 1) {
       const cell = cells[0];
       const valueStr = cell.value === 1 ? 'black' : 'white';
-      return [
-        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
-        ' must be ', bold(valueStr),
-      ];
-    }
-    return [bold(String(cells.length)), ' cells can be deduced'];
-  }
-
-  // Hitori hints carry absolute cells in extraCells.
-  // cellStatus 1 = shaded (black), 2 = unshaded (circled/white).
-  function hitoriHintStatusNodes(h) {
-    const cells = h.extraCells || [];
-    if (cells.length === 0) return ['No hint available'];
-    if (cells.length === 1) {
-      const cell = cells[0];
-      const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
       return [
         'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
         ' must be ', bold(valueStr),
@@ -646,7 +628,7 @@ function makeWidget() {
         return;
       }
       if (result?.partial && puzzleData?.type === 'hitori' && Array.isArray(result.grid)) {
-        applyGridPartialResult(result);
+        applyPartialResult(result);
         return;
       }
       if (result?.partial && puzzleData?.type === 'kakurasu' && Array.isArray(result.grid)) {
