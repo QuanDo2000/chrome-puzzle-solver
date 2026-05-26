@@ -184,7 +184,10 @@ function makeWidget() {
   // hintStatusNodes). Optional `prefix` is prepended verbatim — the loop body
   // uses `Step N: ` so it threads through one branch.
   function setHintStatus(h, prefix = '') {
-    if (h.type === 'galaxies') {
+    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    if (reg?.hintStatusNodes) {
+      setStatusNodes('info', prefix, ...reg.hintStatusNodes(h, { bold }));
+    } else if (h.type === 'galaxies') {
       setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
     } else if (puzzleData?.type === 'binairo') {
       setStatusNodes('info', prefix, ...binairoHintStatusNodes(h));
@@ -801,6 +804,16 @@ function makeWidget() {
   // of the real solution, so caching it would mis-trigger Loop's done-check
   // and the mistake overlay.
   function applyPartialResult(result) {
+    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    if (reg?.partialResultArm) {
+      reg.partialResultArm(result, {
+        clearPendingHint, setStatus, drawPreview,
+        setConfirming: (v) => { confirming = v; },
+        setLoopConfirming: (v) => { loopConfirming = v; },
+        setSolveBtnText: (t) => { solveBtn.textContent = t; },
+      });
+      return;
+    }
     loopConfirming = false;
     clearPendingHint();
     solveBtn.textContent = 'Confirm';
@@ -1028,7 +1041,12 @@ function makeWidget() {
       const gs = await readGridState();
       if (!gs?.success) break;
       let gsComplete;
-      if (puzzleData.type === 'slitherlink') {
+      const regLoop = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+      if (regLoop?.loopDoneCheck) {
+        gsComplete = await regLoop.loopDoneCheck({
+          boardState: gs.grid, solution: puzzleData.solution, puzzleData,
+        });
+      } else if (puzzleData.type === 'slitherlink') {
         const sol = puzzleData.solution;
         if (sol?.horizontal && sol?.vertical) {
           const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
@@ -1100,12 +1118,17 @@ function makeWidget() {
       if (end?.success) drawPreview(end.grid);
       let endComplete = false;
       if (end?.grid) {
-        // Dispatch on type FIRST. For slitherlink, end.grid is
-        // { horizontal, vertical } (not a 2D array), so the cell-grid
-        // `.every` check below would TypeError. Even if solution is missing
-        // (auto-solve failed or still running), stay in the slitherlink arm
-        // and report not-complete instead of crashing.
-        if (puzzleData.type === 'slitherlink') {
+        const regEnd = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+        if (regEnd?.loopDoneCheck) {
+          endComplete = await regEnd.loopDoneCheck({
+            boardState: end.grid, solution: puzzleData.solution, puzzleData,
+          });
+        } else if (puzzleData.type === 'slitherlink') {
+          // Dispatch on type FIRST. For slitherlink, end.grid is
+          // { horizontal, vertical } (not a 2D array), so the cell-grid
+          // `.every` check below would TypeError. Even if solution is missing
+          // (auto-solve failed or still running), stay in the slitherlink arm
+          // and report not-complete instead of crashing.
           if (puzzleData.solution?.horizontal && puzzleData.solution?.vertical) {
             const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
             const bh = edgeState?.horizontal || [];
@@ -1218,7 +1241,19 @@ function makeWidget() {
       await pendingAutoSolve;
     }
     setStatus('Computing hint...', 'info');
-    const result = await getHint({ solution: puzzleData.solution });
+    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    let result;
+    if (reg?.hintDispatch) {
+      result = await reg.hintDispatch({
+        boardState: null, detectedGrid,
+        rows: puzzleData.rows, cols: puzzleData.cols,
+        solution: puzzleData.solution,
+        firstMismatch, getCached: getCachedGridSolution,
+        puzzleData,
+      });
+    } else {
+      result = await getHint({ solution: puzzleData.solution });
+    }
     if (!result?.success) {
       clearPendingHint();
       setStatus(`Hint failed: ${result?.error || 'Unknown error'}`, 'error');
