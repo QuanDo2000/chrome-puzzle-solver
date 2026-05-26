@@ -625,6 +625,8 @@ function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
 let latticeLayer = null;
 let staticLayer = null;
 let staticLayerSig = null;
+let lastDrawSig = null;
+let previewWrap = null;
 
 function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const isSlitherlink = puzzleData?.type === 'slitherlink';

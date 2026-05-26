@@ -659,7 +659,7 @@ function makeWidget() {
 
   const statusEl = q('#ns-status');
   const canvas = q('#ns-canvas');
-  const previewWrap = q('#ns-preview-wrap');
+  previewWrap = q('#ns-preview-wrap');
   solveBtn = q('[data-action="solve"]');
   loopBtn = q('[data-action="loop"]');
 
@@ -1029,7 +1029,6 @@ function makeWidget() {
   // - staticLayer: offscreen canvas with region borders, nonogram every-5
   //   guides, and galaxies stars — pixels that should sit ON TOP of fills.
   //   Both rebuilt only when cellSize / regionMap / stars change.
-  let lastDrawSig = null;
 
   // Identity-based hint signature: hints are typically replaced wholesale, not
   // mutated, so reference identity is a safe proxy for "same hint as last
