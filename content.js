@@ -1038,9 +1038,6 @@ function makeWidget() {
   // mutated, so reference identity is a safe proxy for "same hint as last
   // tick". WeakMap+counter avoids JSON.stringify of the entire hint object
   // (galaxies hints can carry hundreds of lineHints) on every 200ms tick.
-  // Cell-border lattice — batched into one Path2D so the offscreen build is
-  // O(rows + cols) strokes instead of the rows*cols strokeRects the old
-  // per-tick code did.
   function drawPreview(grid, hint) {
     const isSlitherlink = puzzleData?.type === 'slitherlink';
     const isHashi = puzzleData?.type === 'hashi';
