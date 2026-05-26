@@ -51,6 +51,13 @@ class BinairoSolver {
     // undefined `comparisonClues` produces an empty list (standard Binairo).
     this.compConstraints = this._decodeComparison(comparisonClues);
 
+    // Standard Binairo enforces all-rows-distinct + all-cols-distinct.
+    // Binairo Plus (puzzles-mobile.com /binairo-plus/) replaces uniqueness
+    // with the comparison constraints — solutions with duplicate lines are
+    // accepted (and some puzzles have NO solution under strict uniqueness).
+    // Discriminate by presence of comparison constraints.
+    this._strictUniqueness = this.compConstraints.length === 0;
+
     // Seed the grid from initialState if provided, else from givens.
     const init = initialState || this._initialFromGivens(givens);
     for (let r = 0; r < rows; r++) {
@@ -589,6 +596,9 @@ class BinairoSolver {
   // (a) keeps balance legal, (b) avoids no-triples, (c) avoids matching any
   // already-completed parallel line.
   _applyUniqueness(onChange) {
+    // Binairo Plus relaxes uniqueness — see constructor comment on
+    // _strictUniqueness. Skip the rule entirely on relaxed boards.
+    if (!this._strictUniqueness) return true;
     const R = this.rows, C = this.cols, rowHalf = this.rowHalf, colHalf = this.colHalf;
 
     const filledRowMasks = this._filledLineMasks('row');
@@ -914,8 +924,10 @@ class BinairoSolver {
   }
 
   // When the grid is complete, verify uniqueness across all rows and cols.
-  // Returns true if any two rows (or cols) are identical.
+  // Returns true if any two rows (or cols) are identical. Binairo Plus
+  // (with comparison clues) relaxes uniqueness — see _strictUniqueness.
   _hasDuplicateLines() {
+    if (!this._strictUniqueness) return false;
     const R = this.rows, C = this.cols;
     const rowMasks = new Set();
     for (let r = 0; r < R; r++) {

@@ -60,17 +60,25 @@ function verifyBinairoRules(grid, R, C, comparisonClues) {
     if (violatesTriples(line))            return `col ${c}: three in a row`;
     if (violatesBalance(line, R / 2))     return `col ${c}: unbalanced`;
   }
-  const rowKeys = new Set();
-  for (let r = 0; r < R; r++) {
-    const k = lineKey(lineFromGrid(grid, 'row', r, C));
-    if (rowKeys.has(k)) return `duplicate row: ${k}`;
-    rowKeys.add(k);
-  }
-  const colKeys = new Set();
-  for (let c = 0; c < C; c++) {
-    const k = lineKey(lineFromGrid(grid, 'col', c, R));
-    if (colKeys.has(k)) return `duplicate col: ${k}`;
-    colKeys.add(k);
+  // Binairo Plus (with comparison clues) relaxes the uniqueness rule —
+  // puzzles-mobile.com /binairo-plus/ accepts solutions with duplicate
+  // rows/cols. Only enforce uniqueness on standard Binairo.
+  const hasComparisons = Array.isArray(comparisonClues) && comparisonClues.some(
+    row => Array.isArray(row) && row.some(v => typeof v === 'number' && v !== 0)
+  );
+  if (!hasComparisons) {
+    const rowKeys = new Set();
+    for (let r = 0; r < R; r++) {
+      const k = lineKey(lineFromGrid(grid, 'row', r, C));
+      if (rowKeys.has(k)) return `duplicate row: ${k}`;
+      rowKeys.add(k);
+    }
+    const colKeys = new Set();
+    for (let c = 0; c < C; c++) {
+      const k = lineKey(lineFromGrid(grid, 'col', c, R));
+      if (colKeys.has(k)) return `duplicate col: ${k}`;
+      colKeys.add(k);
+    }
   }
   if (Array.isArray(comparisonClues)) {
     for (let r = 0; r < comparisonClues.length && r < R; r++) {
