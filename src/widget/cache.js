@@ -117,13 +117,6 @@ function aquariumCacheKey(data) {
   return 'aquarium-solution:' + data.rows + 'x' + data.cols + ':' + r + ':' + c + ':' + m;
 }
 
-function nonogramCacheKey(data) {
-  if (!data || data.type !== 'nonogram') return null;
-  const r = (data.rowClues || []).map(rc => rc.join('-')).join(';');
-  const c = (data.colClues || []).map(cc => cc.join('-')).join(';');
-  return 'nonogram-solution:' + data.rows + 'x' + data.cols + ':' + r + ':' + c;
-}
-
 function binairoCacheKey(data) {
   if (data?.type !== 'binairo') return null;
   // FNV-1a over (type, rows, cols, flattened givens, comparison clues).
@@ -311,7 +304,6 @@ function getCachedGridSolution(data) {
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) {
     key = data?.type === 'aquarium' ? aquariumCacheKey(data)
-      : data?.type === 'nonogram' ? nonogramCacheKey(data)
       : data?.type === 'binairo' ? binairoCacheKey(data)
       : data?.type === 'shikaku' ? shikakuCacheKey(data)
       : data?.type === 'yinyang' ? yinYangCacheKey(data)
@@ -358,7 +350,6 @@ function cacheGridSolution(data, grid) {
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) {
     key = data?.type === 'aquarium' ? aquariumCacheKey(data)
-      : data?.type === 'nonogram' ? nonogramCacheKey(data)
       : data?.type === 'binairo' ? binairoCacheKey(data)
       : data?.type === 'shikaku' ? shikakuCacheKey(data)
       : data?.type === 'yinyang' ? yinYangCacheKey(data)
@@ -494,7 +485,7 @@ if (typeof module !== 'undefined' && module.exports) {
     isSolutionCacheKey, pruneSolutionCache, isFreshSolutionEntry,
     galaxiesCacheKey, galaxiesPartialKey, galaxiesFailedKey,
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
-    aquariumCacheKey, nonogramCacheKey, binairoCacheKey, shikakuCacheKey,
+    aquariumCacheKey, binairoCacheKey, shikakuCacheKey,
     hashiCacheKey, yinYangCacheKey, slitherlinkCacheKey,
     heyawakeCacheKey, hitoriCacheKey, kakurasuCacheKey,
     kurodokoCacheKey, mosaicCacheKey, norinoriCacheKey, nurikabeCacheKey,

@@ -283,7 +283,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
   c.height = h;
   const ctx = c.getContext('2d');
   drawRegionBordersOn(ctx, rows, cols, cellSize, pd?.regionMap);
-  drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd);
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
   if (reg?.drawStaticLayer) {
     reg.drawStaticLayer(ctx, { rows, cols, cellSize, w, h, pd });
@@ -589,41 +588,6 @@ function drawRegionBordersOn(ctx, rows, cols, cellSize, rm) {
         ctx.stroke();
       }
     }
-  }
-  ctx.restore();
-}
-
-function drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd) {
-  if (pd?.regionMap || pd?.type === 'galaxies' || pd?.type === 'binairo' || pd?.type === 'shikaku' || pd?.type === 'yinyang' || pd?.type === 'slitherlink' || pd?.type === 'hashi' || pd?.type === 'heyawake' || pd?.type === 'hitori' || pd?.type === 'kakurasu' || pd?.type === 'kurodoko' || pd?.type === 'mosaic' || pd?.type === 'norinori' || pd?.type === 'nurikabe') return;
-  ctx.save();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
-  ctx.lineCap = 'square';
-  for (let c = 5; c < cols; c += 5) {
-    ctx.beginPath();
-    ctx.moveTo(c * cellSize, 0);
-    ctx.lineTo(c * cellSize, h);
-    ctx.stroke();
-  }
-  for (let r = 5; r < rows; r += 5) {
-    ctx.beginPath();
-    ctx.moveTo(0, r * cellSize);
-    ctx.lineTo(w, r * cellSize);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = '#6b7280';
-  ctx.lineWidth = Math.max(1, Math.floor(cellSize / 12));
-  for (let c = 5; c < cols; c += 5) {
-    ctx.beginPath();
-    ctx.moveTo(c * cellSize, 0);
-    ctx.lineTo(c * cellSize, h);
-    ctx.stroke();
-  }
-  for (let r = 5; r < rows; r += 5) {
-    ctx.beginPath();
-    ctx.moveTo(0, r * cellSize);
-    ctx.lineTo(w, r * cellSize);
-    ctx.stroke();
   }
   ctx.restore();
 }
@@ -1376,7 +1340,7 @@ if (typeof module !== 'undefined' && module.exports) {
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
     drawComparisonCluesOn, drawShikakuCluesOn, drawHashiIslandsOn,
-    drawHeyawakeRoomsOn, drawRegionBordersOn, drawNonogramGuidesOn,
+    drawHeyawakeRoomsOn, drawRegionBordersOn,
     latticeLayer, staticLayer, staticLayerSig,
     renderPreview,
   };
