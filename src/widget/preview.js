@@ -229,6 +229,11 @@ function buildLatticeLayer(rows, cols, cellSize, w, h, pd) {
   const ctx = c.getContext('2d');
   ctx.strokeStyle = '#d1d5db';
   ctx.lineWidth = 0.5;
+  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
+  if (reg?.customLattice && reg.drawLattice) {
+    reg.drawLattice(ctx, { rows, cols, cellSize, w, h, pd });
+    return c;
+  }
   // Nurikabe boards can have wall cells (task[r][c] === -2) — off-board
   // regions that the page renders blank. Draw per-edge so wall areas have
   // no grid lines through them; edges between a wall and a real cell are
@@ -279,6 +284,11 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
   const ctx = c.getContext('2d');
   drawRegionBordersOn(ctx, rows, cols, cellSize, pd?.regionMap);
   drawNonogramGuidesOn(ctx, rows, cols, cellSize, w, h, pd);
+  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
+  if (reg?.drawStaticLayer) {
+    reg.drawStaticLayer(ctx, { rows, cols, cellSize, w, h, pd });
+    return c;
+  }
   if (pd?.type === 'galaxies' && pd.stars) {
     ctx.fillStyle = '#111827';
     for (const star of pd.stars) {
@@ -672,20 +682,29 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   lastDrawSig = sig;
 
   // (Re)build the static layers if puzzle shape or size changed.
-  const staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
-                    '|rm=' + regionMapSig(pd?.regionMap) +
-                    '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
-                    '|cc=' + comparisonCluesSig(pd?.comparisonClues) +
-                    '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
-                    '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
-                    '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
-                    '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
-                    '|hi=' + hitoriTaskSig(pd?.type === 'hitori' ? pd.task : null) +
-                    '|ka=' + kakurasuCluesSig(pd?.type === 'kakurasu' ? pd.rowClues : null, pd?.type === 'kakurasu' ? pd.colClues : null) +
-                    '|kd=' + kurodokoTaskSig(pd?.type === 'kurodoko' ? pd.task : null) +
-                    '|mc=' + mosaicTaskSig(pd?.type === 'mosaic' ? pd.task : null) +
-                    '|nn=' + norinoriAreasSig(pd?.type === 'norinori' ? pd.areas : null) +
-                    '|nu=' + nurikabeTaskSig(pd?.type === 'nurikabe' ? pd.task : null);
+  const staticSigReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
+  let staticSig;
+  if (staticSigReg?.staticSig) {
+    staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
+                '|rm=' + regionMapSig(pd?.regionMap) +
+                '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
+                '|' + staticSigReg.staticSig(pd);
+  } else {
+    staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
+                      '|rm=' + regionMapSig(pd?.regionMap) +
+                      '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
+                      '|cc=' + comparisonCluesSig(pd?.comparisonClues) +
+                      '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
+                      '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
+                      '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
+                      '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
+                      '|hi=' + hitoriTaskSig(pd?.type === 'hitori' ? pd.task : null) +
+                      '|ka=' + kakurasuCluesSig(pd?.type === 'kakurasu' ? pd.rowClues : null, pd?.type === 'kakurasu' ? pd.colClues : null) +
+                      '|kd=' + kurodokoTaskSig(pd?.type === 'kurodoko' ? pd.task : null) +
+                      '|mc=' + mosaicTaskSig(pd?.type === 'mosaic' ? pd.task : null) +
+                      '|nn=' + norinoriAreasSig(pd?.type === 'norinori' ? pd.areas : null) +
+                      '|nu=' + nurikabeTaskSig(pd?.type === 'nurikabe' ? pd.task : null);
+  }
   if (staticSig !== staticLayerSig) {
     latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull, pd);
     staticLayer = buildStaticLayer(rows, cols, cellSize, wFull, hFull, pd);
@@ -838,12 +857,25 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   } else {
     let xMarkPath = null;
     ctx.fillStyle = '#1f2937';
+    const cellReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const v = grid[r][c];
         if (v === 0 && !isShikaku && !isHitori && !isKakurasu && !isKurodoko && !isMosaic && !isNorinori && !isNurikabe) continue;
         if (v === -1 && isShikaku) continue;
         const x = c * cellSize, y = r * cellSize;
+        if (cellReg?.drawPreviewCell) {
+          cellReg.drawPreviewCell(ctx, {
+            r, c, v, taskVal: pd?.task?.[r]?.[c],
+            x, y, cellW: cellSize, cellH: cellSize, hint,
+            puzzleData: pd,
+            xPad,
+            cellSize,
+            discR,
+            galaxiesColors,
+          });
+          continue;
+        }
         if (isShikaku) {
           if (v >= 0) {
             ctx.fillStyle = galaxiesColors[v % galaxiesColors.length];
