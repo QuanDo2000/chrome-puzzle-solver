@@ -199,6 +199,12 @@ declare function drawHashiIslandsOn(ctx: any, cellSize: any, islands: any): any;
 declare function drawHeyawakeRoomsOn(ctx: any, rows: any, cols: any, cellSize: any, areas: any, rooms?: any): any;
 declare function drawRegionBordersOn(ctx: any, rows: any, cols: any, cellSize: any, rm: any): any;
 declare function drawNonogramGuidesOn(ctx: any, rows: any, cols: any, cellSize: any, w: any, h: any, pd?: any): any;
+declare function renderPreview(canvas: any, puzzleData: any, grid: any, hint?: any, bodyWidth?: any): any;
+declare let latticeLayer: any;
+declare let staticLayer: any;
+declare let staticLayerSig: any;
+declare let lastDrawSig: any;
+declare let previewWrap: any;
 declare const PUZZLES: any;
 
 // Page MAIN-world globals reachable from main-world.js functions (which run

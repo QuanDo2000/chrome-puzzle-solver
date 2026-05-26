@@ -286,6 +286,12 @@ module.exports = [
         drawHeyawakeRoomsOn: 'readonly',
         drawRegionBordersOn: 'readonly',
         drawNonogramGuidesOn: 'readonly',
+        renderPreview: 'readonly',
+        latticeLayer: 'writable',
+        staticLayer: 'writable',
+        staticLayerSig: 'writable',
+        lastDrawSig: 'writable',
+        previewWrap: 'writable',
         // src/widget/puzzles/index.js
         PUZZLES: 'readonly',
       },
