@@ -297,6 +297,9 @@ module.exports = [
         widgetExpandFn: 'writable',
         // src/widget/puzzles/index.js
         PUZZLES: 'readonly',
+        // src/widget/puzzles/nonogram.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        nonogram: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',

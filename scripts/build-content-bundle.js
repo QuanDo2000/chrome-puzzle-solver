@@ -16,6 +16,7 @@ const WIDGET_FILES = [
   'hint.js',
   'preview.js',
   'widget.js',
+  'puzzles/nonogram.js',
   'puzzles/index.js',
 ];
 
