@@ -189,8 +189,6 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...reg.hintStatusNodes(h, { bold }));
     } else if (h.type === 'galaxies') {
       setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
-    } else if (puzzleData?.type === 'binairo') {
-      setStatusNodes('info', prefix, ...binairoHintStatusNodes(h));
     } else if (puzzleData?.type === 'shikaku') {
       setStatusNodes('info', prefix, ...shikakuHintStatusNodes(h));
     } else if (puzzleData?.type === 'yinyang') {
@@ -216,23 +214,6 @@ function makeWidget() {
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
-  }
-
-  function binairoHintStatusNodes(h) {
-    const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
-    if (total === 0) return ['No hint available'];
-    if (total === 1) {
-      const cell = h.cells?.[0] || h.extraCells?.[0];
-      const row = h.cells?.length ? h.index : cell.row;
-      const col = h.cells?.length ? cell.index : cell.col;
-      // Binairo cellStatus: 1 = "one", 2 = "zero". Translate for display.
-      const valueStr = cell.value === 1 ? '1' : '0';
-      return [
-        'Cell ', bold(`(row ${row + 1}, col ${col + 1})`),
-        ' must be ', bold(valueStr),
-      ];
-    }
-    return [bold(String(total)), ' cells can be deduced'];
   }
 
   // Heyawake hints carry absolute cells in extraCells (no row/column index

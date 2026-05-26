@@ -117,33 +117,6 @@ function aquariumCacheKey(data) {
   return 'aquarium-solution:' + data.rows + 'x' + data.cols + ':' + r + ':' + c + ':' + m;
 }
 
-function binairoCacheKey(data) {
-  if (data?.type !== 'binairo') return null;
-  // FNV-1a over (type, rows, cols, flattened givens, comparison clues).
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x42); // 'B' nameplate so binairo keys can't collide with nonogram keys
-  mix(data.rows | 0);
-  mix(data.cols | 0);
-  const g = data.givens || [];
-  for (let r = 0; r < data.rows; r++) {
-    const row = g[r] || [];
-    for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
-  }
-  // Mix comparison clues so binairo and binairo-plus boards with identical
-  // givens hash to distinct keys. Sparse 2D — outer row index, inner col
-  // index, value or 0 for missing. Length sentinels up front keep zero-
-  // comparison and 1-comparison-of-flag-0 cases distinguishable.
-  const cc = Array.isArray(data.comparisonClues) ? data.comparisonClues : [];
-  mix(cc.length);
-  for (let r = 0; r < cc.length; r++) {
-    const row = Array.isArray(cc[r]) ? cc[r] : [];
-    mix(row.length);
-    for (let c = 0; c < row.length; c++) mix((row[c] | 0) + 1);
-  }
-  return 'binairo-solution:' + (h >>> 0).toString(16);
-}
-
 function shikakuCacheKey(data) {
   if (data?.type !== 'shikaku') return null;
   let h = 0x811c9dc5;
@@ -304,7 +277,6 @@ function getCachedGridSolution(data) {
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) {
     key = data?.type === 'aquarium' ? aquariumCacheKey(data)
-      : data?.type === 'binairo' ? binairoCacheKey(data)
       : data?.type === 'shikaku' ? shikakuCacheKey(data)
       : data?.type === 'yinyang' ? yinYangCacheKey(data)
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
@@ -350,7 +322,6 @@ function cacheGridSolution(data, grid) {
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) {
     key = data?.type === 'aquarium' ? aquariumCacheKey(data)
-      : data?.type === 'binairo' ? binairoCacheKey(data)
       : data?.type === 'shikaku' ? shikakuCacheKey(data)
       : data?.type === 'yinyang' ? yinYangCacheKey(data)
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
@@ -485,7 +456,7 @@ if (typeof module !== 'undefined' && module.exports) {
     isSolutionCacheKey, pruneSolutionCache, isFreshSolutionEntry,
     galaxiesCacheKey, galaxiesPartialKey, galaxiesFailedKey,
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
-    aquariumCacheKey, binairoCacheKey, shikakuCacheKey,
+    aquariumCacheKey, shikakuCacheKey,
     hashiCacheKey, yinYangCacheKey, slitherlinkCacheKey,
     heyawakeCacheKey, hitoriCacheKey, kakurasuCacheKey,
     kurodokoCacheKey, mosaicCacheKey, norinoriCacheKey, nurikabeCacheKey,

@@ -40,21 +40,6 @@ function regionMapSig(rm) {
   return h;
 }
 
-// Sparse comparison-clue stable signature. FNV-like rolling number so a
-// change anywhere in the sparse 2D invalidates the static-layer cache.
-function comparisonCluesSig(cc) {
-  if (!Array.isArray(cc) || cc.length === 0) return '0';
-  let h = 0x811c9dc5;
-  for (let r = 0; r < cc.length; r++) {
-    const row = Array.isArray(cc[r]) ? cc[r] : [];
-    for (let c = 0; c < row.length; c++) {
-      h ^= r * 65537 + c * 31 + ((row[c] | 0) + 1);
-      h = Math.imul(h, 0x01000193) >>> 0;
-    }
-  }
-  return (h >>> 0).toString(36);
-}
-
 function shikakuCluesSig(clues) {
   if (!Array.isArray(clues) || clues.length === 0) return '0';
   let h = 0x811c9dc5;
@@ -298,9 +283,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
       ctx.fill();
     }
   }
-  if (pd?.type === 'binairo' && Array.isArray(pd.comparisonClues)) {
-    drawComparisonCluesOn(ctx, cellSize, pd.comparisonClues);
-  }
   if (pd?.type === 'shikaku' && Array.isArray(pd.clues)) {
     drawShikakuCluesOn(ctx, cellSize, pd.clues);
   }
@@ -394,42 +376,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
     ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
   }
   return c;
-}
-
-function drawComparisonCluesOn(ctx, cellSize, comparisonClues) {
-  const fontSize = Math.max(8, Math.floor(cellSize * 0.45));
-  ctx.save();
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#fff';
-  ctx.fillStyle = '#1f2937';
-  for (let r = 0; r < comparisonClues.length; r++) {
-    const row = comparisonClues[r];
-    if (!Array.isArray(row)) continue;
-    for (let c = 0; c < row.length; c++) {
-      const flag = row[c];
-      if (typeof flag !== 'number' || flag === 0) continue;
-      // Right edge (between (r,c) and (r,c+1))
-      if (flag & 3) {
-        const x = (c + 1) * cellSize;
-        const y = r * cellSize + cellSize / 2;
-        const ch = (flag & 1) ? '=' : '×';
-        ctx.strokeText(ch, x, y);
-        ctx.fillText(ch, x, y);
-      }
-      // Bottom edge (between (r,c) and (r+1,c))
-      if (flag & 12) {
-        const x = c * cellSize + cellSize / 2;
-        const y = (r + 1) * cellSize;
-        const ch = (flag & 4) ? '=' : '×';
-        ctx.strokeText(ch, x, y);
-        ctx.fillText(ch, x, y);
-      }
-    }
-  }
-  ctx.restore();
 }
 
 function drawShikakuCluesOn(ctx, cellSize, clues) {
@@ -657,7 +603,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
                       '|rm=' + regionMapSig(pd?.regionMap) +
                       '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
-                      '|cc=' + comparisonCluesSig(pd?.comparisonClues) +
                       '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
@@ -690,14 +635,13 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const galaxiesColors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
   const xPad = Math.max(1, Math.floor(cellSize / 5));
   const isShikaku = puzzleData?.type === 'shikaku';
-  const isBinairo = puzzleData?.type === 'binairo';
   const isYinYang = puzzleData?.type === 'yinyang';
   const isHitori = puzzleData?.type === 'hitori';
   const isKurodoko = puzzleData?.type === 'kurodoko';
   const isMosaic = puzzleData?.type === 'mosaic';
   const isNorinori = puzzleData?.type === 'norinori';
   const isNurikabe = puzzleData?.type === 'nurikabe';
-  const discR = isBinairo ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
+  const discR = puzzleData?.type === 'binairo' ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
   if (isSlitherlink) {
     ctx.save();
     ctx.strokeStyle = '#1f2937';
@@ -844,24 +788,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
           if (v >= 0) {
             ctx.fillStyle = galaxiesColors[v % galaxiesColors.length];
             ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
-          }
-        } else if (isBinairo) {
-          // cellStatus encoding: 1 = "one" cells (page shows as light/outlined),
-          // 2 = "zero" cells (page shows as dark/filled). Match that polarity.
-          const cx = x + cellSize / 2, cy = y + cellSize / 2;
-          if (v === 1) {
-            ctx.fillStyle = '#fff';
-            ctx.strokeStyle = '#1f2937';
-            ctx.lineWidth = Math.max(1.5, cellSize / 14);
-            ctx.beginPath();
-            ctx.arc(cx, cy, discR, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-          } else if (v === 2) {
-            ctx.fillStyle = '#1f2937';
-            ctx.beginPath();
-            ctx.arc(cx, cy, discR, 0, Math.PI * 2);
-            ctx.fill();
           }
         } else if (isYinYang) {
           // cellStatus 1 renders light, 2 renders dark — matching the game
@@ -1333,13 +1259,13 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     hintIdCounter, hintIdCache,
     hintSig, FNV_OFFSET, FNV_PRIME,
-    regionMapSig, comparisonCluesSig, shikakuCluesSig,
+    regionMapSig, shikakuCluesSig,
     slitherlinkCluesSig, hashiIslandsSig, hitoriTaskSig,
     kakurasuCluesSig, kurodokoTaskSig, mosaicTaskSig,
     norinoriAreasSig, nurikabeTaskSig, heyawakeAreasSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
-    drawComparisonCluesOn, drawShikakuCluesOn, drawHashiIslandsOn,
+    drawShikakuCluesOn, drawHashiIslandsOn,
     drawHeyawakeRoomsOn, drawRegionBordersOn,
     latticeLayer, staticLayer, staticLayerSig,
     renderPreview,
