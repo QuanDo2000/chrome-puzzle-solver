@@ -14,6 +14,7 @@ const WIDGET_FILES = [
   'cache.js',
   'galaxies-hint.js',
   'hint.js',
+  'puzzles/index.js',
 ];
 
 const EXPORT_RE =
