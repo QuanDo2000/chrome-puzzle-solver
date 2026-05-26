@@ -788,7 +788,7 @@ function makeWidget() {
     const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
     if (reg?.partialResultArm) {
       reg.partialResultArm(result, {
-        clearPendingHint, setStatus, drawPreview,
+        clearPendingHint, setStatus, drawPreview, applyGridPartialResult,
         setConfirming: (v) => { confirming = v; },
         setLoopConfirming: (v) => { loopConfirming = v; },
         setSolveBtnText: (t) => { solveBtn.textContent = t; },

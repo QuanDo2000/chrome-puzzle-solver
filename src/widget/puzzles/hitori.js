@@ -1,0 +1,119 @@
+'use strict';
+
+// Hitori puzzle module — third migrated puzzle in Stage C of the
+// content.js split. Bundle-concatenated; ends with a CJS export footer
+// the bundler strips before emit.
+//
+// Hooks consumed by the Stage-B dispatchers (cache.js, preview.js,
+// widget.js, content.js):
+//   cacheKey         — FNV-1a over puzzle.task (the grid of clue
+//                      digits); 'I' nameplate keeps keys disjoint.
+//   staticSig        — contributes the task signature to the preview's
+//                      static-layer cache key.
+//   drawStaticLayer  — paints the thick outer border. (Clue digits
+//                      themselves are on the dynamic layer because cell
+//                      shading changes text colour.)
+//   drawPreviewCell  — every cell shows its clue digit; v=2 (unshaded)
+//                      fills the cell dark and renders digit in light
+//                      colour; v=1 (shaded) stays light with dark digit.
+//                      Reversed convention vs. binairo.
+//   hintStatusNodes  — describes a Hitori hint as "must be shaded /
+//                      unshaded" for a single deduced cell.
+//   solveExtraData   — extra payload for the solver worker: rows/cols
+//                      plus task (the clue-digit grid).
+//   partialResultArm — wraps applyGridPartialResult so the Stage-B
+//                      applyPartialResult dispatcher can route hitori
+//                      partial-solve timeouts into the generic grid
+//                      partial UI.
+
+const hitori = {
+  type: 'hitori',
+  label: 'Hitori',
+  url: 'https://www.puzzles-mobile.com/hitori/',
+  solutionKeyPrefix: 'hitori-solution:',
+  skipAutoSolveGate: true,
+
+  cacheKey(data) {
+    if (data?.type !== 'hitori' || !data.task) return null;
+    let h = 0x811c9dc5;
+    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+    mix(0x49); // 'I' nameplate
+    mix(data.rows); mix(data.cols);
+    for (const row of data.task) for (const v of row) mix(v + 1);
+    return 'hitori-solution:' + (h >>> 0).toString(16);
+  },
+
+  staticSig(data) {
+    return 'hi=' + _hitoriTaskSig(data?.task);
+  },
+
+  drawStaticLayer(ctx, { rows, cols, cellSize }) {
+    // Outer border only — clue digits are on the dynamic layer (shading
+    // changes text colour, so they can't be cached here).
+    const borderW = Math.max(2, Math.floor(cellSize / 5));
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = borderW;
+    ctx.lineCap = 'square';
+    ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
+  },
+
+  drawPreviewCell(ctx, { r, c, v, x, y, cellSize, puzzleData }) {
+    // Hitori: every cell shows its clue digit. Reversed convention —
+    // unshaded cells (v=2) get the dark fill (digit in light colour),
+    // shaded cells (v=1) stay light with a dark digit. Unknown (v=0)
+    // stays light/neutral so the initial board is fully readable.
+    if (v === 2) {
+      ctx.fillStyle = '#1f2937';
+      ctx.fillRect(x, y, cellSize, cellSize);
+    }
+    const clueVal = puzzleData?.task?.[r]?.[c] ?? 0;
+    const ch = (clueVal >= 10 && clueVal <= 35)
+      ? String.fromCharCode(clueVal + 87)
+      : String(clueVal);
+    ctx.font = `bold ${Math.floor(cellSize * 0.55)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = v === 2 ? '#f3f4f6' : '#1f2937';
+    ctx.fillText(ch, x + cellSize / 2, y + cellSize / 2);
+  },
+
+  hintStatusNodes(h, { bold }) {
+    // Hitori hints carry absolute cells in extraCells.
+    // cellStatus 1 = shaded (black), 2 = unshaded (circled/white).
+    const cells = h.extraCells || [];
+    if (cells.length === 0) return ['No hint available'];
+    if (cells.length === 1) {
+      const cell = cells[0];
+      const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
+      return [
+        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
+        ' must be ', bold(valueStr),
+      ];
+    }
+    return [bold(String(cells.length)), ' cells can be deduced'];
+  },
+
+  solveExtraData(data) {
+    return { rows: data.rows, cols: data.cols, task: data.task };
+  },
+
+  partialResultArm(result, { applyGridPartialResult }) {
+    applyGridPartialResult(result);
+  },
+};
+
+// Local copy of preview.js's hitoriTaskSig — only used by staticSig
+// above. Inlined here (matches binairo's _comparisonCluesSig pattern)
+// so the module is self-contained.
+function _hitoriTaskSig(task) {
+  if (!task) return '0';
+  let h = 0x811c9dc5;
+  for (const row of task) for (const v of row) {
+    h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return (h >>> 0).toString(16);
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = hitori;
+}
