@@ -307,21 +307,25 @@ function nurikabeCacheKey(data) {
 }
 
 function getCachedGridSolution(data) {
-  const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
-    : data?.type === 'nonogram' ? nonogramCacheKey(data)
-    : data?.type === 'binairo' ? binairoCacheKey(data)
-    : data?.type === 'shikaku' ? shikakuCacheKey(data)
-    : data?.type === 'yinyang' ? yinYangCacheKey(data)
-    : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
-    : data?.type === 'hashi' ? hashiCacheKey(data)
-    : data?.type === 'heyawake' ? heyawakeCacheKey(data)
-    : data?.type === 'hitori' ? hitoriCacheKey(data)
-    : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
-    : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
-    : data?.type === 'mosaic' ? mosaicCacheKey(data)
-    : data?.type === 'norinori' ? norinoriCacheKey(data)
-    : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
-    : null;
+  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
+  let key = reg?.cacheKey ? reg.cacheKey(data) : null;
+  if (!key) {
+    key = data?.type === 'aquarium' ? aquariumCacheKey(data)
+      : data?.type === 'nonogram' ? nonogramCacheKey(data)
+      : data?.type === 'binairo' ? binairoCacheKey(data)
+      : data?.type === 'shikaku' ? shikakuCacheKey(data)
+      : data?.type === 'yinyang' ? yinYangCacheKey(data)
+      : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
+      : data?.type === 'hashi' ? hashiCacheKey(data)
+      : data?.type === 'heyawake' ? heyawakeCacheKey(data)
+      : data?.type === 'hitori' ? hitoriCacheKey(data)
+      : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
+      : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
+      : data?.type === 'mosaic' ? mosaicCacheKey(data)
+      : data?.type === 'norinori' ? norinoriCacheKey(data)
+      : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
+      : null;
+  }
   if (!key) return null;
   try {
     const raw = localStorage.getItem(key);
@@ -350,21 +354,25 @@ function getCachedGridSolution(data) {
 }
 
 function cacheGridSolution(data, grid) {
-  const key = data?.type === 'aquarium' ? aquariumCacheKey(data)
-    : data?.type === 'nonogram' ? nonogramCacheKey(data)
-    : data?.type === 'binairo' ? binairoCacheKey(data)
-    : data?.type === 'shikaku' ? shikakuCacheKey(data)
-    : data?.type === 'yinyang' ? yinYangCacheKey(data)
-    : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
-    : data?.type === 'hashi' ? hashiCacheKey(data)
-    : data?.type === 'heyawake' ? heyawakeCacheKey(data)
-    : data?.type === 'hitori' ? hitoriCacheKey(data)
-    : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
-    : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
-    : data?.type === 'mosaic' ? mosaicCacheKey(data)
-    : data?.type === 'norinori' ? norinoriCacheKey(data)
-    : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
-    : null;
+  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
+  let key = reg?.cacheKey ? reg.cacheKey(data) : null;
+  if (!key) {
+    key = data?.type === 'aquarium' ? aquariumCacheKey(data)
+      : data?.type === 'nonogram' ? nonogramCacheKey(data)
+      : data?.type === 'binairo' ? binairoCacheKey(data)
+      : data?.type === 'shikaku' ? shikakuCacheKey(data)
+      : data?.type === 'yinyang' ? yinYangCacheKey(data)
+      : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
+      : data?.type === 'hashi' ? hashiCacheKey(data)
+      : data?.type === 'heyawake' ? heyawakeCacheKey(data)
+      : data?.type === 'hitori' ? hitoriCacheKey(data)
+      : data?.type === 'kakurasu' ? kakurasuCacheKey(data)
+      : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
+      : data?.type === 'mosaic' ? mosaicCacheKey(data)
+      : data?.type === 'norinori' ? norinoriCacheKey(data)
+      : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
+      : null;
+  }
   if (!key) return;
   try {
     if (data?.type === 'slitherlink') {
