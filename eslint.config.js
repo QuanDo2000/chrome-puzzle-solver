@@ -292,8 +292,21 @@ module.exports = [
         staticLayerSig: 'writable',
         lastDrawSig: 'writable',
         previewWrap: 'writable',
+        // src/widget/widget.js
+        makeWidget: 'readonly',
+        widgetExpandFn: 'writable',
         // src/widget/puzzles/index.js
         PUZZLES: 'readonly',
+        // content.js top-level (consumed by src/widget/widget.js)
+        loadWidgetPref: 'readonly',
+        saveWidgetPref: 'readonly',
+        SUPPORTED_PUZZLES: 'readonly',
+        solveExtraData: 'readonly',
+        detectPuzzle: 'readonly',
+        readGridState: 'readonly',
+        applySolution: 'readonly',
+        getHint: 'readonly',
+        handleHistory: 'readonly',
       },
     },
     rules: sharedRules,

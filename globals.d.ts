@@ -205,6 +205,9 @@ declare let staticLayer: any;
 declare let staticLayerSig: any;
 declare let lastDrawSig: any;
 declare let previewWrap: any;
+// src/widget/widget.js
+declare function makeWidget(): any;
+declare let widgetExpandFn: any;
 declare const PUZZLES: any;
 
 // Page MAIN-world globals reachable from main-world.js functions (which run
