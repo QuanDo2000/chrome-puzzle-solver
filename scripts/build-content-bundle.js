@@ -14,6 +14,7 @@ const WIDGET_FILES = [
   'cache.js',
   'galaxies-hint.js',
   'hint.js',
+  'preview.js',
   'puzzles/index.js',
 ];
 

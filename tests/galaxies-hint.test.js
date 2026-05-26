@@ -99,7 +99,8 @@ function loadWidgetSources() {
   // content.js split). Order matches the bundler.
   const widgetDir = path.join(REPO, 'src', 'widget');
   const widgetOrder = ['state.js', 'worker.js', 'cache.js',
-                        'galaxies-hint.js', 'hint.js', 'puzzles/index.js'];
+                        'galaxies-hint.js', 'hint.js', 'preview.js',
+                        'puzzles/index.js'];
   for (const f of widgetOrder) {
     const fp = path.join(widgetDir, f);
     if (!fs.existsSync(fp)) continue;
