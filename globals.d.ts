@@ -172,6 +172,25 @@ declare function nextChunkHint(grid: any, path: any): any;
 declare function hintAbsoluteCells(hint: any): any;
 declare function applyHintToGrid(grid: any, hint: any): any;
 declare function addAquariumRegionHints(hint: any, grid: any, solution: any, regionMap: any): any;
+// src/widget/preview.js
+declare let hintIdCounter: any;
+declare const hintIdCache: any;
+declare function hintSig(hint: any): any;
+declare const FNV_OFFSET: any;
+declare const FNV_PRIME: any;
+declare function regionMapSig(rm: any): any;
+declare function comparisonCluesSig(cc: any): any;
+declare function shikakuCluesSig(clues: any): any;
+declare function slitherlinkCluesSig(task: any): any;
+declare function hashiIslandsSig(islands: any): any;
+declare function hitoriTaskSig(task: any): any;
+declare function kakurasuCluesSig(rowClues: any, colClues: any): any;
+declare function kurodokoTaskSig(task: any): any;
+declare function mosaicTaskSig(task: any): any;
+declare function norinoriAreasSig(areas: any): any;
+declare function nurikabeTaskSig(task: any): any;
+declare function heyawakeAreasSig(areas: any, rooms?: any): any;
+declare function gridDataSig(grid: any): any;
 declare const PUZZLES: any;
 
 // Page MAIN-world globals reachable from main-world.js functions (which run
