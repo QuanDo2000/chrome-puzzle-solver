@@ -790,8 +790,13 @@ class BinairoSolver {
     // see them because we only pass `givens` + `initialState`. Without this
     // the clone's `compConstraints` stays empty and `_applyComparison`
     // becomes a no-op inside Hint, so Binairo Plus puzzles look fully
-    // deduced when many comparison-driven cells remain forceable.
+    // deduced when many comparison-driven cells remain forceable. Also
+    // sync `_strictUniqueness` — the clone's constructor set it true
+    // (no comparisonClues passed), which would falsely enforce uniqueness
+    // on Binairo Plus and reject valid duplicate-line solutions, making
+    // Hint return null when deductions are actually available.
     clone.compConstraints = this.compConstraints;
+    clone._strictUniqueness = this._strictUniqueness;
     // Suppress the propagate()-internal lookahead phase. Hint's only
     // permitted lookahead is the line-restricted fallback below.
     clone._depth = 1;
