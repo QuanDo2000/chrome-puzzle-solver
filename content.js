@@ -101,6 +101,8 @@ async function applySolution(solution, skipUndo = false, internal = false) {
 function solveExtraData() {
   const data = detectedGrid;
   if (!data) return null;
+  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
+  if (reg?.solveExtraData) return reg.solveExtraData(data);
   if (data.type === 'binairo') {
     return {
       rows: data.rows,
