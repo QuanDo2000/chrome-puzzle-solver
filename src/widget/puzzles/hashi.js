@@ -128,6 +128,11 @@ const hashi = {
   partialResultArm(result, { applyHashiPartialResult }) {
     applyHashiPartialResult(result);
   },
+
+  async applyHint(hint, { applyHashiHintEdges }) {
+    const r = await applyHashiHintEdges(hint);
+    return !!r?.success;
+  },
 };
 
 // Local copy of preview.js's drawHashiIslandsOn — only used by

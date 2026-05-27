@@ -125,6 +125,11 @@ const galaxies = {
       failedPartials: getFailedGalaxiesPartials(data),
     };
   },
+
+  async applyHint(hint, { applySolution }) {
+    const r = await applySolution({ type: 'galaxies-lines', lines: hint.lines });
+    return !!r?.success;
+  },
 };
 
 if (typeof module !== 'undefined' && module.exports) {

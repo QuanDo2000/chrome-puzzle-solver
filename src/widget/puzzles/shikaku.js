@@ -124,6 +124,18 @@ const shikaku = {
     // would return done as soon as any owner index = 0 appears.
     return boardState.every(row => row.every(c => c !== -1));
   },
+
+  async applyHint(hint, { callMainWorld, hintAbsoluteCells, puzzleData }) {
+    // Shikaku uses owner-index cellStatus + currentState.areas; the
+    // generic applyHintCells writer doesn't know that shape. Read the
+    // current state, overlay the hint cells, re-apply via the dedicated
+    // shikaku function.
+    const hintCells = hintAbsoluteCells(hint);
+    const cur = await callMainWorld('readShikakuState', [puzzleData.rows, puzzleData.cols]);
+    const grid = cur || Array.from({ length: puzzleData.rows }, () => new Array(puzzleData.cols).fill(-1));
+    for (const cell of hintCells) grid[cell.row][cell.col] = cell.value;
+    return !!(await callMainWorld('applyShikakuState', [grid, puzzleData.clues]));
+  },
 };
 
 // Local copy of preview.js's drawShikakuCluesOn — only used by

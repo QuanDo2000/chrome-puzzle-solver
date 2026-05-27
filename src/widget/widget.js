@@ -756,34 +756,7 @@ function makeWidget() {
 
     if (puzzleData.pendingHint) {
       setStatus('Applying...', 'info');
-      let ok;
-      if (puzzleData.pendingHint.type === 'galaxies') {
-        const r = await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
-        ok = !!r?.success;
-      } else if (puzzleData.type === 'shikaku') {
-        const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
-        const cur = await callMainWorld('readShikakuState', [puzzleData.rows, puzzleData.cols]);
-        const grid = cur || Array.from({ length: puzzleData.rows }, () => new Array(puzzleData.cols).fill(-1));
-        for (const cell of hintCells) grid[cell.row][cell.col] = cell.value;
-        ok = !!(await callMainWorld('applyShikakuState', [grid, puzzleData.clues]));
-      } else if (puzzleData.type === 'slitherlink') {
-        const cur = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
-        const horizontal = (cur?.horizontal || Array.from({ length: puzzleData.rows + 1 },
-          () => new Array(puzzleData.cols).fill(0))).map(row => row.slice());
-        const vertical   = (cur?.vertical   || Array.from({ length: puzzleData.rows },
-          () => new Array(puzzleData.cols + 1).fill(0))).map(row => row.slice());
-        for (const e of (puzzleData.pendingHint.edges || [])) {
-          if (e.orientation === 'h' && horizontal[e.r]) horizontal[e.r][e.c] = 1;
-          else if (e.orientation === 'v' && vertical[e.r]) vertical[e.r][e.c] = 1;
-        }
-        ok = !!(await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]));
-      } else if (puzzleData.type === 'hashi') {
-        const r = await applyHashiHintEdges(puzzleData.pendingHint);
-        ok = !!r?.success;
-      } else {
-        const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
-        ok = !!(await callMainWorld('applyHintCells', [hintCells]));
-      }
+      const ok = await dispatchApplyHint(puzzleData.pendingHint);
       if (!ok) {
         setStatus('Hint apply failed; loop aborted.', 'error');
         return;
@@ -1035,50 +1008,40 @@ function makeWidget() {
   async function applyHintHandler() {
     if (!puzzleData?.pendingHint) return;
     setStatus('Applying hint...', 'info');
-    let result;
-    if (puzzleData.pendingHint.type === 'galaxies') {
-      result = await applySolution({ type: 'galaxies-lines', lines: puzzleData.pendingHint.lines });
-    } else if (puzzleData.type === 'shikaku') {
-      // Shikaku uses owner-index cellStatus + currentState.areas; the
-      // generic applyHintCells writer doesn't know that shape. Read the
-      // current state, overlay the hint cells, re-apply via the dedicated
-      // shikaku function.
-      const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
-      const cur = await callMainWorld('readShikakuState', [puzzleData.rows, puzzleData.cols]);
-      const grid = cur || Array.from({ length: puzzleData.rows }, () => new Array(puzzleData.cols).fill(-1));
-      for (const cell of hintCells) grid[cell.row][cell.col] = cell.value;
-      const ok = await callMainWorld('applyShikakuState', [grid, puzzleData.clues]);
-      result = ok ? { success: true } : { success: false, error: 'Shikaku hint apply failed' };
-    } else if (puzzleData.type === 'slitherlink') {
-      // Read the current edge state, overlay the hint's LINE edges, apply.
-      const cur = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
-      const horizontal = (cur?.horizontal || Array.from({ length: puzzleData.rows + 1 },
-        () => new Array(puzzleData.cols).fill(0))).map(row => row.slice());
-      const vertical   = (cur?.vertical   || Array.from({ length: puzzleData.rows },
-        () => new Array(puzzleData.cols + 1).fill(0))).map(row => row.slice());
-      for (const e of (puzzleData.pendingHint.edges || [])) {
-        if (e.orientation === 'h' && horizontal[e.r]) horizontal[e.r][e.c] = 1;
-        else if (e.orientation === 'v' && vertical[e.r]) vertical[e.r][e.c] = 1;
-      }
-      const ok = await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]);
-      result = ok ? { success: true } : { success: false, error: 'Slitherlink hint apply failed' };
-    } else if (puzzleData.type === 'hashi') {
-      result = await applyHashiHintEdges(puzzleData.pendingHint);
-    } else {
-      const hintCells = hintAbsoluteCells(puzzleData.pendingHint);
-      const ok = await callMainWorld('applyHintCells', [hintCells]);
-      result = ok ? { success: true } : { success: false, error: 'Hint apply failed' };
-    }
-    if (result?.success) {
+    const ok = await dispatchApplyHint(puzzleData.pendingHint);
+    if (ok) {
       clearPendingHint();
       setStatus('Hint applied!', 'success');
       const newState = await readGridState();
       if (newState?.success) drawPreview(newState.grid);
     } else {
       setStatus('Apply failed.', 'error');
-      if (result?.error) setStatus('Apply failed: ' + result.error, 'error');
     }
     updateUndoRedoButtons();
+  }
+
+  // Dispatch the pendingHint apply to the per-puzzle `applyHint` hook
+  // (galaxies, shikaku, slitherlink, hashi) or fall back to the generic
+  // cell-state writer (applyHintCells) for binairo/hitori/mosaic/etc.
+  //
+  // Galaxies hints carry their own type ('galaxies'); other hint types
+  // align with puzzleData.type. Pick the registry entry by hint.type ===
+  // 'galaxies' first, then by puzzleData.type.
+  async function dispatchApplyHint(hint) {
+    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES)
+      ? PUZZLES[hint?.type === 'galaxies' ? 'galaxies' : puzzleData?.type]
+      : null;
+    if (reg?.applyHint) {
+      return !!(await reg.applyHint(hint, {
+        applySolution,
+        callMainWorld,
+        applyHashiHintEdges,
+        hintAbsoluteCells,
+        puzzleData,
+      }));
+    }
+    const hintCells = hintAbsoluteCells(hint);
+    return !!(await callMainWorld('applyHintCells', [hintCells]));
   }
 
   function fmtList(nums) {

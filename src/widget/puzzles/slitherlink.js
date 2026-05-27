@@ -146,6 +146,20 @@ const slitherlink = {
     return true;
   },
 
+  async applyHint(hint, { callMainWorld, puzzleData }) {
+    // Read the current edge state, overlay the hint's LINE edges, apply.
+    const cur = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
+    const horizontal = (cur?.horizontal || Array.from({ length: puzzleData.rows + 1 },
+      () => new Array(puzzleData.cols).fill(0))).map(row => row.slice());
+    const vertical   = (cur?.vertical   || Array.from({ length: puzzleData.rows },
+      () => new Array(puzzleData.cols + 1).fill(0))).map(row => row.slice());
+    for (const e of (hint.edges || [])) {
+      if (e.orientation === 'h' && horizontal[e.r]) horizontal[e.r][e.c] = 1;
+      else if (e.orientation === 'v' && vertical[e.r]) vertical[e.r][e.c] = 1;
+    }
+    return !!(await callMainWorld('applySlitherlinkState', [{ horizontal, vertical }]));
+  },
+
   partialResultArm(result, {
     clearPendingHint, setStatus, drawPreview,
     setConfirming, setLoopConfirming, setSolveBtnText,
