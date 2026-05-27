@@ -564,14 +564,10 @@ function makeWidget() {
     // is { solved, edges }; every other puzzle type returns { solved, grid }.
     // Keep puzzleData.solution in the same shape readState returns, so
     // downstream consumers (gsComplete, endComplete, mistake-diff) can compare
-    // directly without re-checking.
-    if (puzzleData?.type === 'slitherlink') {
-      puzzleData.solution = { horizontal: result.horizontal, vertical: result.vertical };
-    } else if (puzzleData?.type === 'hashi') {
-      puzzleData.solution = { solved: result.solved, edges: result.edges };
-    } else {
-      puzzleData.solution = result.grid;
-    }
+    // directly without re-checking. The puzzle module's solutionFromResult
+    // hook (slitherlink, hashi) re-shapes; default is result.grid.
+    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    puzzleData.solution = reg?.solutionFromResult ? reg.solutionFromResult(result) : result.grid;
     cacheGalaxiesSolution(puzzleData, result.grid);
     cacheGridSolution(puzzleData, puzzleData.solution);
     clearPartial(puzzleData);
@@ -594,14 +590,12 @@ function makeWidget() {
   // For slitherlink the worker result has { horizontal, vertical } instead of
   // .grid; for hashi it has { edges }. drawPreview expects the matching shape
   // (same shape readState returns for the puzzle type). Other puzzle types
-  // still pass result.grid through unchanged.
+  // still pass result.grid through unchanged. The puzzle module's
+  // solutionFromResult hook (slitherlink, hashi) shapes the preview payload;
+  // default is result.grid.
   function previewGridFromResult(result) {
-    if (puzzleData?.type === 'slitherlink' && result?.horizontal && result?.vertical) {
-      return { horizontal: result.horizontal, vertical: result.vertical };
-    }
-    if (puzzleData?.type === 'hashi' && result?.edges) {
-      return { edges: result.edges };
-    }
+    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    if (reg?.solutionFromResult) return reg.solutionFromResult(result);
     return result?.grid;
   }
 

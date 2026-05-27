@@ -128,6 +128,16 @@ const slitherlink = {
     };
   },
 
+  // Slitherlink's worker result has { solved, horizontal, vertical } instead
+  // of { solved, grid }. recordSolveSuccess and previewGridFromResult both
+  // delegate here to get the puzzleData.solution / preview shape. The fields
+  // are passed through unconditionally — downstream consumers (loop done
+  // check, mistake-diff, drawPreview's edge arm) use `?.` access and skip on
+  // undefined, matching the pre-hook behavior.
+  solutionFromResult(result) {
+    return { horizontal: result?.horizontal, vertical: result?.vertical };
+  },
+
   async loopDoneCheck({ solution, puzzleData }) {
     if (!solution?.horizontal || !solution?.vertical) return false;
     const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);

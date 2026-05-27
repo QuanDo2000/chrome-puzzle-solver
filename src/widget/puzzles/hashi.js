@@ -121,6 +121,16 @@ const hashi = {
     };
   },
 
+  // Hashi's worker result has { solved, edges } instead of { solved, grid }.
+  // recordSolveSuccess and previewGridFromResult both delegate here to get
+  // the puzzleData.solution / preview shape. Fields are passed through
+  // unconditionally — downstream consumers (hashiDoneCheck, mistake-diff,
+  // drawPreview's edges arm) use `?.` access and skip on undefined,
+  // matching the pre-hook behavior.
+  solutionFromResult(result) {
+    return { solved: result?.solved, edges: result?.edges };
+  },
+
   loopDoneCheck({ boardState, solution }) {
     return hashiDoneCheck(boardState, solution);
   },
