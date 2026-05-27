@@ -120,6 +120,25 @@ const binairo = {
     }
   },
 
+  drawHintCell(ctx, { cell, cx, cy, cellSize, fillColor }) {
+    // For binairo hints, draw a translucent disc matching the target value
+    // — outlined blue = "play a 1 here", full blue fill = "play a 0 here".
+    if (cell.value === 1 || cell.value === 2) {
+      const ccx = cx + cellSize / 2;
+      const ccy = cy + cellSize / 2;
+      const hr = Math.max(2, Math.floor(cellSize * 0.35));
+      ctx.fillStyle = fillColor;
+      ctx.beginPath();
+      ctx.arc(ccx, ccy, hr, 0, Math.PI * 2);
+      ctx.fill();
+      if (cell.value === 1) {
+        ctx.strokeStyle = '#2e86de';
+        ctx.lineWidth = Math.max(1.5, cellSize / 14);
+        ctx.stroke();
+      }
+    }
+  },
+
   hintStatusNodes(h, { bold }) {
     const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
     if (total === 0) return ['No hint available'];

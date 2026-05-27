@@ -79,6 +79,17 @@ const hitori = {
     ctx.fillText(ch, x + cellSize / 2, y + cellSize / 2);
   },
 
+  drawHintCell(ctx, { cell, cx, cy, cellSize }) {
+    // Hitori hint (reversed convention): value 2 = must be unshaded
+    // (dark cell), so use the darker blue ring; value 1 = must be
+    // shaded (light cell), so use the lighter blue ring.
+    if (cell.value === 1 || cell.value === 2) {
+      ctx.strokeStyle = cell.value === 2 ? '#3b82f6' : '#60a5fa';
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+      ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+    }
+  },
+
   hintStatusNodes(h, { bold }) {
     // Hitori hints carry absolute cells in extraCells.
     // cellStatus 1 = shaded (black), 2 = unshaded (circled/white).

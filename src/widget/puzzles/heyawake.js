@@ -83,6 +83,21 @@ const heyawake = {
     }
   },
 
+  drawHintCell(ctx, { cell, cx, cy, cellSize }) {
+    // Heyawake hint: value 1 = must be black (dark fill + blue ring),
+    // value 2 = must be white/empty (translucent overlay + blue ring).
+    if (cell.value === 1 || cell.value === 2) {
+      const inset = Math.max(1, Math.floor(cellSize * 0.1));
+      const side = cellSize - 2 * inset;
+      const sx = cx + inset, sy = cy + inset;
+      ctx.fillStyle = cell.value === 1 ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255,255,255,0.5)';
+      ctx.fillRect(sx, sy, side, side);
+      ctx.strokeStyle = '#2e86de';
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+      ctx.strokeRect(sx, sy, side, side);
+    }
+  },
+
   hintStatusNodes(h, { bold }) {
     // Heyawake hints carry absolute cells in extraCells (no row/column index
     // — every hint is a flat list of forced cells from propagation).

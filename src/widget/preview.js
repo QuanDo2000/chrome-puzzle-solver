@@ -603,90 +603,15 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     // hintAbsoluteCells normalizes hint.cells (row/col-indexed via
     // hint.type+hint.index) and hint.extraCells (already absolute) into one
     // {row, col, value} list, so the paint logic stays single-source.
+    // Per-puzzle modules own their hint-cell render via drawHintCell; the
+    // default branch covers the nonogram-shape arms (value=1 fill,
+    // value=-1 red cross) that don't belong to any per-puzzle module.
+    const hintCellReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
     for (const cell of hintAbsoluteCells(hint)) {
       const cx = cell.col * cellSize;
       const cy = cell.row * cellSize;
-      if (puzzleData?.type === 'shikaku' && cell.value >= 0) {
-        // Shikaku hint cell: paint it in its owning rectangle's colour
-        // (so the rectangle visibly takes shape) with a blue ring to
-        // mark it as the newly-revealed hint.
-        ctx.fillStyle = galaxiesColors[cell.value % galaxiesColors.length];
-        ctx.fillRect(cx + 1, cy + 1, cellSize - 2, cellSize - 2);
-        ctx.strokeStyle = '#2e86de';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 7));
-        ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-      } else if (puzzleData?.type === 'yinyang' && (cell.value === 1 || cell.value === 2)) {
-        // Draw the hint square in its colour, ringed blue to mark the hint.
-        const inset = Math.max(1, Math.floor(cellSize * 0.15));
-        const side = cellSize - 2 * inset;
-        const sx = cx + inset, sy = cy + inset;
-        ctx.fillStyle = cell.value === 1 ? '#fff' : '#1f2937';
-        ctx.fillRect(sx, sy, side, side);
-        ctx.strokeStyle = '#2e86de';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-        ctx.strokeRect(sx, sy, side, side);
-      } else if (puzzleData?.type === 'heyawake' && (cell.value === 1 || cell.value === 2)) {
-        // Heyawake hint: value 1 = must be black (dark fill + blue ring),
-        // value 2 = must be white/empty (translucent overlay + blue ring).
-        const inset = Math.max(1, Math.floor(cellSize * 0.1));
-        const side = cellSize - 2 * inset;
-        const sx = cx + inset, sy = cy + inset;
-        ctx.fillStyle = cell.value === 1 ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255,255,255,0.5)';
-        ctx.fillRect(sx, sy, side, side);
-        ctx.strokeStyle = '#2e86de';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-        ctx.strokeRect(sx, sy, side, side);
-      } else if (puzzleData?.type === 'hitori' && (cell.value === 1 || cell.value === 2)) {
-        // Hitori hint (reversed convention): value 2 = must be unshaded
-        // (dark cell), so use the darker blue ring; value 1 = must be
-        // shaded (light cell), so use the lighter blue ring.
-        ctx.strokeStyle = cell.value === 2 ? '#3b82f6' : '#60a5fa';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-        ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-      } else if (isKakurasu && (cell.value === 1 || cell.value === 2)) {
-        // Kakurasu hint: value 1 = must be filled (darker blue ring),
-        // value 2 = must be crossed (lighter blue ring).
-        ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-        ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-      } else if (isKurodoko && (cell.value === 1 || cell.value === 2)) {
-        // Kurodoko hint: value 1 = must be black (darker blue ring),
-        // value 2 = must be white/empty (lighter blue ring).
-        ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-        ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-      } else if (isMosaic && (cell.value === 1 || cell.value === 2)) {
-        // Mosaic hint: value 1 = must be black (darker blue ring),
-        // value 2 = must be white/empty (lighter blue ring).
-        ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-        ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-      } else if (isNorinori && (cell.value === 1 || cell.value === 2)) {
-        // Norinori hint: value 1 = must be black (darker blue ring),
-        // value 2 = must be empty/crossed (lighter blue ring).
-        ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-        ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-      } else if (isNurikabe && (cell.value === 1 || cell.value === 2)) {
-        // Nurikabe hint: value 1 = must be sea/black; value 2 = must be island/white.
-        ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
-        ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
-        ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
-      } else if (puzzleData?.type === 'binairo' && (cell.value === 1 || cell.value === 2)) {
-        // For binairo hints, draw a translucent disc matching the target value
-        // — outlined blue = "play a 1 here", full blue fill = "play a 0 here".
-        const ccx = cx + cellSize / 2;
-        const ccy = cy + cellSize / 2;
-        const hr = Math.max(2, Math.floor(cellSize * 0.35));
-        ctx.fillStyle = fillColor;
-        ctx.beginPath();
-        ctx.arc(ccx, ccy, hr, 0, Math.PI * 2);
-        ctx.fill();
-        if (cell.value === 1) {
-          ctx.strokeStyle = '#2e86de';
-          ctx.lineWidth = Math.max(1.5, cellSize / 14);
-          ctx.stroke();
-        }
+      if (hintCellReg?.drawHintCell) {
+        hintCellReg.drawHintCell(ctx, { cell, cx, cy, cellSize, galaxiesColors, fillColor });
       } else if (cell.value === 1) {
         ctx.fillStyle = fillColor;
         ctx.fillRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);

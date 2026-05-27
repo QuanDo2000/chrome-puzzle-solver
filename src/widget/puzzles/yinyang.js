@@ -72,6 +72,20 @@ const yinyang = {
     }
   },
 
+  drawHintCell(ctx, { cell, cx, cy, cellSize }) {
+    // Draw the hint square in its colour, ringed blue to mark the hint.
+    if (cell.value === 1 || cell.value === 2) {
+      const inset = Math.max(1, Math.floor(cellSize * 0.15));
+      const side = cellSize - 2 * inset;
+      const sx = cx + inset, sy = cy + inset;
+      ctx.fillStyle = cell.value === 1 ? '#fff' : '#1f2937';
+      ctx.fillRect(sx, sy, side, side);
+      ctx.strokeStyle = '#2e86de';
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+      ctx.strokeRect(sx, sy, side, side);
+    }
+  },
+
   hintStatusNodes(h, { bold }) {
     const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
     if (total === 0) return ['No hint available'];

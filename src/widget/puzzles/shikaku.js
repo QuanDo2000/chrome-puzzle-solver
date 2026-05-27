@@ -88,6 +88,19 @@ const shikaku = {
     }
   },
 
+  drawHintCell(ctx, { cell, cx, cy, cellSize, galaxiesColors }) {
+    // Shikaku hint cell: paint it in its owning rectangle's colour
+    // (so the rectangle visibly takes shape) with a blue ring to
+    // mark it as the newly-revealed hint.
+    if (cell.value >= 0) {
+      ctx.fillStyle = galaxiesColors[cell.value % galaxiesColors.length];
+      ctx.fillRect(cx + 1, cy + 1, cellSize - 2, cellSize - 2);
+      ctx.strokeStyle = '#2e86de';
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize / 7));
+      ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+    }
+  },
+
   hintStatusNodes(h, { bold }) {
     const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
     if (total === 0) return ['No hint available'];

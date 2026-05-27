@@ -96,6 +96,16 @@ const kurodoko = {
     // v === 0 non-clue → blank (already excluded by early-bail above)
   },
 
+  drawHintCell(ctx, { cell, cx, cy, cellSize }) {
+    // Kurodoko hint: value 1 = must be black (darker blue ring),
+    // value 2 = must be white/empty (lighter blue ring).
+    if (cell.value === 1 || cell.value === 2) {
+      ctx.strokeStyle = cell.value === 1 ? '#3b82f6' : '#60a5fa';
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize / 9));
+      ctx.strokeRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+    }
+  },
+
   hintStatusNodes(h, { bold }) {
     // Kurodoko hints carry absolute cells in extraCells.
     // cellStatus 1 = shaded (black), 2 = unshaded (white).
