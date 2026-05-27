@@ -211,16 +211,6 @@ function heyawakeCacheKey(data) {
   return 'heyawake-solution:' + (h >>> 0).toString(16);
 }
 
-function kurodokoCacheKey(data) {
-  if (data?.type !== 'kurodoko' || !data.task) return null;
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x44); // 'D' nameplate (kuroDoko)
-  mix(data.rows); mix(data.cols);
-  for (const row of data.task) for (const v of row) mix(v + 1);
-  return 'kurodoko-solution:' + (h >>> 0).toString(16);
-}
-
 function mosaicCacheKey(data) {
   if (data?.type !== 'mosaic' || !data.task) return null;
   let h = 0x811c9dc5;
@@ -261,7 +251,6 @@ function getCachedGridSolution(data) {
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : data?.type === 'heyawake' ? heyawakeCacheKey(data)
-      : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
       : data?.type === 'mosaic' ? mosaicCacheKey(data)
       : data?.type === 'norinori' ? norinoriCacheKey(data)
       : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
@@ -304,7 +293,6 @@ function cacheGridSolution(data, grid) {
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : data?.type === 'heyawake' ? heyawakeCacheKey(data)
-      : data?.type === 'kurodoko' ? kurodokoCacheKey(data)
       : data?.type === 'mosaic' ? mosaicCacheKey(data)
       : data?.type === 'norinori' ? norinoriCacheKey(data)
       : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
@@ -434,7 +422,7 @@ if (typeof module !== 'undefined' && module.exports) {
     aquariumCacheKey, shikakuCacheKey,
     hashiCacheKey, yinYangCacheKey, slitherlinkCacheKey,
     heyawakeCacheKey,
-    kurodokoCacheKey, mosaicCacheKey, norinoriCacheKey, nurikabeCacheKey,
+    mosaicCacheKey, norinoriCacheKey, nurikabeCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,
     countKnownCells, chooseInitialGrid,

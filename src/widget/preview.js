@@ -76,15 +76,6 @@ function hashiIslandsSig(islands) {
   return (h >>> 0).toString(36);
 }
 
-function kurodokoTaskSig(task) {
-  if (!task) return '0';
-  let h = 0x811c9dc5;
-  for (const row of task) for (const v of row) {
-    h ^= (v + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(16);
-}
-
 function mosaicTaskSig(task) {
   if (!task) return '0';
   let h = 0x811c9dc5;
@@ -305,15 +296,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
     // Norinori has the same room-boundary structure as Heyawake but no
     // target numbers — call the shared helper with rooms=null.
     drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, null);
-  }
-  if (pd?.type === 'kurodoko') {
-    // Outer border only — clue digits are on the dynamic layer (cell
-    // shading changes text colour, so they can't be pre-rendered here).
-    const borderW = Math.max(2, Math.floor(cellSize / 5));
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = borderW;
-    ctx.lineCap = 'square';
-    ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
   }
   if (pd?.type === 'mosaic') {
     // Outer border + light interior grid lines. Clue digits go on the
@@ -556,7 +538,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
                       '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
-                      '|kd=' + kurodokoTaskSig(pd?.type === 'kurodoko' ? pd.task : null) +
                       '|mc=' + mosaicTaskSig(pd?.type === 'mosaic' ? pd.task : null) +
                       '|nn=' + norinoriAreasSig(pd?.type === 'norinori' ? pd.areas : null) +
                       '|nu=' + nurikabeTaskSig(pd?.type === 'nurikabe' ? pd.task : null);
@@ -776,41 +757,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
             ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
             ctx.fill();
           }
-        } else if (isKurodoko) {
-          // Kurodoko: every cell shows clue digit if it's a clue cell.
-          // v=1 = black cell (solid dark fill); v=2 = confirmed white/empty
-          // (× cross so the player can see deduced whites); v=0 = unknown
-          // (blank — skipped by early-bail unless clue cell).
-          const taskVal = (pd?.task?.[r]?.[c] ?? -1);
-          if (taskVal !== -1) {
-            // Clue cell: show the number. If also marked black, fill dark
-            // first so the digit renders in light colour on top.
-            ctx.font = `bold ${Math.floor(cellSize * 0.5)}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            if (v === 1) {
-              ctx.fillStyle = '#1f2937';
-              ctx.fillRect(x, y, cellSize, cellSize);
-              ctx.fillStyle = '#f3f4f6';
-            } else {
-              ctx.fillStyle = '#1f2937';
-            }
-            ctx.fillText(String(taskVal), x + cellSize / 2, y + cellSize / 2);
-          } else if (v === 1) {
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(x, y, cellSize, cellSize);
-          } else if (v === 2) {
-            const pad = Math.max(3, Math.floor(cellSize * 0.25));
-            ctx.strokeStyle = '#9ca3af';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x + pad, y + pad);
-            ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
-            ctx.moveTo(x + cellSize - pad, y + pad);
-            ctx.lineTo(x + pad, y + cellSize - pad);
-            ctx.stroke();
-          }
-          // v === 0 non-clue → blank (already excluded by early-bail above)
         } else if (isMosaic) {
           const taskVal = (pd?.task?.[r]?.[c] ?? -1);
           // Background fill based on cellStatus.
@@ -1171,7 +1117,7 @@ if (typeof module !== 'undefined' && module.exports) {
     hintSig, FNV_OFFSET, FNV_PRIME,
     regionMapSig, shikakuCluesSig,
     slitherlinkCluesSig, hashiIslandsSig,
-    kurodokoTaskSig, mosaicTaskSig,
+    mosaicTaskSig,
     norinoriAreasSig, nurikabeTaskSig, heyawakeAreasSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,

@@ -153,9 +153,6 @@ function solveExtraData() {
       rooms: data.rooms,
     };
   }
-  if (data.type === 'kurodoko') {
-    return { rows: data.rows, cols: data.cols, task: data.task };
-  }
   if (data.type === 'mosaic') {
     return { rows: data.rows, cols: data.cols, task: data.task };
   }
