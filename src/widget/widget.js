@@ -16,6 +16,38 @@
 // reaching into its closure.
 let widgetExpandFn = null;
 
+// Hashi done-check helper: every solution edge's bridge count matches the
+// current board state AND no extra bridges exist on pairs absent from the
+// solution. Edge keys are min-max normalized so the comparison is
+// direction-independent. _emit() filters bridges=0 out of solution.edges,
+// so iterating only solution.edges would miss user-drawn extras on
+// solution-0 pairs — hence the second loop over currentState.edges.
+//
+// Lifted to bundle scope (out of makeWidget) so puzzles/hashi.js's
+// loopDoneCheck hook can reference it directly. The function is pure
+// (no closure state), so promotion is safe.
+function hashiDoneCheck(currentState, solution) {
+  if (!currentState || !solution || !solution.edges) return false;
+  const solMap = new Map();
+  for (const e of solution.edges) {
+    const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+    solMap.set(`${a}-${b}`, e.bridges);
+  }
+  const curMap = new Map();
+  for (const e of currentState.edges) {
+    const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
+    curMap.set(`${a}-${b}`, e.bridges);
+  }
+  for (const [key, want] of solMap) {
+    if (curMap.get(key) !== want) return false;
+  }
+  for (const [key, have] of curMap) {
+    if (!have) continue; // 0 means "no bridge drawn" — not an extra
+    if (!solMap.has(key)) return false; // user drew a bridge on a solution-0 pair
+  }
+  return true;
+}
+
 function makeWidget() {
   const pref = loadWidgetPref();
   let expanded = pref.expanded !== false;
@@ -186,7 +218,7 @@ function makeWidget() {
   function setHintStatus(h, prefix = '') {
     const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
     if (reg?.hintStatusNodes) {
-      setStatusNodes('info', prefix, ...reg.hintStatusNodes(h, { bold }));
+      setStatusNodes('info', prefix, ...reg.hintStatusNodes(h, { bold, puzzleData }));
     } else if (h.type === 'galaxies') {
       setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
     } else if (puzzleData?.type === 'slitherlink') {
@@ -740,34 +772,6 @@ function makeWidget() {
     for (const remaining of overrideMap.values()) merged.push(remaining);
     const ok = await callMainWorld('applyHashiState', [merged]);
     return ok ? { success: true } : { success: false, error: 'Hashi hint apply failed' };
-  }
-
-  // Hashi done-check helper: every solution edge's bridge count matches the
-  // current board state AND no extra bridges exist on pairs absent from the
-  // solution. Edge keys are min-max normalized so the comparison is
-  // direction-independent. _emit() filters bridges=0 out of solution.edges,
-  // so iterating only solution.edges would miss user-drawn extras on
-  // solution-0 pairs — hence the second loop over currentState.edges.
-  function hashiDoneCheck(currentState, solution) {
-    if (!currentState || !solution || !solution.edges) return false;
-    const solMap = new Map();
-    for (const e of solution.edges) {
-      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-      solMap.set(`${a}-${b}`, e.bridges);
-    }
-    const curMap = new Map();
-    for (const e of currentState.edges) {
-      const a = Math.min(e.a, e.b), b = Math.max(e.a, e.b);
-      curMap.set(`${a}-${b}`, e.bridges);
-    }
-    for (const [key, want] of solMap) {
-      if (curMap.get(key) !== want) return false;
-    }
-    for (const [key, have] of curMap) {
-      if (!have) continue; // 0 means "no bridge drawn" — not an extra
-      if (!solMap.has(key)) return false; // user drew a bridge on a solution-0 pair
-    }
-    return true;
   }
 
   // The Loop button cycles through three states. loopHandler dispatches; the

@@ -28,6 +28,7 @@ const WIDGET_FILES = [
   'puzzles/yinyang.js',
   'puzzles/aquarium.js',
   'puzzles/shikaku.js',
+  'puzzles/hashi.js',
   'puzzles/index.js',
 ];
 

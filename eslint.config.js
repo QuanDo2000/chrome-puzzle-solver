@@ -271,6 +271,7 @@ module.exports = [
         // src/widget/widget.js
         makeWidget: 'readonly',
         widgetExpandFn: 'writable',
+        hashiDoneCheck: 'readonly',
         // src/widget/puzzles/index.js
         PUZZLES: 'readonly',
         // src/widget/puzzles/nonogram.js — bundle-scope const consumed
@@ -309,6 +310,9 @@ module.exports = [
         // src/widget/puzzles/shikaku.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         shikaku: 'readonly',
+        // src/widget/puzzles/hashi.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        hashi: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
