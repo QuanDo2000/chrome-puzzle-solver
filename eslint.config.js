@@ -301,6 +301,9 @@ module.exports = [
         // src/widget/puzzles/kurodoko.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         kurodoko: 'readonly',
+        // src/widget/puzzles/mosaic.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        mosaic: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',

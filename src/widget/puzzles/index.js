@@ -12,6 +12,7 @@ if (typeof binairo !== 'undefined') PUZZLES[binairo.type] = binairo;
 if (typeof hitori !== 'undefined') PUZZLES[hitori.type] = hitori;
 if (typeof kakurasu !== 'undefined') PUZZLES[kakurasu.type] = kakurasu;
 if (typeof kurodoko !== 'undefined') PUZZLES[kurodoko.type] = kurodoko;
+if (typeof mosaic !== 'undefined') PUZZLES[mosaic.type] = mosaic;
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { PUZZLES };
