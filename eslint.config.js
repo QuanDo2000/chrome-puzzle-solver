@@ -206,7 +206,6 @@ module.exports = [
         aquariumCacheKey: 'readonly',
         shikakuCacheKey: 'readonly',
         hashiCacheKey: 'readonly',
-        yinYangCacheKey: 'readonly',
         slitherlinkCacheKey: 'readonly',
         getCachedGridSolution: 'readonly',
         cacheGridSolution: 'readonly',

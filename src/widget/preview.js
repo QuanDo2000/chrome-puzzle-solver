@@ -466,7 +466,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const galaxiesColors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
   const xPad = Math.max(1, Math.floor(cellSize / 5));
   const isShikaku = puzzleData?.type === 'shikaku';
-  const isYinYang = puzzleData?.type === 'yinyang';
   const isHitori = puzzleData?.type === 'hitori';
   const isKurodoko = puzzleData?.type === 'kurodoko';
   const isMosaic = puzzleData?.type === 'mosaic';

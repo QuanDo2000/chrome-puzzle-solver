@@ -156,22 +156,6 @@ function hashiCacheKey(data) {
   return 'hashi-solution:' + (h >>> 0).toString(16);
 }
 
-function yinYangCacheKey(data) {
-  if (data?.type !== 'yinyang') return null;
-  // FNV-1a over (type nameplate, rows, cols, flattened task).
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x59); // 'Y' nameplate so yin-yang keys can't collide with other types
-  mix(data.rows | 0);
-  mix(data.cols | 0);
-  const t = data.task || [];
-  for (let r = 0; r < data.rows; r++) {
-    const row = t[r] || [];
-    for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
-  }
-  return 'yinyang-solution:' + (h >>> 0).toString(16);
-}
-
 function slitherlinkCacheKey(data) {
   if (data?.type !== 'slitherlink') return null;
   // FNV-1a over (nameplate, rows, cols, flattened task).
@@ -357,7 +341,7 @@ if (typeof module !== 'undefined' && module.exports) {
     galaxiesCacheKey, galaxiesPartialKey, galaxiesFailedKey,
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
     aquariumCacheKey, shikakuCacheKey,
-    hashiCacheKey, yinYangCacheKey, slitherlinkCacheKey,
+    hashiCacheKey, slitherlinkCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,
     countKnownCells, chooseInitialGrid,
