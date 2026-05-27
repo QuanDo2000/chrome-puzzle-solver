@@ -105,26 +105,6 @@ function cacheGalaxiesSolution(data, grid) {
   } catch { /* quota or unavailable; pruneSolutionCache would no-op anyway */ }
 }
 
-function hashiCacheKey(data) {
-  if (data?.type !== 'hashi') return null;
-  // FNV-1a over (nameplate, rows, cols, sorted islands flattened).
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x48); // 'H' nameplate so hashi keys can't collide with other types
-  mix(data.rows | 0);
-  mix(data.cols | 0);
-  const islands = Array.isArray(data.islands) ? data.islands : [];
-  mix(islands.length);
-  const sorted = islands.slice().sort((a, b) =>
-    a.row - b.row || a.col - b.col || a.number - b.number);
-  for (const i of sorted) {
-    mix(i.row | 0);
-    mix(i.col | 0);
-    mix(i.number | 0);
-  }
-  return 'hashi-solution:' + (h >>> 0).toString(16);
-}
-
 function slitherlinkCacheKey(data) {
   if (data?.type !== 'slitherlink') return null;
   // FNV-1a over (nameplate, rows, cols, flattened task).
@@ -303,7 +283,7 @@ if (typeof module !== 'undefined' && module.exports) {
     isSolutionCacheKey, pruneSolutionCache, isFreshSolutionEntry,
     galaxiesCacheKey, galaxiesPartialKey, galaxiesFailedKey,
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
-    hashiCacheKey, slitherlinkCacheKey,
+    slitherlinkCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,
     countKnownCells, chooseInitialGrid,
