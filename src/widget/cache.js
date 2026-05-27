@@ -105,25 +105,6 @@ function cacheGalaxiesSolution(data, grid) {
   } catch { /* quota or unavailable; pruneSolutionCache would no-op anyway */ }
 }
 
-function shikakuCacheKey(data) {
-  if (data?.type !== 'shikaku') return null;
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x53); // 'S' nameplate
-  mix(data.rows | 0);
-  mix(data.cols | 0);
-  const clues = Array.isArray(data.clues) ? data.clues : [];
-  mix(clues.length);
-  const sorted = clues.slice().sort((a, b) =>
-    a.row - b.row || a.col - b.col || a.area - b.area);
-  for (const k of sorted) {
-    mix(k.row | 0);
-    mix(k.col | 0);
-    mix(k.area | 0);
-  }
-  return 'shikaku-solution:' + (h >>> 0).toString(16);
-}
-
 function hashiCacheKey(data) {
   if (data?.type !== 'hashi') return null;
   // FNV-1a over (nameplate, rows, cols, sorted islands flattened).
@@ -324,7 +305,6 @@ if (typeof module !== 'undefined' && module.exports) {
     isSolutionCacheKey, pruneSolutionCache, isFreshSolutionEntry,
     galaxiesCacheKey, galaxiesPartialKey, galaxiesFailedKey,
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
-    shikakuCacheKey,
     hashiCacheKey, slitherlinkCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,
