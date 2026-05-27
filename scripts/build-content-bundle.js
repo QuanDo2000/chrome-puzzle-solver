@@ -20,6 +20,7 @@ const WIDGET_FILES = [
   'puzzles/binairo.js',
   'puzzles/hitori.js',
   'puzzles/kakurasu.js',
+  'puzzles/kurodoko.js',
   'puzzles/index.js',
 ];
 

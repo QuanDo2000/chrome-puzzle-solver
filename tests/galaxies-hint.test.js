@@ -105,6 +105,7 @@ function loadWidgetSources() {
                         'puzzles/binairo.js',
                         'puzzles/hitori.js',
                         'puzzles/kakurasu.js',
+                        'puzzles/kurodoko.js',
                         'puzzles/index.js'];
   for (const f of widgetOrder) {
     const fp = path.join(widgetDir, f);
