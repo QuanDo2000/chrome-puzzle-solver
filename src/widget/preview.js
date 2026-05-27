@@ -135,16 +135,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
     reg.drawStaticLayer(ctx, { rows, cols, cellSize, w, h, pd });
     return c;
   }
-  if (pd?.type === 'galaxies' && pd.stars) {
-    ctx.fillStyle = '#111827';
-    for (const star of pd.stars) {
-      const cx = ((star.col + 1) / 2) * cellSize;
-      const cy = ((star.row + 1) / 2) * cellSize;
-      ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(3, cellSize / 7), 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
   return c;
 }
 

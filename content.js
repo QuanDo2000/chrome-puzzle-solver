@@ -103,15 +103,6 @@ function solveExtraData() {
   if (!data) return null;
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
   if (reg?.solveExtraData) return reg.solveExtraData(data);
-  if (data.type === 'galaxies') {
-    return {
-      stars: data.stars,
-      rows: data.rows,
-      cols: data.cols,
-      partialGrid: getCachedGalaxiesPartial(data),
-      failedPartials: getFailedGalaxiesPartials(data),
-    };
-  }
   return null;
 }
 

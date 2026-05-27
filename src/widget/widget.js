@@ -223,8 +223,6 @@ function makeWidget() {
     const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
     if (reg?.hintStatusNodes) {
       setStatusNodes('info', prefix, ...reg.hintStatusNodes(h, { bold, puzzleData }));
-    } else if (h.type === 'galaxies') {
-      setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
