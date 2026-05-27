@@ -117,13 +117,6 @@ function solveExtraData() {
       islands: data.islands,
     };
   }
-  if (data.type === 'yinyang') {
-    return {
-      rows: data.rows,
-      cols: data.cols,
-      task: data.task,
-    };
-  }
   if (data.type === 'slitherlink') {
     return {
       rows: data.rows,

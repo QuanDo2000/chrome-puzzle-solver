@@ -620,29 +620,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
             ctx.fillStyle = galaxiesColors[v % galaxiesColors.length];
             ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
           }
-        } else if (isYinYang) {
-          // cellStatus 1 renders light, 2 renders dark — matching the game
-          // (Yin-Yang shares Binairo's cell encoding/polarity).
-          const yyInset = Math.max(1, Math.floor(cellSize * 0.15));
-          const yySide = cellSize - 2 * yyInset;
-          const sx = x + yyInset, sy = y + yyInset;
-          if (v === 1) {
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(sx, sy, yySide, yySide);
-            ctx.strokeStyle = '#1f2937';
-            ctx.lineWidth = Math.max(1.5, cellSize / 14);
-            ctx.strokeRect(sx, sy, yySide, yySide);
-          } else if (v === 2) {
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(sx, sy, yySide, yySide);
-          }
-          // Given cells get a small contrasting centre square.
-          const given = puzzleData?.task?.[r]?.[c];
-          if (given === 0 || given === 1) {
-            const dotSide = Math.max(2, Math.floor(cellSize * 0.2));
-            ctx.fillStyle = v === 1 ? '#1f2937' : '#fff';
-            ctx.fillRect(x + (cellSize - dotSide) / 2, y + (cellSize - dotSide) / 2, dotSide, dotSide);
-          }
         } else if (puzzleData?.type === 'galaxies' && v > 0) {
           ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
           ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);

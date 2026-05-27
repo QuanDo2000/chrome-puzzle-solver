@@ -194,7 +194,6 @@ function getCachedGridSolution(data) {
   if (!key) {
     key = data?.type === 'aquarium' ? aquariumCacheKey(data)
       : data?.type === 'shikaku' ? shikakuCacheKey(data)
-      : data?.type === 'yinyang' ? yinYangCacheKey(data)
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : null;
@@ -232,7 +231,6 @@ function cacheGridSolution(data, grid) {
   if (!key) {
     key = data?.type === 'aquarium' ? aquariumCacheKey(data)
       : data?.type === 'shikaku' ? shikakuCacheKey(data)
-      : data?.type === 'yinyang' ? yinYangCacheKey(data)
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : null;
