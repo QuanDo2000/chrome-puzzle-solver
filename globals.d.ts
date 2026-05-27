@@ -118,7 +118,6 @@ declare function galaxiesPartialKey(data: any): any;
 declare function galaxiesFailedKey(data: any): any;
 declare function getCachedGalaxiesSolution(data: any): any;
 declare function cacheGalaxiesSolution(data: any, grid: any): any;
-declare function aquariumCacheKey(data: any): any;
 declare function shikakuCacheKey(data: any): any;
 declare function hashiCacheKey(data: any): any;
 declare function yinYangCacheKey(data: any): any;

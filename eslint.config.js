@@ -203,7 +203,6 @@ module.exports = [
         galaxiesFailedKey: 'readonly',
         getCachedGalaxiesSolution: 'readonly',
         cacheGalaxiesSolution: 'readonly',
-        aquariumCacheKey: 'readonly',
         shikakuCacheKey: 'readonly',
         hashiCacheKey: 'readonly',
         slitherlinkCacheKey: 'readonly',

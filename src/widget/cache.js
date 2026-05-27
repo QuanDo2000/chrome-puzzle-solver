@@ -105,18 +105,6 @@ function cacheGalaxiesSolution(data, grid) {
   } catch { /* quota or unavailable; pruneSolutionCache would no-op anyway */ }
 }
 
-// Aquarium + nonogram cache. Same shape as galaxies (stable key derived from
-// puzzle definition + 2D grid in localStorage), without the galaxies-lines
-// side-property. Lets the loop / Hint button reuse a once-solved puzzle
-// across reloads, and also fuels the per-type path fallbacks below.
-function aquariumCacheKey(data) {
-  if (!data || data.type !== 'aquarium') return null;
-  const r = (data.rowClues || []).join(',');
-  const c = (data.colClues || []).join(',');
-  const m = (data.regionMap || []).map(row => row.join('-')).join(';');
-  return 'aquarium-solution:' + data.rows + 'x' + data.cols + ':' + r + ':' + c + ':' + m;
-}
-
 function shikakuCacheKey(data) {
   if (data?.type !== 'shikaku') return null;
   let h = 0x811c9dc5;
@@ -338,7 +326,7 @@ if (typeof module !== 'undefined' && module.exports) {
     isSolutionCacheKey, pruneSolutionCache, isFreshSolutionEntry,
     galaxiesCacheKey, galaxiesPartialKey, galaxiesFailedKey,
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
-    aquariumCacheKey, shikakuCacheKey,
+    shikakuCacheKey,
     hashiCacheKey, slitherlinkCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,
