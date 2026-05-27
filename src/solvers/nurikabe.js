@@ -1233,6 +1233,15 @@ class NurikabeSolver {
         this.cellStatus[r * this.cols + c] = initialState[r][c];
       }
     }
+    // Re-assert clue cells as WHITE (value 2). The page doesn't track clue
+    // cells in cellStatus, so initialState always has them as UNKNOWN (0)
+    // even when the puzzle is mid-solve. Without this re-assert, the
+    // propagation rules (e.g. sea-connectivity) can deduce clue cells as
+    // BLACK and the hint output targets cells the page won't accept —
+    // Loop applies the no-op move forever (caught in 5x5-easy regression).
+    for (const clue of this.clues) {
+      this.cellStatus[clue.idx] = 2;
+    }
     const before = new Uint8Array(this.N);
     for (let i = 0; i < this.N; i++) before[i] = this.cellStatus[i];
     this.trail = [];
