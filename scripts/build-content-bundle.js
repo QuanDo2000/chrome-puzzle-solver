@@ -19,6 +19,7 @@ const WIDGET_FILES = [
   'puzzles/nonogram.js',
   'puzzles/binairo.js',
   'puzzles/hitori.js',
+  'puzzles/kakurasu.js',
   'puzzles/index.js',
 ];
 

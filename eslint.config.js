@@ -299,6 +299,9 @@ module.exports = [
         // src/widget/puzzles/hitori.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         hitori: 'readonly',
+        // src/widget/puzzles/kakurasu.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        kakurasu: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',

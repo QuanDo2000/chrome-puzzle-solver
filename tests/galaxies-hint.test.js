@@ -104,6 +104,7 @@ function loadWidgetSources() {
                         'puzzles/nonogram.js',
                         'puzzles/binairo.js',
                         'puzzles/hitori.js',
+                        'puzzles/kakurasu.js',
                         'puzzles/index.js'];
   for (const f of widgetOrder) {
     const fp = path.join(widgetDir, f);
