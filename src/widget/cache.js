@@ -176,8 +176,7 @@ function getCachedGridSolution(data) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) {
-    key = data?.type === 'aquarium' ? aquariumCacheKey(data)
-      : data?.type === 'shikaku' ? shikakuCacheKey(data)
+    key = data?.type === 'shikaku' ? shikakuCacheKey(data)
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : null;
@@ -213,8 +212,7 @@ function cacheGridSolution(data, grid) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) {
-    key = data?.type === 'aquarium' ? aquariumCacheKey(data)
-      : data?.type === 'shikaku' ? shikakuCacheKey(data)
+    key = data?.type === 'shikaku' ? shikakuCacheKey(data)
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : null;

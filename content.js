@@ -124,12 +124,6 @@ function solveExtraData() {
       task: data.task,
     };
   }
-  if (data.type === 'aquarium') {
-    return {
-      rowCluesFlat: data.rowClues, colCluesFlat: data.colClues,
-      regionMap: data.regionMap, rows: data.rows, cols: data.cols,
-    };
-  }
   if (data.type === 'galaxies') {
     return {
       stars: data.stars,
