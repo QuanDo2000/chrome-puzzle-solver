@@ -24,11 +24,10 @@
 //                      applyPartialResult dispatcher can route kakurasu
 //                      partial-solve timeouts into the generic grid
 //                      partial UI.
-//
-// Geometry references in preview.js (`isKakurasu`, `cellSizeDenC`,
-// `cellSizeDenR`, `wFull`, `hFull`) stay inline — Kakurasu needs an
-// (N+1)×(N+1) canvas to fit the clue rim and that cross-cutting
-// geometry awaits a Stage D `canvasDims` hook.
+//   canvasDims       — Kakurasu needs an (N+1)×(N+1) canvas to fit the
+//                      clue rim. Returns padRight=1, padBottom=1 so the
+//                      preview.js dispatcher expands wFull/hFull
+//                      accordingly. Stage D Task 5.
 
 const kakurasu = {
   type: 'kakurasu',
@@ -52,6 +51,10 @@ const kakurasu = {
 
   staticSig(data) {
     return 'ka=' + _kakurasuCluesSig(data?.rowClues, data?.colClues);
+  },
+
+  canvasDims(pd, { grid }) {
+    return { rows: grid.length, cols: grid[0]?.length || 0, padRight: 1, padBottom: 1 };
   },
 
   drawStaticLayer(ctx, { rows, cols, cellSize, pd }) {

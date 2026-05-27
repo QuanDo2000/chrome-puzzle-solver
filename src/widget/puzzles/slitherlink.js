@@ -47,6 +47,9 @@
 //                      so the Hint chain should not block on the
 //                      background autoSolve (which can take 30 s on hard
 //                      30×30 dailies while propagation returns in ~1 ms).
+//   canvasDims       — rows/cols come from puzzleData when present, with
+//                      a fallback to grid.horizontal's dimensions (the
+//                      H/V arrays imply them). Stage D Task 5.
 //
 // No drawPreviewCell hook: Slitherlink is edge-based and doesn't render
 // per-cell. The inline `isSlitherlink` edge-rendering branch in
@@ -78,6 +81,13 @@ const slitherlink = {
 
   staticSig(data) {
     return 'sl=' + _slitherlinkCluesSig(data?.type === 'slitherlink' ? data?.task : null);
+  },
+
+  canvasDims(pd, { grid }) {
+    return {
+      rows: pd?.rows || (grid.horizontal ? grid.horizontal.length - 1 : 0),
+      cols: pd?.cols || (grid.horizontal ? (grid.horizontal[0] || []).length : 0),
+    };
   },
 
   drawStaticLayer(ctx, { rows, cols, cellSize, pd }) {

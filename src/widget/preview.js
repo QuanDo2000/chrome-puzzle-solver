@@ -263,31 +263,30 @@ let lastDrawSig = null;
 let previewWrap = null;
 
 function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
-  const isSlitherlink = puzzleData?.type === 'slitherlink';
-  const isHashi = puzzleData?.type === 'hashi';
-  // Hashi's "grid" is { edges }: no 2D extent, so rows/cols come from
-  // puzzleData.{rows,cols}. Slitherlink also takes rows/cols from puzzleData
-  // when present (the H/V arrays imply them, but pd is authoritative).
-  let rows, cols;
-  if (isHashi) {
-    rows = puzzleData?.rows || 0;
-    cols = puzzleData?.cols || 0;
-  } else if (isSlitherlink) {
-    rows = puzzleData?.rows || (grid.horizontal ? grid.horizontal.length - 1 : 0);
-    cols = puzzleData?.cols || (grid.horizontal ? (grid.horizontal[0] || []).length : 0);
-  } else {
-    rows = grid.length;
-    cols = grid[0].length;
-  }
-  const isKakurasu = puzzleData?.type === 'kakurasu';
-  // Kakurasu needs a (cols+1)×(rows+1) canvas: N×N play grid plus a right
-  // column for row clues and a bottom row for column clues.
-  const cellSizeDenC = isKakurasu ? cols + 1 : cols;
-  const cellSizeDenR = isKakurasu ? rows + 1 : rows;
+  // Stage D Task 5: canvasDims hook collapses the geometry chain.
+  // Non-default modules (hashi, slitherlink, kakurasu) provide a
+  // canvasDims(pd, { grid }) returning {rows, cols, padRight?, padBottom?}.
+  // padRight/padBottom (default 0) are EXTRA cells added to the canvas —
+  // kakurasu uses padRight=1, padBottom=1 for its (N+1)×(N+1) clue rim.
+  const dimsReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+  const dims = dimsReg?.canvasDims
+    ? dimsReg.canvasDims(puzzleData, { grid })
+    : { rows: grid.length, cols: grid[0]?.length || 0, padRight: 0, padBottom: 0 };
+  const rows = dims.rows;
+  const cols = dims.cols;
+  const padRight = dims.padRight || 0;
+  const padBottom = dims.padBottom || 0;
+  const cellSizeDenC = cols + padRight;
+  const cellSizeDenR = rows + padBottom;
   const cellSize = Math.min(Math.floor((bodyWidth - 4) / cellSizeDenC), Math.floor(350 / cellSizeDenR), 24);
   const w = cols * cellSize, h = rows * cellSize;
-  const wFull = isKakurasu ? (cols + 1) * cellSize : w;
-  const hFull = isKakurasu ? (rows + 1) * cellSize : h;
+  const wFull = (cols + padRight) * cellSize;
+  const hFull = (rows + padBottom) * cellSize;
+  // Type-discriminator consts still consumed at other sites in renderPreview
+  // (cell-loop gates, dynamic-render arms, mistake-overlay branches).
+  const isSlitherlink = puzzleData?.type === 'slitherlink';
+  const isHashi = puzzleData?.type === 'hashi';
+  const isKakurasu = puzzleData?.type === 'kakurasu';
 
   // Idempotent: ensure the preview is visible whether or not we redraw.
   previewWrap.classList.add('ns-visible');

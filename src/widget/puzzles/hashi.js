@@ -43,6 +43,8 @@
 //                      live board via solver.getStepwiseHint; it doesn't
 //                      need puzzleData.solution, so the Hint chain should
 //                      not block on the background autoSolve.
+//   canvasDims       — Hashi's "grid" is { edges } with no 2D extent;
+//                      rows/cols come from puzzleData. Stage D Task 5.
 //
 // No drawPreviewCell hook: Hashi doesn't render anything per-cell — the
 // bridges are drawn in the inline isHashi block in renderPreview (kept).
@@ -77,6 +79,10 @@ const hashi = {
 
   staticSig(data) {
     return 'hi=' + _hashiIslandsSig(data?.islands);
+  },
+
+  canvasDims(pd) {
+    return { rows: pd?.rows || 0, cols: pd?.cols || 0 };
   },
 
   drawStaticLayer(ctx, { cellSize, pd }) {
