@@ -14,6 +14,7 @@ if (typeof kakurasu !== 'undefined') PUZZLES[kakurasu.type] = kakurasu;
 if (typeof kurodoko !== 'undefined') PUZZLES[kurodoko.type] = kurodoko;
 if (typeof mosaic !== 'undefined') PUZZLES[mosaic.type] = mosaic;
 if (typeof norinori !== 'undefined') PUZZLES[norinori.type] = norinori;
+if (typeof nurikabe !== 'undefined') PUZZLES[nurikabe.type] = nurikabe;
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { PUZZLES };

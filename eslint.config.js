@@ -303,6 +303,9 @@ module.exports = [
         // src/widget/puzzles/norinori.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         norinori: 'readonly',
+        // src/widget/puzzles/nurikabe.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        nurikabe: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',

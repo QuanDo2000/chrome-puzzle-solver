@@ -23,6 +23,7 @@ const WIDGET_FILES = [
   'puzzles/kurodoko.js',
   'puzzles/mosaic.js',
   'puzzles/norinori.js',
+  'puzzles/nurikabe.js',
   'puzzles/index.js',
 ];
 
