@@ -24,6 +24,7 @@ const WIDGET_FILES = [
   'puzzles/mosaic.js',
   'puzzles/norinori.js',
   'puzzles/nurikabe.js',
+  'puzzles/heyawake.js',
   'puzzles/index.js',
 ];
 
