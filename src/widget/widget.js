@@ -831,6 +831,14 @@ function makeWidget() {
     const state1 = await readGridState();
     if (state1?.success) drawPreview(state1.grid);
 
+    // No-progress guard: if two iterations in a row compute the SAME hint
+    // (i.e. apply went through but the page state didn't update), break with
+    // a diagnostic instead of spinning forever. Catches the Hashi/page-state
+    // mismatch where applyHashiState writes succeed but cellStatus mirrors
+    // don't reflect the new bridge counts on the next read.
+    let lastHintSig = '';
+    let stalledIters = 0;
+
     while (true) {
       if (stopLooping) break;
       const gs = await readGridState();
@@ -873,6 +881,23 @@ function makeWidget() {
       if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && hr.hint?.type !== 'kurodoko' && hr.hint?.type !== 'mosaic' && hr.hint?.type !== 'norinori' && hr.hint?.type !== 'nurikabe' && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
+      // No-progress check: if this hint is identical to the previous one,
+      // the prior apply didn't propagate visibly to the page (or the page
+      // silently rejected it). Surface a clear status and break instead of
+      // looping forever.
+      const hintSig = h.type + '|' + JSON.stringify(
+        h.edges || h.cells || h.extraCells || h.lines || []
+      );
+      if (hintSig === lastHintSig) {
+        stalledIters++;
+        if (stalledIters >= 2) {
+          setStatus(`Loop stalled — same hint repeating. Stopped after ${steps} step${steps !== 1 ? 's' : ''}.`, 'info');
+          break;
+        }
+      } else {
+        stalledIters = 0;
+        lastHintSig = hintSig;
+      }
       // getHint may lazily solve as a fallback (galaxies + aquarium);
       // persist the returned solution so subsequent iterations skip the
       // solver call. Galaxies attaches a memoized _galaxyPath; aquarium
