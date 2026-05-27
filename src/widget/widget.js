@@ -189,8 +189,6 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...reg.hintStatusNodes(h, { bold }));
     } else if (h.type === 'galaxies') {
       setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
-    } else if (puzzleData?.type === 'shikaku') {
-      setStatusNodes('info', prefix, ...shikakuHintStatusNodes(h));
     } else if (puzzleData?.type === 'slitherlink') {
       setStatusNodes('info', prefix, ...slitherlinkHintStatusNodes(h));
     } else if (puzzleData?.type === 'hashi') {
@@ -198,18 +196,6 @@ function makeWidget() {
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
-  }
-
-  function shikakuHintStatusNodes(h) {
-    const total = (h.cells?.length || 0) + (h.extraCells?.length || 0);
-    if (total === 0) return ['No hint available'];
-    if (h.clue) {
-      return [
-        'Draw the ', bold(`${h.clue.area}`), '-cell rectangle for the clue at ',
-        bold(`(row ${h.clue.row + 1}, col ${h.clue.col + 1})`),
-      ];
-    }
-    return [bold(String(total)), ' cells can be deduced'];
   }
 
   function slitherlinkHintStatusNodes(h) {
@@ -903,8 +889,6 @@ function makeWidget() {
         } else {
           gsComplete = false;
         }
-      } else if (puzzleData.type === 'shikaku') {
-        gsComplete = gs.grid.every(row => row.every(c => c !== -1));
       } else if (puzzleData.type === 'hashi') {
         // gs.grid for hashi is { edges } from hashiHandler.readState, not a
         // 2D cell array; route through hashiDoneCheck (matches the post-loop

@@ -103,13 +103,6 @@ function solveExtraData() {
   if (!data) return null;
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
   if (reg?.solveExtraData) return reg.solveExtraData(data);
-  if (data.type === 'shikaku') {
-    return {
-      rows: data.rows,
-      cols: data.cols,
-      clues: data.clues,
-    };
-  }
   if (data.type === 'hashi') {
     return {
       rows: data.rows,

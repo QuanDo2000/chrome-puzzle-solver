@@ -40,16 +40,6 @@ function regionMapSig(rm) {
   return h;
 }
 
-function shikakuCluesSig(clues) {
-  if (!Array.isArray(clues) || clues.length === 0) return '0';
-  let h = 0x811c9dc5;
-  for (const k of clues) {
-    h ^= (k.row | 0) * 65537 + (k.col | 0) * 31 + (k.area | 0);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(36);
-}
-
 function slitherlinkCluesSig(task) {
   if (!Array.isArray(task)) return '';
   let h = 0x811c9dc5;
@@ -181,9 +171,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
       ctx.fill();
     }
   }
-  if (pd?.type === 'shikaku' && Array.isArray(pd.clues)) {
-    drawShikakuCluesOn(ctx, cellSize, pd.clues);
-  }
   if (pd?.type === 'hashi' && Array.isArray(pd.islands)) {
     drawHashiIslandsOn(ctx, cellSize, pd.islands);
   }
@@ -214,25 +201,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
     }
   }
   return c;
-}
-
-function drawShikakuCluesOn(ctx, cellSize, clues) {
-  const fontSize = Math.max(10, Math.floor(cellSize * 0.5));
-  ctx.save();
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#fff';
-  ctx.fillStyle = '#111827';
-  for (const k of clues) {
-    const x = k.col * cellSize + cellSize / 2;
-    const y = k.row * cellSize + cellSize / 2;
-    const ch = String(k.area);
-    ctx.strokeText(ch, x, y);
-    ctx.fillText(ch, x, y);
-  }
-  ctx.restore();
 }
 
 // Numbered island circles for hashi. Cached in the static layer (island set
@@ -441,7 +409,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
                       '|rm=' + regionMapSig(pd?.regionMap) +
                       '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
-                      '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null);
   }
@@ -614,12 +581,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
           });
           continue;
         }
-        if (isShikaku) {
-          if (v >= 0) {
-            ctx.fillStyle = galaxiesColors[v % galaxiesColors.length];
-            ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
-          }
-        } else if (puzzleData?.type === 'galaxies' && v > 0) {
+        if (puzzleData?.type === 'galaxies' && v > 0) {
           ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
           ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
         } else if (v === 1) {
@@ -916,11 +878,11 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     hintIdCounter, hintIdCache,
     hintSig, FNV_OFFSET, FNV_PRIME,
-    regionMapSig, shikakuCluesSig,
+    regionMapSig,
     slitherlinkCluesSig, hashiIslandsSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
-    drawShikakuCluesOn, drawHashiIslandsOn,
+    drawHashiIslandsOn,
     drawHeyawakeRoomsOn, drawRegionBordersOn,
     latticeLayer, staticLayer, staticLayerSig,
     renderPreview,
