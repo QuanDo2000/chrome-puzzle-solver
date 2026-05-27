@@ -40,19 +40,6 @@ function regionMapSig(rm) {
   return h;
 }
 
-function slitherlinkCluesSig(task) {
-  if (!Array.isArray(task)) return '';
-  let h = 0x811c9dc5;
-  for (let r = 0; r < task.length; r++) {
-    const row = task[r] || [];
-    for (let c = 0; c < row.length; c++) {
-      h ^= (row[c] | 0) + 2;
-      h = Math.imul(h, 0x01000193) >>> 0;
-    }
-  }
-  return (h >>> 0).toString(16);
-}
-
 function gridDataSig(grid) {
   // Hashi grids: { edges: [...] }. No 2D state — bridges encode everything
   // visible. (No .horizontal/.vertical, so test before the slitherlink arm.)
@@ -156,32 +143,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
       ctx.beginPath();
       ctx.arc(cx, cy, Math.max(3, cellSize / 7), 0, Math.PI * 2);
       ctx.fill();
-    }
-  }
-  if (pd?.type === 'slitherlink') {
-    const dotR = Math.max(1.5, cellSize / 14);
-    ctx.fillStyle = '#1f2937';
-    for (let r = 0; r <= rows; r++) {
-      for (let c = 0; c <= cols; c++) {
-        ctx.beginPath();
-        ctx.arc(c * cellSize, r * cellSize, dotR, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    const fontPx = Math.max(8, Math.floor(cellSize * 0.55));
-    ctx.font = `bold ${fontPx}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#1f2937';
-    const task = pd.task || [];
-    for (let r = 0; r < rows; r++) {
-      const row = task[r] || [];
-      for (let c = 0; c < cols; c++) {
-        const v = row[c];
-        if (v === 0 || v === 1 || v === 2 || v === 3) {
-          ctx.fillText(String(v), c * cellSize + cellSize / 2, r * cellSize + cellSize / 2);
-        }
-      }
     }
   }
   return c;
@@ -364,9 +325,8 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                 '|' + staticSigReg.staticSig(pd);
   } else {
     staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
-                      '|rm=' + regionMapSig(pd?.regionMap) +
-                      '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
-                      '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null);
+                '|rm=' + regionMapSig(pd?.regionMap) +
+                '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '');
   }
   if (staticSig !== staticLayerSig) {
     latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull, pd);
@@ -835,7 +795,6 @@ if (typeof module !== 'undefined' && module.exports) {
     hintIdCounter, hintIdCache,
     hintSig, FNV_OFFSET, FNV_PRIME,
     regionMapSig,
-    slitherlinkCluesSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
     drawHeyawakeRoomsOn, drawRegionBordersOn,

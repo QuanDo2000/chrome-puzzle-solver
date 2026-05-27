@@ -221,24 +221,9 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...reg.hintStatusNodes(h, { bold, puzzleData }));
     } else if (h.type === 'galaxies') {
       setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
-    } else if (puzzleData?.type === 'slitherlink') {
-      setStatusNodes('info', prefix, ...slitherlinkHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
-  }
-
-  function slitherlinkHintStatusNodes(h) {
-    const total = h?.edges?.length || 0;
-    if (total === 0) return ['No hint available'];
-    if (total === 1) {
-      const e = h.edges[0];
-      const desc = e.orientation === 'h'
-        ? `the top of cell (row ${e.r + 1}, col ${e.c + 1}) / bottom of (row ${e.r}, col ${e.c + 1})`
-        : `the left of cell (row ${e.r + 1}, col ${e.c + 1}) / right of (row ${e.r + 1}, col ${e.c})`;
-      return ['Draw a line along ', bold(desc), '.'];
-    }
-    return [bold(String(total)), ' edges can be deduced'];
   }
 
   // Status + preview after a freshly computed hint. Used by hintHandler,
@@ -618,13 +603,13 @@ function makeWidget() {
     return result?.grid;
   }
 
-  // Partial-solution preview for slitherlink: when solve() times out on a
-  // hard board (e.g. the 50×40 monthly), the solver returns what propagation
-  // + lookahead could deduce as a partial. We show that as a preview the
-  // user can apply, with a clear "partial — continue manually" status.
-  // We deliberately do NOT call recordSolveSuccess: the partial is a subset
-  // of the real solution, so caching it would mis-trigger Loop's done-check
-  // and the mistake overlay.
+  // Partial-solution preview. Every puzzle that supports partial results
+  // declares a `partialResultArm` hook in src/widget/puzzles/<type>.js;
+  // most cell-state puzzles delegate to `applyGridPartialResult`, hashi
+  // delegates to `applyHashiPartialResult`, slitherlink runs its own
+  // edge-shape UI in the hook body. We deliberately do NOT call
+  // recordSolveSuccess: the partial is a subset of the real solution, so
+  // caching it would mis-trigger Loop's done-check and the mistake overlay.
   function applyPartialResult(result) {
     const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
     if (reg?.partialResultArm) {
@@ -635,20 +620,7 @@ function makeWidget() {
         setLoopConfirming: (v) => { loopConfirming = v; },
         setSolveBtnText: (t) => { solveBtn.textContent = t; },
       });
-      return;
     }
-    loopConfirming = false;
-    clearPendingHint();
-    solveBtn.textContent = 'Confirm';
-    confirming = true;
-    let lines = 0;
-    for (const row of result.horizontal) for (const v of row) if (v === 1) lines++;
-    for (const row of result.vertical)   for (const v of row) if (v === 1) lines++;
-    setStatus(
-      `Partial only: ${lines} edges deduced (board too hard for full solve). Apply, then finish manually.`,
-      'info',
-    );
-    drawPreview({ horizontal: result.horizontal, vertical: result.vertical });
   }
 
   // Hashi twin of applyPartialResult. Deliberately does NOT call
@@ -849,28 +821,6 @@ function makeWidget() {
         gsComplete = await regLoop.loopDoneCheck({
           boardState: gs.grid, solution: puzzleData.solution, puzzleData,
         });
-      } else if (puzzleData.type === 'slitherlink') {
-        const sol = puzzleData.solution;
-        if (sol?.horizontal && sol?.vertical) {
-          const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
-          const bh = edgeState?.horizontal || [];
-          const bv = edgeState?.vertical || [];
-          gsComplete = true;
-          outer: for (let r = 0; r < sol.horizontal.length; r++) {
-            for (let c = 0; c < (sol.horizontal[r]?.length || 0); c++) {
-              if (sol.horizontal[r][c] === 1 && bh[r]?.[c] !== 1) { gsComplete = false; break outer; }
-            }
-          }
-          if (gsComplete) {
-            outer2: for (let r = 0; r < sol.vertical.length; r++) {
-              for (let c = 0; c < (sol.vertical[r]?.length || 0); c++) {
-                if (sol.vertical[r][c] === 1 && bv[r]?.[c] !== 1) { gsComplete = false; break outer2; }
-              }
-            }
-          }
-        } else {
-          gsComplete = false;
-        }
       } else {
         gsComplete = gs.grid.every(row => row.every(c => c !== 0));
       }

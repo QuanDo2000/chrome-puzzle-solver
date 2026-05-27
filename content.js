@@ -103,13 +103,6 @@ function solveExtraData() {
   if (!data) return null;
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
   if (reg?.solveExtraData) return reg.solveExtraData(data);
-  if (data.type === 'slitherlink') {
-    return {
-      rows: data.rows,
-      cols: data.cols,
-      task: data.task,
-    };
-  }
   if (data.type === 'galaxies') {
     return {
       stars: data.stars,

@@ -105,29 +105,9 @@ function cacheGalaxiesSolution(data, grid) {
   } catch { /* quota or unavailable; pruneSolutionCache would no-op anyway */ }
 }
 
-function slitherlinkCacheKey(data) {
-  if (data?.type !== 'slitherlink') return null;
-  // FNV-1a over (nameplate, rows, cols, flattened task).
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x4C); // 'L' nameplate (Loop) so slitherlink keys don't collide
-  mix(data.rows | 0);
-  mix(data.cols | 0);
-  const t = data.task || [];
-  for (let r = 0; r < data.rows; r++) {
-    const row = t[r] || [];
-    for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
-  }
-  return 'slitherlink-solution:' + (h >>> 0).toString(16);
-}
-
 function getCachedGridSolution(data) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
-  let key = reg?.cacheKey ? reg.cacheKey(data) : null;
-  if (!key) {
-    key = data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
-      : null;
-  }
+  const key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) return null;
   try {
     const raw = localStorage.getItem(key);
@@ -157,11 +137,7 @@ function getCachedGridSolution(data) {
 
 function cacheGridSolution(data, grid) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
-  let key = reg?.cacheKey ? reg.cacheKey(data) : null;
-  if (!key) {
-    key = data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
-      : null;
-  }
+  const key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) return;
   try {
     if (data?.type === 'slitherlink') {
@@ -283,7 +259,6 @@ if (typeof module !== 'undefined' && module.exports) {
     isSolutionCacheKey, pruneSolutionCache, isFreshSolutionEntry,
     galaxiesCacheKey, galaxiesPartialKey, galaxiesFailedKey,
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
-    slitherlinkCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,
     countKnownCells, chooseInitialGrid,
