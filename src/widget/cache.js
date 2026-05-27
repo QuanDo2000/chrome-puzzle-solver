@@ -188,29 +188,6 @@ function slitherlinkCacheKey(data) {
   return 'slitherlink-solution:' + (h >>> 0).toString(16);
 }
 
-function heyawakeCacheKey(data) {
-  if (data?.type !== 'heyawake') return null;
-  // FNV-1a over (nameplate, rows, cols, flattened areas 2-D room-ID map).
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x57); // 'W' nameplate (heWawake) so heyawake keys can't collide
-  mix(data.rows | 0);
-  mix(data.cols | 0);
-  const areas = data.areas || [];
-  for (let r = 0; r < data.rows; r++) {
-    const row = areas[r] || [];
-    for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 1);
-  }
-  if (data.rooms) {
-    for (const room of data.rooms) {
-      const t = room.target;
-      h ^= (t + 1) & 0xff;
-      h = Math.imul(h, 0x01000193) >>> 0;
-    }
-  }
-  return 'heyawake-solution:' + (h >>> 0).toString(16);
-}
-
 function getCachedGridSolution(data) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
@@ -220,7 +197,6 @@ function getCachedGridSolution(data) {
       : data?.type === 'yinyang' ? yinYangCacheKey(data)
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
-      : data?.type === 'heyawake' ? heyawakeCacheKey(data)
       : null;
   }
   if (!key) return null;
@@ -259,7 +235,6 @@ function cacheGridSolution(data, grid) {
       : data?.type === 'yinyang' ? yinYangCacheKey(data)
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
-      : data?.type === 'heyawake' ? heyawakeCacheKey(data)
       : null;
   }
   if (!key) return;
@@ -385,7 +360,6 @@ if (typeof module !== 'undefined' && module.exports) {
     getCachedGalaxiesSolution, cacheGalaxiesSolution,
     aquariumCacheKey, shikakuCacheKey,
     hashiCacheKey, yinYangCacheKey, slitherlinkCacheKey,
-    heyawakeCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,
     countKnownCells, chooseInitialGrid,

@@ -146,13 +146,6 @@ function solveExtraData() {
       failedPartials: getFailedGalaxiesPartials(data),
     };
   }
-  if (data.type === 'heyawake') {
-    return {
-      rows: data.rows,
-      cols: data.cols,
-      rooms: data.rooms,
-    };
-  }
   return null;
 }
 

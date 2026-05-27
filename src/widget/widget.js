@@ -197,28 +197,9 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...slitherlinkHintStatusNodes(h));
     } else if (puzzleData?.type === 'hashi') {
       setStatusNodes('info', prefix, ...hashiHintStatusNodes(h));
-    } else if (puzzleData?.type === 'heyawake') {
-      setStatusNodes('info', prefix, ...heyawakeHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
-  }
-
-  // Heyawake hints carry absolute cells in extraCells (no row/column index
-  // — every hint is a flat list of forced cells from propagation).
-  // cellStatus 1 = black, 2 = white-mark; same encoding as Yin-Yang.
-  function heyawakeHintStatusNodes(h) {
-    const cells = h.extraCells || [];
-    if (cells.length === 0) return ['No hint available'];
-    if (cells.length === 1) {
-      const cell = cells[0];
-      const valueStr = cell.value === 1 ? 'black' : 'white';
-      return [
-        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
-        ' must be ', bold(valueStr),
-      ];
-    }
-    return [bold(String(cells.length)), ' cells can be deduced'];
   }
 
   function yinYangHintStatusNodes(h) {
@@ -534,7 +515,7 @@ function makeWidget() {
       // Generic 2D-grid partial: any cell-state puzzle (heyawake, hitori)
       // that emits {partial:true, grid:[...]} on timeout.
       if (result?.partial && puzzleData?.type === 'heyawake' && Array.isArray(result.grid)) {
-        applyGridPartialResult(result);
+        applyPartialResult(result);
         return;
       }
       if (result?.partial && puzzleData?.type === 'hitori' && Array.isArray(result.grid)) {

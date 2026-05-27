@@ -76,24 +76,6 @@ function hashiIslandsSig(islands) {
   return (h >>> 0).toString(36);
 }
 
-// Room-boundary (areas) + target-numbers stable signature for the heyawake static layer.
-function heyawakeAreasSig(areas, rooms) {
-  if (!Array.isArray(areas) || areas.length === 0) return '0';
-  let h = 0x811c9dc5;
-  for (const row of areas) {
-    for (const v of row) {
-      h ^= (v + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    }
-  }
-  if (Array.isArray(rooms)) {
-    for (const room of rooms) {
-      const t = room.target;
-      h ^= (t + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    }
-  }
-  return (h >>> 0).toString(36);
-}
-
 function gridDataSig(grid) {
   // Hashi grids: { edges: [...] }. No 2D state — bridges encode everything
   // visible. (No .horizontal/.vertical, so test before the slitherlink arm.)
@@ -230,9 +212,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
         }
       }
     }
-  }
-  if (pd?.type === 'heyawake' && Array.isArray(pd.areas)) {
-    drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, pd.rooms);
   }
   return c;
 }
@@ -464,8 +443,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                       '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
                       '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
-                      '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
-                      '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null);
+                      '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null);
   }
   if (staticSig !== staticLayerSig) {
     latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull, pd);
@@ -668,20 +646,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
         } else if (puzzleData?.type === 'galaxies' && v > 0) {
           ctx.fillStyle = galaxiesColors[(v - 1) % galaxiesColors.length];
           ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
-        } else if (puzzleData?.type === 'heyawake') {
-          // cellStatus 1 = black cell; 2 = white-marked (not black, confirmed
-          // empty). Render black as a solid dark fill; white-marker as a small
-          // grey dot at the cell centre so the player can see deduced empties.
-          if (v === 1) {
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(x, y, cellSize, cellSize);
-          } else if (v === 2) {
-            const dotR = Math.max(2, Math.floor(cellSize * 0.15));
-            ctx.fillStyle = '#9ca3af';
-            ctx.beginPath();
-            ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
-            ctx.fill();
-          }
         } else if (v === 1) {
           ctx.fillStyle = '#1f2937';
           ctx.fillRect(x, y, cellSize, cellSize);
@@ -978,7 +942,6 @@ if (typeof module !== 'undefined' && module.exports) {
     hintSig, FNV_OFFSET, FNV_PRIME,
     regionMapSig, shikakuCluesSig,
     slitherlinkCluesSig, hashiIslandsSig,
-    heyawakeAreasSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
     drawShikakuCluesOn, drawHashiIslandsOn,
