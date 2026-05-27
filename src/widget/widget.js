@@ -48,6 +48,20 @@ function hashiDoneCheck(currentState, solution) {
   return true;
 }
 
+// Human-readable description of a Galaxies hint's boundary line(s).
+//
+// Lifted to bundle scope (out of makeWidget) so puzzles/galaxies.js's
+// hintStatusNodes hook can reference it directly. The function is pure
+// (no closure state), so promotion is safe.
+function galaxiesHintLineDesc(h) {
+  const lines = h.lineHints || [h];
+  if (lines.length !== 1) return `${lines.length} boundary lines`;
+  const l = lines[0];
+  return l.orientation === 'horizontal'
+    ? `horizontal boundary below row ${l.row}, column ${l.col + 1}`
+    : `vertical boundary at row ${l.row + 1}, after column ${l.col}`;
+}
+
 function makeWidget() {
   const pref = loadWidgetPref();
   let expanded = pref.expanded !== false;
@@ -197,16 +211,6 @@ function makeWidget() {
     if (puzzleData) puzzleData.pendingHint = null;
     setHintLabel('Hint');
     q('[data-action="applyHint"]').disabled = true;
-  }
-
-  // Human-readable description of a Galaxies hint's boundary line(s).
-  function galaxiesHintLineDesc(h) {
-    const lines = h.lineHints || [h];
-    if (lines.length !== 1) return `${lines.length} boundary lines`;
-    const l = lines[0];
-    return l.orientation === 'horizontal'
-      ? `horizontal boundary below row ${l.row}, column ${l.col + 1}`
-      : `vertical boundary at row ${l.row + 1}, after column ${l.col}`;
   }
 
   // Returns an array of DOM nodes / strings describing a row/col nonogram hint,

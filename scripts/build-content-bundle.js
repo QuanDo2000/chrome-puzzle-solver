@@ -30,6 +30,7 @@ const WIDGET_FILES = [
   'puzzles/shikaku.js',
   'puzzles/hashi.js',
   'puzzles/slitherlink.js',
+  'puzzles/galaxies.js',
   'puzzles/index.js',
 ];
 

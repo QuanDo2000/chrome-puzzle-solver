@@ -112,6 +112,7 @@ function loadWidgetSources() {
                         'puzzles/heyawake.js',
                         'puzzles/yinyang.js',
                         'puzzles/slitherlink.js',
+                        'puzzles/galaxies.js',
                         'puzzles/index.js'];
   for (const f of widgetOrder) {
     const fp = path.join(widgetDir, f);
