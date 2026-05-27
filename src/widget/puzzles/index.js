@@ -20,6 +20,7 @@ if (typeof yinyang !== 'undefined') PUZZLES[yinyang.type] = yinyang;
 if (typeof aquarium !== 'undefined') PUZZLES[aquarium.type] = aquarium;
 if (typeof shikaku !== 'undefined') PUZZLES[shikaku.type] = shikaku;
 if (typeof hashi !== 'undefined') PUZZLES[hashi.type] = hashi;
+if (typeof slitherlink !== 'undefined') PUZZLES[slitherlink.type] = slitherlink;
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { PUZZLES };

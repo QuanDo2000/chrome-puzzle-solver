@@ -310,6 +310,9 @@ module.exports = [
         // src/widget/puzzles/hashi.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         hashi: 'readonly',
+        // src/widget/puzzles/slitherlink.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        slitherlink: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',

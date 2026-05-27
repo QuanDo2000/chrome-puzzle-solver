@@ -111,6 +111,7 @@ function loadWidgetSources() {
                         'puzzles/nurikabe.js',
                         'puzzles/heyawake.js',
                         'puzzles/yinyang.js',
+                        'puzzles/slitherlink.js',
                         'puzzles/index.js'];
   for (const f of widgetOrder) {
     const fp = path.join(widgetDir, f);
