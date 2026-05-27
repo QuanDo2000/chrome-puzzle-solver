@@ -131,6 +131,21 @@ const hashi = {
     return { solved: result?.solved, edges: result?.edges };
   },
 
+  // Cache-shape hooks (Stage D Task 4). Only the edges list is persisted —
+  // the `solved` flag from solutionFromResult is a runtime worker artifact
+  // that doesn't need to be stored. solutionFromCacheJson defensively clones
+  // each edge so a caller mutating one entry can't bleed back into the
+  // cached array.
+  solutionToCacheJson(solution) {
+    if (!solution || !Array.isArray(solution.edges)) return null;
+    return { edges: solution.edges };
+  },
+
+  solutionFromCacheJson(parsed) {
+    if (!parsed || !Array.isArray(parsed.edges)) return null;
+    return { edges: parsed.edges.map(e => ({ ...e })) };
+  },
+
   loopDoneCheck({ boardState, solution }) {
     return hashiDoneCheck(boardState, solution);
   },

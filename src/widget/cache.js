@@ -117,17 +117,11 @@ function getCachedGridSolution(data) {
       try { localStorage.removeItem(key); } catch { /* ignore */ }
       return null;
     }
-    if (data.type === 'slitherlink') {
-      if (!parsed?.horizontal || !parsed?.vertical) return null;
-      return {
-        horizontal: parsed.horizontal.map(row => row.slice()),
-        vertical: parsed.vertical.map(row => row.slice()),
-      };
+    if (reg?.solutionFromCacheJson) {
+      return reg.solutionFromCacheJson(parsed);
     }
-    if (data.type === 'hashi') {
-      if (!Array.isArray(parsed?.edges)) return null;
-      return { edges: parsed.edges.map(e => ({ ...e })) };
-    }
+    // Default: cell-state puzzles persist as { grid: 2D }. Clone rows so the
+    // caller can't mutate the parsed object's internals.
     if (!Array.isArray(parsed?.grid)) return null;
     return parsed.grid.map(row => row.slice());
   } catch {
@@ -140,20 +134,16 @@ function cacheGridSolution(data, grid) {
   const key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) return;
   try {
-    if (data?.type === 'slitherlink') {
-      if (!grid || !grid.horizontal || !grid.vertical) return;
-      localStorage.setItem(key, JSON.stringify({
-        horizontal: grid.horizontal, vertical: grid.vertical, savedAt: Date.now(),
-      }));
-    } else if (data?.type === 'hashi') {
-      if (!grid || !Array.isArray(grid.edges)) return;
-      localStorage.setItem(key, JSON.stringify({
-        edges: grid.edges, savedAt: Date.now(),
-      }));
+    let body;
+    if (reg?.solutionToCacheJson) {
+      body = reg.solutionToCacheJson(grid);
     } else {
-      if (!Array.isArray(grid)) return;
-      localStorage.setItem(key, JSON.stringify({ grid, savedAt: Date.now() }));
+      // Default: cell-state puzzles persist as { grid: 2D }.
+      body = Array.isArray(grid) ? { grid } : null;
     }
+    if (!body) return;
+    body.savedAt = Date.now();
+    localStorage.setItem(key, JSON.stringify(body));
     pruneSolutionCache();
   } catch { /* quota or unavailable */ }
 }

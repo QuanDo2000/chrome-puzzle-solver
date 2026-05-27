@@ -138,6 +138,23 @@ const slitherlink = {
     return { horizontal: result?.horizontal, vertical: result?.vertical };
   },
 
+  // Cache-shape hooks (Stage D Task 4). The cache.js dispatcher serializes
+  // whatever this returns and stamps `savedAt` itself. Returning null skips
+  // the write / treats the read as a miss. The read path defensively clones
+  // rows so the caller can't mutate the parsed object back into the cache.
+  solutionToCacheJson(solution) {
+    if (!solution || !solution.horizontal || !solution.vertical) return null;
+    return { horizontal: solution.horizontal, vertical: solution.vertical };
+  },
+
+  solutionFromCacheJson(parsed) {
+    if (!parsed?.horizontal || !parsed?.vertical) return null;
+    return {
+      horizontal: parsed.horizontal.map(row => row.slice()),
+      vertical: parsed.vertical.map(row => row.slice()),
+    };
+  },
+
   async loopDoneCheck({ solution, puzzleData }) {
     if (!solution?.horizontal || !solution?.vertical) return false;
     const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
