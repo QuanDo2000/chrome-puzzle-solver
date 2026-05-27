@@ -211,16 +211,6 @@ function heyawakeCacheKey(data) {
   return 'heyawake-solution:' + (h >>> 0).toString(16);
 }
 
-function nurikabeCacheKey(data) {
-  if (data?.type !== 'nurikabe' || !data.task) return null;
-  let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-  mix(0x4F); // distinct from Norinori (0x4E)
-  mix(data.rows); mix(data.cols);
-  for (const row of data.task) for (const v of row) { mix(v & 0xff); mix((v >>> 8) & 0xff); }
-  return 'nurikabe-solution:' + (h >>> 0).toString(16);
-}
-
 function getCachedGridSolution(data) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
@@ -231,7 +221,6 @@ function getCachedGridSolution(data) {
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : data?.type === 'heyawake' ? heyawakeCacheKey(data)
-      : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
       : null;
   }
   if (!key) return null;
@@ -271,7 +260,6 @@ function cacheGridSolution(data, grid) {
       : data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
       : data?.type === 'hashi' ? hashiCacheKey(data)
       : data?.type === 'heyawake' ? heyawakeCacheKey(data)
-      : data?.type === 'nurikabe' ? nurikabeCacheKey(data)
       : null;
   }
   if (!key) return;
@@ -398,7 +386,6 @@ if (typeof module !== 'undefined' && module.exports) {
     aquariumCacheKey, shikakuCacheKey,
     hashiCacheKey, yinYangCacheKey, slitherlinkCacheKey,
     heyawakeCacheKey,
-    nurikabeCacheKey,
     getCachedGridSolution, cacheGridSolution,
     puzzlePartialKey, getCachedPartial, cachePartial, clearPartial,
     countKnownCells, chooseInitialGrid,

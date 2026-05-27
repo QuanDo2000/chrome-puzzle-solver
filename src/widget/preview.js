@@ -76,16 +76,6 @@ function hashiIslandsSig(islands) {
   return (h >>> 0).toString(36);
 }
 
-function nurikabeTaskSig(task) {
-  if (!task) return '0';
-  let h = 0x811c9dc5;
-  for (const row of task) for (const v of row) {
-    h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    h ^= (v >>> 8) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(16);
-}
-
 // Room-boundary (areas) + target-numbers stable signature for the heyawake static layer.
 function heyawakeAreasSig(areas, rooms) {
   if (!Array.isArray(areas) || areas.length === 0) return '0';
@@ -173,36 +163,6 @@ function buildLatticeLayer(rows, cols, cellSize, w, h, pd) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
   if (reg?.customLattice && reg.drawLattice) {
     reg.drawLattice(ctx, { rows, cols, cellSize, w, h, pd });
-    return c;
-  }
-  // Nurikabe boards can have wall cells (task[r][c] === -2) — off-board
-  // regions that the page renders blank. Draw per-edge so wall areas have
-  // no grid lines through them; edges between a wall and a real cell are
-  // still drawn (showing the board boundary).
-  const isWall = (r, cc) =>
-    pd?.type === 'nurikabe' &&
-    r >= 0 && r < rows && cc >= 0 && cc < cols &&
-    pd.task?.[r]?.[cc] === -2;
-  if (pd?.type === 'nurikabe') {
-    ctx.beginPath();
-    for (let r = 0; r < rows; r++) {
-      for (let cc = 0; cc < cols; cc++) {
-        if (isWall(r, cc)) continue;
-        const x = cc * cellSize;
-        const y = r * cellSize;
-        // Top edge: draw if cell above is wall or out of bounds, OR always
-        // draw (the neighbouring non-wall cell will also draw it — overlap
-        // is harmless).
-        ctx.moveTo(x, y); ctx.lineTo(x + cellSize, y);
-        // Left edge.
-        ctx.moveTo(x, y); ctx.lineTo(x, y + cellSize);
-        // Bottom edge.
-        ctx.moveTo(x, y + cellSize); ctx.lineTo(x + cellSize, y + cellSize);
-        // Right edge.
-        ctx.moveTo(x + cellSize, y); ctx.lineTo(x + cellSize, y + cellSize);
-      }
-    }
-    ctx.stroke();
     return c;
   }
   ctx.beginPath();
@@ -505,8 +465,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                       '|sk=' + shikakuCluesSig(pd?.type === 'shikaku' ? pd.clues : null) +
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
-                      '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
-                      '|nu=' + nurikabeTaskSig(pd?.type === 'nurikabe' ? pd.task : null);
+                      '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null);
   }
   if (staticSig !== staticLayerSig) {
     latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull, pd);
@@ -722,27 +681,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
             ctx.beginPath();
             ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
             ctx.fill();
-          }
-        } else if (isNurikabe) {
-          // Skip clue cells — page renders them as their own DOM node.
-          // Skip wall cells (task === -2) — off-board, page renders them inert.
-          const taskVal = puzzleData?.task?.[r]?.[c];
-          if (typeof taskVal === 'number' && (taskVal > 0 || taskVal === -2)) {
-            // leave page's clue/wall cell visible (no overdraw)
-          } else if (v === 1) {
-            const pad = Math.max(2, Math.floor(cellSize * 0.1));
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(x + pad, y + pad, cellSize - 2 * pad, cellSize - 2 * pad);
-          } else if (v === 2) {
-            const pad = Math.max(3, Math.floor(cellSize * 0.25));
-            ctx.strokeStyle = '#9ca3af';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x + pad, y + pad);
-            ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
-            ctx.moveTo(x + cellSize - pad, y + pad);
-            ctx.lineTo(x + pad, y + cellSize - pad);
-            ctx.stroke();
           }
         } else if (v === 1) {
           ctx.fillStyle = '#1f2937';
@@ -1040,7 +978,7 @@ if (typeof module !== 'undefined' && module.exports) {
     hintSig, FNV_OFFSET, FNV_PRIME,
     regionMapSig, shikakuCluesSig,
     slitherlinkCluesSig, hashiIslandsSig,
-    nurikabeTaskSig, heyawakeAreasSig,
+    heyawakeAreasSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
     drawShikakuCluesOn, drawHashiIslandsOn,
