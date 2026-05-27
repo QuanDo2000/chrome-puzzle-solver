@@ -199,8 +199,6 @@ function makeWidget() {
       setStatusNodes('info', prefix, ...hashiHintStatusNodes(h));
     } else if (puzzleData?.type === 'heyawake') {
       setStatusNodes('info', prefix, ...heyawakeHintStatusNodes(h));
-    } else if (puzzleData?.type === 'kakurasu') {
-      setStatusNodes('info', prefix, ...kakurasuHintStatusNodes(h));
     } else if (puzzleData?.type === 'kurodoko') {
       setStatusNodes('info', prefix, ...kurodokoHintStatusNodes(h));
     } else if (puzzleData?.type === 'mosaic') {
@@ -223,22 +221,6 @@ function makeWidget() {
     if (cells.length === 1) {
       const cell = cells[0];
       const valueStr = cell.value === 1 ? 'black' : 'white';
-      return [
-        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
-        ' must be ', bold(valueStr),
-      ];
-    }
-    return [bold(String(cells.length)), ' cells can be deduced'];
-  }
-
-  // Kakurasu hints carry absolute cells in extraCells.
-  // cellStatus 1 = filled (black), 2 = empty (white).
-  function kakurasuHintStatusNodes(h) {
-    const cells = h.extraCells || [];
-    if (cells.length === 0) return ['No hint available'];
-    if (cells.length === 1) {
-      const cell = cells[0];
-      const valueStr = cell.value === 1 ? 'filled' : 'empty';
       return [
         'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
         ' must be ', bold(valueStr),
@@ -632,7 +614,7 @@ function makeWidget() {
         return;
       }
       if (result?.partial && puzzleData?.type === 'kakurasu' && Array.isArray(result.grid)) {
-        applyGridPartialResult(result);
+        applyPartialResult(result);
         return;
       }
       if (result?.partial && puzzleData?.type === 'kurodoko' && Array.isArray(result.grid)) {

@@ -76,14 +76,6 @@ function hashiIslandsSig(islands) {
   return (h >>> 0).toString(36);
 }
 
-function kakurasuCluesSig(rowClues, colClues) {
-  if (!rowClues || !colClues) return '0';
-  let h = 0x811c9dc5;
-  for (const v of rowClues) { h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0; }
-  for (const v of colClues) { h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0; }
-  return (h >>> 0).toString(16);
-}
-
 function kurodokoTaskSig(task) {
   if (!task) return '0';
   let h = 0x811c9dc5;
@@ -313,31 +305,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
     // Norinori has the same room-boundary structure as Heyawake but no
     // target numbers — call the shared helper with rooms=null.
     drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, null);
-  }
-  if (pd?.type === 'kakurasu' && Array.isArray(pd.rowClues) && Array.isArray(pd.colClues)) {
-    // Outer border of the N×N playing area.
-    const borderW = Math.max(2, Math.floor(cellSize / 5));
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = borderW;
-    ctx.lineCap = 'square';
-    ctx.strokeRect(borderW / 2, borderW / 2, cols * cellSize - borderW, rows * cellSize - borderW);
-    // Row clues on the right edge: cell at (r, cols).
-    const fontPx = Math.max(8, Math.floor(cellSize * 0.5));
-    ctx.font = `bold ${fontPx}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#1f2937';
-    for (let r = 0; r < rows; r++) {
-      const cx = cols * cellSize + cellSize / 2;
-      const cy = r * cellSize + cellSize / 2;
-      ctx.fillText(String(pd.rowClues[r]), cx, cy);
-    }
-    // Column clues on the bottom edge: cell at (rows, c).
-    for (let cc = 0; cc < cols; cc++) {
-      const cx = cc * cellSize + cellSize / 2;
-      const cy = rows * cellSize + cellSize / 2;
-      ctx.fillText(String(pd.colClues[cc]), cx, cy);
-    }
   }
   if (pd?.type === 'kurodoko') {
     // Outer border only — clue digits are on the dynamic layer (cell
@@ -589,7 +556,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
                       '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
-                      '|ka=' + kakurasuCluesSig(pd?.type === 'kakurasu' ? pd.rowClues : null, pd?.type === 'kakurasu' ? pd.colClues : null) +
                       '|kd=' + kurodokoTaskSig(pd?.type === 'kurodoko' ? pd.task : null) +
                       '|mc=' + mosaicTaskSig(pd?.type === 'mosaic' ? pd.task : null) +
                       '|nn=' + norinoriAreasSig(pd?.type === 'norinori' ? pd.areas : null) +
@@ -809,25 +775,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
             ctx.beginPath();
             ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
             ctx.fill();
-          }
-        } else if (isKakurasu) {
-          // Kakurasu: v=1 filled (dark square inset), v=2 crossed (two
-          // diagonal strokes), v=0 unknown (empty — handled by early-bail
-          // check above but also fine to fall through to nothing).
-          if (v === 1) {
-            const pad = Math.max(2, Math.floor(cellSize * 0.1));
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(x + pad, y + pad, cellSize - 2 * pad, cellSize - 2 * pad);
-          } else if (v === 2) {
-            const pad = Math.max(3, Math.floor(cellSize * 0.25));
-            ctx.strokeStyle = '#9ca3af';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x + pad, y + pad);
-            ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
-            ctx.moveTo(x + cellSize - pad, y + pad);
-            ctx.lineTo(x + pad, y + cellSize - pad);
-            ctx.stroke();
           }
         } else if (isKurodoko) {
           // Kurodoko: every cell shows clue digit if it's a clue cell.
@@ -1224,7 +1171,7 @@ if (typeof module !== 'undefined' && module.exports) {
     hintSig, FNV_OFFSET, FNV_PRIME,
     regionMapSig, shikakuCluesSig,
     slitherlinkCluesSig, hashiIslandsSig,
-    kakurasuCluesSig, kurodokoTaskSig, mosaicTaskSig,
+    kurodokoTaskSig, mosaicTaskSig,
     norinoriAreasSig, nurikabeTaskSig, heyawakeAreasSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,

@@ -153,9 +153,6 @@ function solveExtraData() {
       rooms: data.rooms,
     };
   }
-  if (data.type === 'kakurasu') {
-    return { rows: data.rows, cols: data.cols, rowClues: data.rowClues, colClues: data.colClues };
-  }
   if (data.type === 'kurodoko') {
     return { rows: data.rows, cols: data.cols, task: data.task };
   }
