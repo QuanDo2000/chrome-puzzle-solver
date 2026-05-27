@@ -975,16 +975,45 @@ function applyHashiState(edges) {
       G.saveState(true);
     }
     var cs = G.currentState.cellStatus;
-    // Reset all bridge counts first.
+    // Pre-compute neighbor topology from owner-side `right`/`bottom`
+    // references. The page initializes bl/bt/bb/br = -1 for cells with
+    // no neighbor on that side, but some puzzles-mobile.com Hashi pages
+    // corrupt these sentinels during the render ladder after writes
+    // (observed on 7x7-easy: after applying bridges to an island that
+    // owns BOTH a right and a bottom edge, its bl/bt flip from -1 to
+    // match its outgoing bridge counts). The corrupted total then puts
+    // the island in an "over-target" state that breaks subsequent Loop
+    // iterations. Re-derive the canonical topology each apply and force
+    // the -1 sentinel back, instead of preserving whatever value the
+    // last render left behind.
+    var hasLeft = new Array(cs.length);
+    var hasTop = new Array(cs.length);
+    var hasRight = new Array(cs.length);
+    var hasBottom = new Array(cs.length);
+    for (var ti = 0; ti < cs.length; ti++) {
+      var tc = cs[ti];
+      if (!tc) continue;
+      if (tc.right && typeof tc.right.index === 'number') {
+        hasRight[ti] = true;
+        hasLeft[tc.right.index] = true;
+      }
+      if (tc.bottom && typeof tc.bottom.index === 'number') {
+        hasBottom[ti] = true;
+        hasTop[tc.bottom.index] = true;
+      }
+    }
+    // Reset all bridge counts first. Mirrors get the topology-derived
+    // sentinel: -1 if no neighbour on that side, 0 if a neighbour exists
+    // but currently no bridge drawn.
     for (var id = 0; id < cs.length; id++) {
       var cell = cs[id];
       if (!cell) continue;
       if (cell.right) cell.right.bridges = 0;
       if (cell.bottom) cell.bottom.bridges = 0;
-      if (cell.bl !== -1) cell.bl = 0;
-      if (cell.bt !== -1) cell.bt = 0;
-      if (cell.bb !== -1) cell.bb = 0;
-      if (cell.br !== -1) cell.br = 0;
+      cell.bl = hasLeft[id] ? 0 : -1;
+      cell.bt = hasTop[id] ? 0 : -1;
+      cell.bb = hasBottom[id] ? 0 : -1;
+      cell.br = hasRight[id] ? 0 : -1;
     }
     // Apply edges. Owner is determined by POSITION, NOT by numeric index:
     // - H edge: owner is the LEFT island (smaller col); only LEFT has a
