@@ -76,15 +76,6 @@ function hashiIslandsSig(islands) {
   return (h >>> 0).toString(36);
 }
 
-function norinoriAreasSig(areas) {
-  if (!areas) return '0';
-  let h = 0x811c9dc5;
-  for (const row of areas) for (const v of row) {
-    h ^= (v + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(16);
-}
-
 function nurikabeTaskSig(task) {
   if (!task) return '0';
   let h = 0x811c9dc5;
@@ -282,11 +273,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
   }
   if (pd?.type === 'heyawake' && Array.isArray(pd.areas)) {
     drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, pd.rooms);
-  }
-  if (pd?.type === 'norinori' && Array.isArray(pd.areas)) {
-    // Norinori has the same room-boundary structure as Heyawake but no
-    // target numbers — call the shared helper with rooms=null.
-    drawHeyawakeRoomsOn(ctx, rows, cols, cellSize, pd.areas, null);
   }
   return c;
 }
@@ -520,7 +506,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                       '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
                       '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null) +
                       '|hy=' + heyawakeAreasSig(pd?.type === 'heyawake' ? pd.areas : null, pd?.type === 'heyawake' ? pd.rooms : null) +
-                      '|nn=' + norinoriAreasSig(pd?.type === 'norinori' ? pd.areas : null) +
                       '|nu=' + nurikabeTaskSig(pd?.type === 'nurikabe' ? pd.task : null);
   }
   if (staticSig !== staticLayerSig) {
@@ -737,24 +722,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
             ctx.beginPath();
             ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
             ctx.fill();
-          }
-        } else if (isNorinori) {
-          // Norinori: v=1 = black cell (solid dark fill inset); v=2 = crossed
-          // empty (diagonal cross in muted gray); v=0 = unknown (blank).
-          if (v === 1) {
-            const pad = Math.max(2, Math.floor(cellSize * 0.1));
-            ctx.fillStyle = '#1f2937';
-            ctx.fillRect(x + pad, y + pad, cellSize - 2 * pad, cellSize - 2 * pad);
-          } else if (v === 2) {
-            const pad = Math.max(3, Math.floor(cellSize * 0.25));
-            ctx.strokeStyle = '#9ca3af';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x + pad, y + pad);
-            ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
-            ctx.moveTo(x + cellSize - pad, y + pad);
-            ctx.lineTo(x + pad, y + cellSize - pad);
-            ctx.stroke();
           }
         } else if (isNurikabe) {
           // Skip clue cells — page renders them as their own DOM node.
@@ -1073,7 +1040,7 @@ if (typeof module !== 'undefined' && module.exports) {
     hintSig, FNV_OFFSET, FNV_PRIME,
     regionMapSig, shikakuCluesSig,
     slitherlinkCluesSig, hashiIslandsSig,
-    norinoriAreasSig, nurikabeTaskSig, heyawakeAreasSig,
+    nurikabeTaskSig, heyawakeAreasSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
     drawShikakuCluesOn, drawHashiIslandsOn,

@@ -153,9 +153,6 @@ function solveExtraData() {
       rooms: data.rooms,
     };
   }
-  if (data.type === 'norinori') {
-    return { rows: data.rows, cols: data.cols, rooms: data.rooms };
-  }
   if (data.type === 'nurikabe') {
     return { rows: data.rows, cols: data.cols, task: data.task };
   }
