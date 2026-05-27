@@ -223,8 +223,6 @@ function makeWidget() {
       setStatusNodes('info', prefix, 'Draw the ', bold(galaxiesHintLineDesc(h)), '.');
     } else if (puzzleData?.type === 'slitherlink') {
       setStatusNodes('info', prefix, ...slitherlinkHintStatusNodes(h));
-    } else if (puzzleData?.type === 'hashi') {
-      setStatusNodes('info', prefix, ...hashiHintStatusNodes(h));
     } else {
       setStatusNodes('info', prefix, ...hintStatusNodes(h));
     }
@@ -241,36 +239,6 @@ function makeWidget() {
       return ['Draw a line along ', bold(desc), '.'];
     }
     return [bold(String(total)), ' edges can be deduced'];
-  }
-
-  function hashiHintStatusNodes(h) {
-    // Hashi hints are an array of { a, b, orientation, bridges } edges; bridges
-    // is the deduced count (1 or 2, or 0 for "this connection is impossible").
-    // Stepwise hints carry a .description naming the rule that fired — show it
-    // verbatim so the user sees the logical reason for the deduction.
-    const total = h?.edges?.length || 0;
-    if (total === 0) return ['No hint available'];
-    if (h.description) {
-      return [bold(h.description)];
-    }
-    const islands = puzzleData?.islands || [];
-    const fmtIsland = (idx) => {
-      const isl = islands[idx];
-      if (!isl) return `island ${idx}`;
-      return `(row ${isl.row + 1}, col ${isl.col + 1})`;
-    };
-    if (total === 1) {
-      const e = h.edges[0];
-      const bridgeWord = e.bridges === 1 ? 'single bridge'
-        : e.bridges === 2 ? 'double bridge'
-        : `${e.bridges} bridges`;
-      return [
-        'Draw a ', bold(bridgeWord),
-        ' between ', bold(fmtIsland(e.a)),
-        ' and ', bold(fmtIsland(e.b)), '.',
-      ];
-    }
-    return [bold(String(total)), ' bridges can be deduced'];
   }
 
   // Status + preview after a freshly computed hint. Used by hintHandler,
@@ -506,9 +474,10 @@ function makeWidget() {
       }
       // Hashi partial: HashiSolver.solve emits {partial:true, edges:[...]}
       // on timeout. Show the deduced bridges as a preview instead of
-      // dropping them.
+      // dropping them. Routes through the hashi partialResultArm hook,
+      // which calls applyHashiPartialResult via ctx.
       if (result?.partial && puzzleData?.type === 'hashi' && Array.isArray(result.edges)) {
-        applyHashiPartialResult(result);
+        applyPartialResult(result);
         return;
       }
       // Generic 2D-grid partial: any cell-state puzzle (heyawake, hitori)
@@ -660,7 +629,8 @@ function makeWidget() {
     const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
     if (reg?.partialResultArm) {
       reg.partialResultArm(result, {
-        clearPendingHint, setStatus, drawPreview, applyGridPartialResult,
+        clearPendingHint, setStatus, drawPreview,
+        applyGridPartialResult, applyHashiPartialResult,
         setConfirming: (v) => { confirming = v; },
         setLoopConfirming: (v) => { loopConfirming = v; },
         setSolveBtnText: (t) => { solveBtn.textContent = t; },
@@ -893,11 +863,6 @@ function makeWidget() {
         } else {
           gsComplete = false;
         }
-      } else if (puzzleData.type === 'hashi') {
-        // gs.grid for hashi is { edges } from hashiHandler.readState, not a
-        // 2D cell array; route through hashiDoneCheck (matches the post-loop
-        // endComplete check below).
-        gsComplete = hashiDoneCheck(gs.grid, puzzleData.solution);
       } else {
         gsComplete = gs.grid.every(row => row.every(c => c !== 0));
       }

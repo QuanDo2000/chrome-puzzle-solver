@@ -146,7 +146,6 @@ function getCachedGridSolution(data) {
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) {
     key = data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
-      : data?.type === 'hashi' ? hashiCacheKey(data)
       : null;
   }
   if (!key) return null;
@@ -181,7 +180,6 @@ function cacheGridSolution(data, grid) {
   let key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) {
     key = data?.type === 'slitherlink' ? slitherlinkCacheKey(data)
-      : data?.type === 'hashi' ? hashiCacheKey(data)
       : null;
   }
   if (!key) return;

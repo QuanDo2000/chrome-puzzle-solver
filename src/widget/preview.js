@@ -53,19 +53,6 @@ function slitherlinkCluesSig(task) {
   return (h >>> 0).toString(16);
 }
 
-// Island-set stable signature for the hashi static layer (circles + numbers).
-// Bridge counts live in the dynamic layer / gridDataSig, NOT here.
-function hashiIslandsSig(islands) {
-  if (!Array.isArray(islands) || islands.length === 0) return '0';
-  let h = 0x811c9dc5;
-  for (const i of islands) {
-    h ^= (i.row | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    h ^= (i.col | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    h ^= (i.number | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(36);
-}
-
 function gridDataSig(grid) {
   // Hashi grids: { edges: [...] }. No 2D state — bridges encode everything
   // visible. (No .horizontal/.vertical, so test before the slitherlink arm.)
@@ -171,9 +158,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
       ctx.fill();
     }
   }
-  if (pd?.type === 'hashi' && Array.isArray(pd.islands)) {
-    drawHashiIslandsOn(ctx, cellSize, pd.islands);
-  }
   if (pd?.type === 'slitherlink') {
     const dotR = Math.max(1.5, cellSize / 14);
     ctx.fillStyle = '#1f2937';
@@ -201,33 +185,6 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
     }
   }
   return c;
-}
-
-// Numbered island circles for hashi. Cached in the static layer (island set
-// changes only on a fresh detect). Bridges paint in the dynamic layer, so
-// re-drawing the circles AFTER bridges in the main loop keeps the centre
-// disc covering any bridge stubs that might otherwise poke through.
-function drawHashiIslandsOn(ctx, cellSize, islands) {
-  const radius = cellSize * 0.35;
-  const fontSize = Math.max(8, Math.floor(cellSize * 0.5));
-  ctx.save();
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  for (const i of islands) {
-    const cx = i.col * cellSize + cellSize / 2;
-    const cy = i.row * cellSize + cellSize / 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff';
-    ctx.fill();
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = Math.max(1.5, cellSize / 14);
-    ctx.stroke();
-    ctx.fillStyle = '#1f2937';
-    ctx.fillText(String(i.number), cx, cy);
-  }
-  ctx.restore();
 }
 
 // Thick black borders between distinct room IDs + room-target clue numbers
@@ -409,8 +366,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
                       '|rm=' + regionMapSig(pd?.regionMap) +
                       '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
-                      '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null) +
-                      '|hi=' + hashiIslandsSig(pd?.type === 'hashi' ? pd.islands : null);
+                      '|sl=' + slitherlinkCluesSig(pd?.type === 'slitherlink' ? pd.task : null);
   }
   if (staticSig !== staticLayerSig) {
     latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull, pd);
@@ -879,10 +835,9 @@ if (typeof module !== 'undefined' && module.exports) {
     hintIdCounter, hintIdCache,
     hintSig, FNV_OFFSET, FNV_PRIME,
     regionMapSig,
-    slitherlinkCluesSig, hashiIslandsSig,
+    slitherlinkCluesSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
-    drawHashiIslandsOn,
     drawHeyawakeRoomsOn, drawRegionBordersOn,
     latticeLayer, staticLayer, staticLayerSig,
     renderPreview,
