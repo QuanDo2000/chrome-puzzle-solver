@@ -309,6 +309,9 @@ module.exports = [
         // src/widget/puzzles/aquarium.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         aquarium: 'readonly',
+        // src/widget/puzzles/shikaku.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        shikaku: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
