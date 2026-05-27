@@ -33,6 +33,8 @@ const heyawake = {
   url: 'https://www.puzzles-mobile.com/heyawake/',
   solutionKeyPrefix: 'heyawake-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
+  hintBandSkip: true,
 
   cacheKey(data) {
     if (data?.type !== 'heyawake') return null;

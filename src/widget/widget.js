@@ -830,7 +830,8 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      if (hr.hint?.type !== 'galaxies' && hr.hint?.type !== 'slitherlink' && hr.hint?.type !== 'hashi' && hr.hint?.type !== 'heyawake' && hr.hint?.type !== 'hitori' && hr.hint?.type !== 'kakurasu' && hr.hint?.type !== 'kurodoko' && hr.hint?.type !== 'mosaic' && hr.hint?.type !== 'norinori' && hr.hint?.type !== 'nurikabe' && !hr.hint?.cells?.length) break;
+      const hintReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[hr.hint?.type] : null;
+      if (!hintReg?.hasAbsoluteHintCells && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
       // No-progress check: if this hint is identical to the previous one,
@@ -1000,7 +1001,7 @@ function makeWidget() {
     // on pendingAutoSolve — on hard 30×30 dailies that solve can take >30 s,
     // while the propagation hint returns in ~1 ms. Other puzzle types still
     // need the cached solution for mistake comparison.
-    const skipAutoSolveGate = puzzleData.type === 'slitherlink' || puzzleData.type === 'hashi' || puzzleData.type === 'heyawake' || puzzleData.type === 'hitori' || puzzleData.type === 'kakurasu' || puzzleData.type === 'kurodoko' || puzzleData.type === 'mosaic' || puzzleData.type === 'norinori' || puzzleData.type === 'nurikabe';
+    const skipAutoSolveGate = !!(typeof PUZZLES !== 'undefined' && PUZZLES?.[puzzleData?.type]?.skipAutoSolveGate);
     if (!skipAutoSolveGate && !puzzleData.solution && pendingAutoSolve) {
       setStatus('Solving...', 'info');
       await pendingAutoSolve;

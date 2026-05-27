@@ -92,6 +92,7 @@ const galaxies = {
   type: 'galaxies',
   label: 'Galaxies',
   url: 'https://www.puzzles-mobile.com/galaxies/',
+  hasAbsoluteHintCells: true,
   solutionKeyPrefix: 'galaxies-solution:',
 
   cacheKey(data) {

@@ -52,6 +52,7 @@ const shikaku = {
   label: 'Shikaku',
   url: 'https://www.puzzles-mobile.com/shikaku/',
   solutionKeyPrefix: 'shikaku-solution:',
+  hintBandSkip: true,
 
   cacheKey(data) {
     if (data?.type !== 'shikaku') return null;

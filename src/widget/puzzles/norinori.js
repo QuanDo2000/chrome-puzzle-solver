@@ -31,6 +31,8 @@ const norinori = {
   url: 'https://www.puzzles-mobile.com/norinori/',
   solutionKeyPrefix: 'norinori-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
+  hintBandSkip: true,
 
   cacheKey(data) {
     if (data?.type !== 'norinori' || !data.areas) return null;

@@ -37,6 +37,8 @@ const nurikabe = {
   url: 'https://www.puzzles-mobile.com/nurikabe/',
   solutionKeyPrefix: 'nurikabe-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
+  hintBandSkip: true,
   customLattice: true,
 
   cacheKey(data) {

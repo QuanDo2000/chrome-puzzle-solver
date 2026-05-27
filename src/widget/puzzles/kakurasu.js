@@ -36,6 +36,8 @@ const kakurasu = {
   url: 'https://www.puzzles-mobile.com/kakurasu/',
   solutionKeyPrefix: 'kakurasu-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
+  hintBandSkip: true,
 
   cacheKey(data) {
     if (data?.type !== 'kakurasu' || !data.rowClues || !data.colClues) return null;

@@ -53,6 +53,7 @@ const hashi = {
   url: 'https://www.puzzles-mobile.com/hashi/',
   solutionKeyPrefix: 'hashi-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
 
   cacheKey(data) {
     if (data?.type !== 'hashi') return null;

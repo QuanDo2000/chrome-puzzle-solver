@@ -31,6 +31,8 @@ const mosaic = {
   url: 'https://www.puzzles-mobile.com/mosaic/',
   solutionKeyPrefix: 'mosaic-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
+  hintBandSkip: true,
 
   cacheKey(data) {
     if (data?.type !== 'mosaic' || !data.task) return null;

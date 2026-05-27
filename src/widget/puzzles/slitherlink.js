@@ -58,6 +58,7 @@ const slitherlink = {
   url: 'https://www.puzzles-mobile.com/loop/',
   solutionKeyPrefix: 'slitherlink-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
 
   cacheKey(data) {
     if (data?.type !== 'slitherlink') return null;

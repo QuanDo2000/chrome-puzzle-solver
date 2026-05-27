@@ -571,6 +571,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     const highlightColor = 'rgba(46, 134, 222, 0.25)';
     const fillColor = 'rgba(46, 134, 222, 0.45)';
     const crossColor = 'rgba(230, 57, 70, 0.45)';
+    const bandReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
     if (hint.type === 'galaxies') {
       ctx.save();
       ctx.strokeStyle = '#2e86de';
@@ -588,28 +589,10 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
         ctx.stroke();
       }
       ctx.restore();
-    } else if (puzzleData?.type === 'shikaku') {
-      // Shikaku hints reveal a rectangle, not a row/column — skip the
-      // band highlight; the per-cell loop below paints each hint cell.
-    } else if (puzzleData?.type === 'heyawake') {
-      // Heyawake hints are absolute cells (extraCells) — no row/column
-      // band; the per-cell loop below paints each hint cell.
-    } else if (puzzleData?.type === 'hitori') {
-      // Hitori hints are absolute cells (extraCells) — no row/column band.
-    } else if (isKakurasu) {
-      // Kakurasu hints are absolute cells (extraCells) — no row/column band.
-    } else if (isKurodoko) {
-      // Kurodoko hints are absolute cells (extraCells) — no row/column band.
-    } else if (isMosaic) {
-      // Mosaic hints are absolute cells (extraCells) — no row/column band.
-    } else if (isNorinori) {
-      // Norinori hints are absolute cells (extraCells) — no row/column band.
-    } else if (isNurikabe) {
-      // Nurikabe hints are absolute cells (extraCells) — no row/column band.
-    } else if (hint.type === 'hashi') {
-      // Hashi hint edges are already merged into grid.edges by
-      // applyHintToGrid and painted by the dynamic-bridges branch above.
-      // No row/column band highlight, no per-cell loop applies.
+    } else if (bandReg?.hintBandSkip || hint.type === 'hashi') {
+      // Per-puzzle hint shapes that don't paint a row/column band; the
+      // per-cell loop below paints each hint cell (or, for hashi, edges
+      // already merged into grid.edges by applyHintToGrid).
     } else if (hint.type === 'row') {
       ctx.fillStyle = highlightColor;
       ctx.fillRect(0, hint.index * cellSize, w, cellSize);

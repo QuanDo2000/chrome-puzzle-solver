@@ -32,6 +32,8 @@ const hitori = {
   url: 'https://www.puzzles-mobile.com/hitori/',
   solutionKeyPrefix: 'hitori-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
+  hintBandSkip: true,
 
   cacheKey(data) {
     if (data?.type !== 'hitori' || !data.task) return null;

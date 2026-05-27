@@ -31,6 +31,8 @@ const kurodoko = {
   url: 'https://www.puzzles-mobile.com/kurodoko/',
   solutionKeyPrefix: 'kurodoko-solution:',
   skipAutoSolveGate: true,
+  hasAbsoluteHintCells: true,
+  hintBandSkip: true,
 
   cacheKey(data) {
     if (data?.type !== 'kurodoko' || !data.task) return null;
