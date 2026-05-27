@@ -307,6 +307,9 @@ module.exports = [
         // src/widget/puzzles/yinyang.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         yinyang: 'readonly',
+        // src/widget/puzzles/aquarium.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        aquarium: 'readonly',
         // content.js top-level (consumed by src/widget/widget.js)
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
