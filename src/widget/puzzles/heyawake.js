@@ -122,6 +122,25 @@ const heyawake = {
   partialResultArm(result, { applyGridPartialResult }) {
     applyGridPartialResult(result);
   },
+
+  // Hint dispatch for Heyawake. hintCells from the solver is absolute
+  // {row, col, value} packed as extraCells (hintAbsoluteCells passes them
+  // through unchanged). Mirrors the previous inline arm in content.js's
+  // getHint verbatim.
+  hintDispatch(ctx) {
+    const { detectedGrid, grid, solution, rows, cols, firstMismatch } = ctx;
+    if (solution && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    const rooms = detectedGrid.rooms;
+    const solver = new HeyawakeSolver({ rows, cols, rooms });
+    const hintCells = solver.getHint(grid);
+    if (!hintCells || hintCells.length === 0) {
+      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+    }
+    const hint = { type: 'heyawake', extraCells: hintCells, count: hintCells.length };
+    return { success: true, hint, grid, solution };
+  },
 };
 
 // Local copy of preview.js's heyawakeAreasSig — only used by staticSig

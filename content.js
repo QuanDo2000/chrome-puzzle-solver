@@ -244,20 +244,6 @@ async function getHint(request = {}) {
         rule: step.rule,
         description: step.description,
       };
-    } else if (detectedGrid.type === 'heyawake') {
-      if (solution && firstMismatch(grid, solution)) {
-        return { success: false, error: 'Current game state is wrong.' };
-      }
-      const rooms = detectedGrid.rooms;
-      const solver = new HeyawakeSolver({ rows, cols, rooms });
-      const hintCells = solver.getHint(grid);
-      if (!hintCells || hintCells.length === 0) {
-        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-      }
-      // hintCells is [{row, col, value}, ...] — absolute coordinates.
-      // Pack as extraCells so hintAbsoluteCells passes them through unchanged
-      // (hint.cells uses row/col index arithmetic that breaks for absolute shapes).
-      hint = { type: 'heyawake', extraCells: hintCells, count: hintCells.length };
     } else if (detectedGrid.type === 'hitori') {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
