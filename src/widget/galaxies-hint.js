@@ -1,5 +1,14 @@
 'use strict';
 
+// Galaxies hint helpers — content-script side of the Galaxies puzzle.
+//
+// === Shared statics on `GalaxiesSolver` ===
+//
+// `GalaxiesSolver.seedCellsForStar(star, rows, cols)` and
+// `GalaxiesSolver.regionsToLines(grid, rows, cols)` are static, used by
+// solver, this file (hint), and `handler.js` (DOM lines). Don't reintroduce
+// per-file copies — they drifted before.
+
 function cloneGalaxiesLines(lines) {
   return {
     horizontal: (lines?.horizontal || []).map(row => row.slice()),

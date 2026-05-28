@@ -29,6 +29,37 @@
 //                      still `-1`). Note this dispatches the in-loop check
 //                      only; the post-loop endComplete site stays inline.
 //
+// === Encoding ===
+//
+// `/shikaku/*` has dedicated `ShikakuSolver` + `shikakuHandler` (partitions
+// grid into rectangles — no overlap with cell-state puzzles).
+//
+// `window.Game.task` is 2D ints: non-zero cells are clues (value = required
+// rectangle area), zero = non-clue. `currentState.cellStatus` is `rows×cols`:
+// `-1 = unassigned`, else owner clue index. `currentState.areas` is the
+// rectangle list indexed by owner id.
+//
+// Each area MUST match the page's `currentMove` shape:
+// `{cells:[{row,col}], cellStatus:id, invert:false, startPoint:{row,col},
+// endPoint:{row,col}}`. Field names are load-bearing — three page functions
+// each crash on a mismatch: `drawCurrentStateInternal` reads
+// `startPoint/endPoint`, `removeArea` reads `cells[].row/col` (NOT
+// `cellList[].r/c`), `applyCurrentMoveToState` stores at
+// `areas[move.cellStatus]` (every area's `cellStatus` MUST equal its index).
+// Partial-hint clues with no cells left as `undefined` — page's
+// `void 0 !== areas[t]` guards skip those.
+//
+// Worker→content→MAIN shape: 2D `number[][]` of owner indices (0..K-1) or `-1`.
+// `applyHintHandler`/`applyAndRunLoop` in `content.js` have shikaku-specific arms;
+// generic `applyHintCells` assumes cell-state encoding. Loop done-check uses
+// `-1` as unassigned (unlike other puzzles where `0` means unassigned).
+//
+// Preview colors cells by owner index (`galaxiesColors`), thick borders between
+// distinct owners, clue numbers overlaid as bold text in cached `staticLayer`;
+// `staticSig` includes `|sk=`.
+//
+// See `src/solvers/shikaku.js` for the rectangle-enumeration algorithm.
+//
 // No partialResultArm / skipAutoSolveGate / hintDispatch: Shikaku doesn't
 // have a partial-result fallback path, the hint chain awaits autoSolve like
 // the other cell-state puzzles, and its hint logic lives in content.js's

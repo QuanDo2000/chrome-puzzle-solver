@@ -24,6 +24,23 @@
 // Yin-Yang's static layer is just the grid (lattice + givens are
 // rendered per-cell), there's no partial-result fallback path, and the
 // hint chain doesn't fast-bypass autoSolve.
+//
+// === Encoding ===
+//
+// `/yin-yang/*` has dedicated `YinYangSolver` + `yinYangHandler`. Same cell
+// encoding as Binairo (givens `-1`=none, `0`=white, `1`=black; state
+// `0`=empty, `1`=black, `2`=white; translation `-1→0, 0→2, 1→1`). Internal
+// work in cellStatus encoding, mirroring Binairo.
+//
+// Rules: every cell black or white; each colour orthogonally-connected; no 2×2
+// window monochrome OR diagonal checkerboard (checkerboard would make both
+// colours' diagonal pairs uncrossable).
+//
+// MAIN-world: `readYinYangData/readYinYangState/applyYinYangState`, twins of
+// Binairo. Hints reuse generic `applyHintCells` (cell-state encoding). Loop
+// done-check needs no special arm.
+//
+// See `src/solvers/yinyang.js` for the propagation rules and lookahead.
 
 const yinyang = {
   type: 'yinyang',

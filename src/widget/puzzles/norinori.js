@@ -24,6 +24,39 @@
 //                      applyPartialResult dispatcher can route norinori
 //                      partial-solve timeouts into the generic grid
 //                      partial UI.
+//
+// === Encoding ===
+//
+// `/norinori/*` has `NorinoriSolver` + `norinoriHandler`. Same cell encoding
+// as Heyawake-family (0=unknown, 1=black, 2=white). Region-partitioned via
+// `G.areas` + `G.areaPoints`, **no `areaTask`** — every region has the
+// same target.
+//
+// **Rules (per the site's bundled `getErrors`, NOT textbook Norinori):**
+// 1. Each region has exactly 2 black cells (`r[i] > 2` → blockMany; reachable-
+//    count < 2 → blockFew).
+// 2. No 3-in-row of blacks (`check3InARow`).
+// 3. No 2×2 with 3+ blacks (`check2x2`).
+// 4. Every black has at least one black neighbour at completion (`checkSolo`
+//    flags a black whose neighbours are all status=2).
+//
+// Combined, these imply blacks tile in 1×2 / 2×1 dominoes — but **dominoes
+// may span regions.** A region's 2 blacks can be 1 internal domino, OR 2
+// endpoints of separate cross-region dominoes (each paired with a black in
+// an adjacent region). Textbook Norinori's "no cross-region adjacency"
+// rule **does not apply** on this site. The 30×30 daily relies on this:
+// several rooms (e.g. 2-cell forced-domino regions next to 3-cell L
+// regions) become infeasible under strict rules but solvable when
+// cross-region pairs are allowed.
+//
+// MAIN-world: `readNorinoriData/readNorinoriState/applyNorinoriState`, twins
+// of Heyawake; hints reuse generic `applyHintCells`. Loop done-check needs no
+// special arm. Preview: dynamic cells (1=dark inset, 2=× cross); region
+// borders cached in `staticLayer` (`|nn=` segment); diff is per-cell same as
+// other cell-state puzzles.
+//
+// See `src/solvers/norinori.js` for the propagation rules, lookahead, and
+// the rules to NOT reintroduce.
 
 const norinori = {
   type: 'norinori',

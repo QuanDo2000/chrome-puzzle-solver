@@ -48,6 +48,68 @@
 //
 // No drawPreviewCell hook: Hashi doesn't render anything per-cell — the
 // bridges are drawn in the inline isHashi block in renderPreview (kept).
+//
+// === Encoding ===
+//
+// `/hashi/*` has dedicated `HashiSolver` + `hashiHandler`. The URL path is
+// `/hashi/`, page internal `slug === 'bridges'`. The `handler.matches()`
+// keys on `/hashi/`; `dumpPuzzleForBench` accepts `/hashi/`, `/bridges/`,
+// or `slug === 'bridges'` so dumps work even if the path varies.
+//
+// Page encoding (island-based, not grid):
+// - `task` — flat array of `{index, number: string, row, col}`, one entry
+//   per island. `number` is the required bridge total; **parse to int at
+//   the boundary** (`parseInt(island.number, 10)` in `dumpPuzzleForBench`
+//   / `readHashiData`).
+// - `currentState.cellStatus[id]` — parallel-indexed to `task[id]`. Per
+//   island: `right: {index, col, bridges}` and `bottom: {index, row,
+//   bridges}` (owner side of each bridge, pointing at the partner's
+//   island index); `bl/bt/bb/br` — bridge-count mirrors for each side
+//   (`-1` = no neighbour in that direction, `0/1/2` = current bridge
+//   count); `total` — sum of the four mirrors with `-1` clamped to 0.
+//
+// **Sentinel detection:** use `br === -1` (or `bl/bt/bb`) to test "no
+// neighbour in that direction", NOT `right.index === 0` — island 0 is a
+// real id, so an owner pointing at index 0 is meaningful, not a null
+// marker.
+//
+// **Apply contract** (`applyHashiState`). Per edge `(a, b)`:
+// 1. Owner is the lower-coordinate island (`Math.min(e.a, e.b)`); partner
+//    is the higher. Horizontal → owner writes `right.bridges`; vertical →
+//    owner writes `bottom.bridges`.
+// 2. Per edge, set owner's `right.bridges`/`bottom.bridges` AND owner's
+//    `br`/`bb` mirror AND partner's `bl`/`bt` mirror (three writes per
+//    edge — the page reads all three independently in different render
+//    paths).
+// 3. After all edges applied, recompute every island's `total` from its
+//    four mirrors (don't trust incremental updates; the page reads
+//    `total` directly for the "complete" check overlay).
+// 4. Reset all bridge counts to 0 BEFORE applying edges (clears any prior
+//    state), then wrap the whole write with `saveState(true)` BEFORE
+//    writes; fall through `drawCurrentState → render → redraw` ladder
+//    AFTER (same save+render contract as the cell-state puzzles).
+//
+// === Cache, loop done-check, diff ===
+//
+// localStorage cache prefix: `hashi-solution:` (registered in
+// `SOLUTION_KEY_PREFIXES` so the per-puzzle clear button drops it).
+//
+// Loop done-check: **"every solution edge matches"** — iterate
+// `puzzleData.solution.edges`, look up the corresponding bridge count on
+// the live board (via island ids + orientation), all must equal. Hashi
+// boards have no "cell" concept, so the empty-cell sentinel used by the
+// cell-state puzzles doesn't apply.
+//
+// `computePuzzleDiff('hashi', board, solution)` returns `[{a, b,
+// orientation, expected, actual}, ...]` for edges where the live bridge
+// count contradicts the solution. Two arms: (1) iterate solution edges,
+// flag any with non-zero board count that disagrees; (2) iterate board
+// edges, flag any with non-zero count where the solution has 0 (extra
+// bridges drawn that shouldn't exist). Zero-bridge entries on the board
+// are never flagged (analogous to UNKNOWN slitherlink edges).
+//
+// See `src/solvers/hashi.js` for the propagation rules, lookahead, and
+// solution shape.
 
 const hashi = {
   type: 'hashi',

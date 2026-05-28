@@ -54,6 +54,62 @@
 // No drawPreviewCell hook: Slitherlink is edge-based and doesn't render
 // per-cell. The inline `isSlitherlink` edge-rendering branch in
 // renderPreview stays.
+//
+// === Encoding ===
+//
+// `/loop/*` has dedicated `SlitherlinkSolver` + `slitherlinkHandler`. Named
+// "slitherlink" in code to avoid colliding with the Loop button; URL matcher
+// keys on `/loop/`.
+//
+// Page encoding (edge-based, like Galaxies):
+// - `task` — 2D `int[H][W]`: `-1`=no clue, `0/1/2/3`=clue.
+// - `cellHorizontalStatus` — `(H+1) × W`: `0`=empty, `1`=line, **`2`=× ("not
+//   loop edge")**.
+// - `cellVerticalStatus` — `H × (W+1)`, same encoding.
+//
+// Internal edges: `0=UNKNOWN, 1=LINE, 2=EMPTY` (direct passthrough to page
+// encoding). **× supported end-to-end** — read extracts page `2`s as EMPTY,
+// `_emit` outputs `2`s, apply writes `2`s back, `drawPreview`'s slitherlink arm
+// renders ×s in muted gray on the LINE layer. Don't reintroduce "ignore page
+// `2`" — the solver gets meaningful signal from user-drawn ×s, and deduced ×s
+// shrink the manual residue on hard boards.
+//
+// MAIN-world: `readSlitherlinkData/readSlitherlinkState/applySlitherlinkState`,
+// twins of Galaxies but without flood-fill region-build (raw H/V only). Apply
+// calls `saveState(true)` then falls through `drawCurrentState → render →
+// redraw → draw`. Both read+apply preserve `0/1/2` encoding.
+//
+// === Diff, loop done-check, partial routing ===
+//
+// Diff is **edge-based** — `computePuzzleDiff('slitherlink', board, solution)`
+// returns `[{orientation, r, c}, ...]`. Mismatch: `board[r][c] !== 0 &&
+// board[r][c] !== solution[r][c]` — flags both wrong-LINEs and wrong-×s.
+// UNKNOWN (`0`) never flagged. `drawPreview`'s mistake overlay and
+// `applyHintHandler`/`applyAndRunLoop` branch on `puzzleData.type ===
+// 'slitherlink'` for the edge shape. Loop done-check: "every solution LINE
+// edge is also on the board" (Slitherlink never fills all cells).
+//
+// **Partial in content.js.** `solveHandler` routes `{partial: true, ...}` to
+// `applyPartialResult` instead of `applySolveResult` — enters confirm mode
+// with `"Partial only: N edges deduced..."` and deliberately does NOT call
+// `recordSolveSuccess` (caching a partial in `puzzleData.solution` would
+// mis-trigger Loop's done-check and the mistake overlay).
+// `previewGridFromResult(result)` returns the right shape for both slitherlink
+// (`{horizontal, vertical}`) and other types (`result.grid`).
+//
+// `puzzleData.solution` for slitherlink is `{horizontal, vertical}` (not 2D),
+// so `getCachedGridSolution/cacheGridSolution` carry a slitherlink-specific
+// shape branch. localStorage prefix `slitherlink-solution:`. `gridDataSig`
+// early-bail hashes H+V directly; `staticSig` gains `|sl=`.
+//
+// Hint **skips the `await pendingAutoSolve` gate** for slitherlink — `getHint`
+// propagates from live board, so on a hard 30×30 daily where autoSolve takes
+// 30 s Hint still returns instantly. Other types still await (their hint
+// heuristics consult cached solution).
+//
+// See `src/solvers/slitherlink.js` for the propagation fixpoint, CDCL search,
+// lookahead/CDCL composition constraints, partial-result strategy, and the
+// performance envelope.
 
 const slitherlink = {
   type: 'slitherlink',

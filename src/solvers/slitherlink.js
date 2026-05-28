@@ -1,5 +1,170 @@
 'use strict';
 
+// SlitherlinkSolver — pure logic for Slitherlink loop puzzles.
+//
+// Internal edge encoding: `0=UNKNOWN, 1=LINE, 2=EMPTY` (passthrough to page
+// encoding; user-drawn ×s are meaningful signal, not dropped). See
+// `src/widget/puzzles/slitherlink.js` for the page-side encoding and the
+// content-script integration (apply, diff, loop done-check, partial routing).
+//
+// === Trail-based undo ===
+//
+// Trail uses a 2-bit kind field per entry: `(kind << 24) | idx` for edges
+// (`kind` 0=H, 1=V), or `(oldColor << 26) | (2 << 24) | idx` for cell color
+// writes. `_rollback` dispatches on `(e >> 24) & 3`. Edge writes don't trail
+// old value (`_setEdge` rejects overwrite of non-UNKNOWN); color writes do
+// (need to know which slot to restore).
+//
+// === Propagation fixpoint (cheapest first) ===
+//
+// 1. `_propagateClues` — `m > k` or `m + n < k` → contradiction; `m == k` →
+//    remaining UNKNOWN → EMPTY; `m + n == k` → remaining UNKNOWN → LINE.
+// 2. `_propagateVertices` — every dot's loop-degree ∈ {0, 2}; per-dot
+//    `lineCount`/`unknownCount` (Int16Array) maintained incrementally.
+// 3. `_propagateAdvanced` — corner-3, corner-1, adjacent 3-3 (H+V), diagonal
+//    3-3 (all 4 orientations). Each via per-instance helper (so
+//    `_findNextHintDeduction` can dispatch individually).
+// 4. `_propagateColors` — inside/outside cell coloring (`this.colors`
+//    `Uint8Array(H*W)`, 0=UNKNOWN/1=INSIDE/2=OUTSIDE; out-of-grid = OUTSIDE).
+//    Sub-rules: (a) known edge → adjacent cells differ iff LINE; (b) known
+//    colors → edge state; (c) clue × own-color → forced opposite/same colors
+//    on neighbours. Writes via `_setColor` (trailed).
+// 5. `_propagateConnectivity` — `_slApplyInsideReachability` BFS-floods from
+//    known-INSIDE through `{INSIDE ∪ UNKNOWN}` forcing unreachable cells to
+//    OUTSIDE; `_slApplyOutsideReachability` from virtual exterior root
+//    (border cells); `_slApplyCut` iterative-Tarjan articulation analysis
+//    **INSIDE only** — OUTSIDE-cut is unsound (OUTSIDE can connect via plane
+//    exterior even when cell-graph-disconnected; rectangle-loop
+//    counterexample). All guarded by `!_inLookahead` to keep inner probe cheap.
+// 6. `_propagateParity` — every straight scan line crosses the loop an even
+//    number of times. Horizontal scan at `y=R+0.5` crosses `V[R][.]` edges;
+//    vertical at `x=C+0.5` crosses `H[.][C]`. 0 unknowns + odd LINE →
+//    contradiction; 1 unknown → forced to make even.
+//
+// Subloop prevention via union-find over LINE-edge endpoints. DSU **rebuilt
+// from scratch** at the two callsites needing it (`propagate()` post-fixpoint,
+// `_backtrack()` at completion) — incremental maintenance under backtracking
+// is fiddly, rebuild is O(LINE_count). Multi-loop detection at fixpoint is
+// deferred to final completion check (unknowns may remain legitimately in
+// degree-0 disconnected regions); final check enforces all clues exact, no
+// UNKNOWN edges, every dot degree 0/2, all LINE edges in one component.
+//
+// After fixpoint, `propagate()` runs **1-step lookahead** (`_applyLookahead`)
+// at `_depth === 0` and `!_inLookahead` — probe each candidate UNKNOWN edge
+// (and selected cells), run lookahead-free inner propagate, force surviving
+// value on single-side contradictions. Candidate filter: edges adjacent to
+// tight dots/clues only.
+//
+// Most-constrained variable pick at backtrack: score each UNKNOWN edge as
+// `10 * max(lineCount[u], lineCount[v]) - min(unknownCount[u], unknownCount[v])`
+// (higher = more constrained). Init `bestScore = -Infinity` (blank-board
+// scores are negative). Branch LINE first, then EMPTY.
+//
+// === Partial results ===
+//
+// Hard boards (e.g. 50×40 monthly) time out but propagation gives a useful
+// chunk. `solve()` returns `{solved: false, partial: true, horizontal,
+// vertical, error: 'timed out'}` on either timeout. Two static caches:
+// `_solutionCache` (50-entry LRU, full solutions, keyed FNV-1a of
+// `(width, height, task)`); `_partialCache` (20-entry LRU, partial
+// snapshots, same key — partial cache hit short-circuits propagate, saves 3–7
+// s per Hint/Loop on monthly-class after the first timeout).
+// `clearSolutionCache()` clears BOTH (keep tests deterministic).
+//
+// Worker budget is **10 s** (not 30) — partial-return fires sooner on too-hard
+// boards so the user gets visible progress in ~10 s.
+//
+// `getHint(curH, curV)` seeds probe solver from live edge state, runs
+// `_findNextHintDeduction(minLines)` where `minLines = max(3, ceil(H*W/30))`
+// (scales batch with area so Loop completes in ~10 s wall regardless of size;
+// see [[hint-batch-scaling-for-loop]]). Inner propagate at `_depth = 1` (skips
+// lookahead — too expensive per click); collects forced LINE edges from trail
+// until reaching `minLines`, then rolls back. Falls back to tight-budget
+// `solve()` (capped `min(this.maxMs, 5000)` ms) returning partial. Probe sets
+// `_startedAt = Date.now()` so inherited `maxMs` doesn't fire spuriously.
+//
+// === CDCL search ===
+//
+// `solve()` calls `_cdclSearch()` (CDCL with first-UIP, non-chronological
+// backjumping, VSIDS branching, LRU learned-clause storage cap 5000, Luby
+// restarts RESTART_UNIT=100). `_backtrack` kept as dead code for reference;
+// don't delete without first replacing `_cdclSearch`.
+//
+// - **Variable encoding** — `_varIdEdge('H'|'V', idx)`, `_varIdCell(idx)`,
+//   `_decodeVar`. H edges `[0, numH)`, V `[numH, numH+numV)`, cells
+//   `[numH+numV, totalVars)`.
+// - **Literals** — `~lit` convention: `lit >= 0` is positive (LINE/INSIDE),
+//   `lit < 0` is negative (EMPTY/OUTSIDE), `varId = lit >= 0 ? lit : ~lit`.
+//   **Never `Math.abs(lit)` or `-lit`** — variable 0 is real and arithmetic
+//   negation is ambiguous.
+// - **Reason tracking** — `_setEdge/_setColor` push `_currentReason` (set by
+//   rule helpers before forcing) into `_reasons[]` parallel to `this.trail`.
+//   Decisions push `null`. `_decisionLevels[]` tracks level.
+// - **Conflict analysis** — `_analyzeConflict` is classic first-UIP plus two
+//   non-textbook additions: (1) subsumption pre-pass — current-level conflict
+//   vars whose reasons reference other current-level conflict vars marked
+//   "subsumed" so they don't double-count toward `pathCount`; (2) rescue path —
+//   if all current-level vars are subsumed (seeding leaves `pathCount === 0`),
+//   walk trail backward to most recent current-level seen var and clear its
+//   subsumed flag. Without rescue, lookahead-driven contradictions produce
+//   empty-but-not-empty learned clauses that backjump-to-0 incorrectly.
+// - **VSIDS** — `Float32Array` scores, decay 0.95 every 256 conflicts.
+//   `_pickDecisionLiteral()` returns highest-score unassigned. **Caller MUST
+//   `_allEdgesAssigned()`-check separately** — literal 0 is valid (H-edge
+//   0/LINE), so can't be used as "all-assigned" sentinel.
+// - **Luby restarts** — `_lubyNext(idx)` returns the canonical Luby sequence
+//   (Knuth AofA Vol 4A §7.2.2.2): `[1,1,2,1,1,2,4,1,1,2,1,1,2,4,8,...]`.
+//   Standard 1-indexed recurrence (the spec's iterative formula
+//   non-terminates on `idx===1`). Restarts pop trail to level 0, keep
+//   learned clauses + VSIDS.
+//
+// **Performance envelope** (2026-05-23):
+//
+// | board                     | path             | wall time         |
+// | ---                       | ---              | ---               |
+// | 5×5 real                  | propagate alone  | ~0.6 ms median    |
+// | 30×30 synthetic-rect      | propagate alone  | ~200 ms           |
+// | 50×40 monthly real        | times out, partial | 30 s (budget)   |
+//
+// 50×40 monthly currently **does not solve** within 10 s (or 30 s in bench).
+// Returns partial with ~38% edges deduced. Bottleneck: `_applyLookahead` ~750
+// ms per call caps CDCL at ~40 conflicts/s — too few for a 2000-edge puzzle.
+//
+// Fixture `slitherlinkRealMonthly50x40_a` carries `expectSolved: false` so
+// bench records timing without failing. The `tests/solver.test.js` integration
+// test asserts only **soundness** (not spurious `error: 'no solution found'`),
+// not solvedness. Tighten when a real perf fix lands.
+//
+// **Lookahead/CDCL composition constraint.** `_applyLookahead`'s double-fail
+// (both LINE and EMPTY probes contradict) **cannot** use probe-collected
+// antecedents as a CDCL conflict reason: those vars are rolled back below the
+// analysis point, so `_analyzeConflict` sees them as level 0 and learns
+// nothing. Instead, the double-fail handler blames **the most recent
+// current-level decision** (chronological-backtrack semantics). Learned
+// clause `~lastDecision`, backjump pops one level, next propagate forces
+// opposite sense. Rule-level conflicts (with well-formed reasons that survive
+// rollback) still drive normal first-UIP learning.
+//
+// === Approaches ruled out for the monthly perf gap ===
+//
+// Tried during CDCL build (2026-05-23):
+//
+// - **Disable lookahead inside `_cdclSearch` (`_depth = 1`)**: per-propagate
+//   cheap (~5 ms), CDCL accumulates hundreds of conflicts. But rule set
+//   without lookahead is too weak — converges to *spurious UNSAT*
+//   (`error: 'no solution found'`) on known-solvable boards.
+// - **Use probe-collected antecedents as CDCL conflict reason on
+//   double-fail**: vars rolled back below `_analyzeConflict`'s reach, UIP
+//   walk learns empty clauses. Source of the spurious UNSAT pre-fix.
+// - **Use "all current-level decisions" as conflict reason on double-fail**:
+//   wide learned clauses `~d1 ∨ ~d2 ∨ ... ∨ ~dk` prune huge swaths; CDCL
+//   falsely concludes UNSAT after ~10 conflicts.
+// - **Per-edge `_lookaheadClean` cache + adjacent-cell dirty tracking**:
+//   unsound — parity scans full rows/columns and connectivity BFSes across
+//   the entire cell graph. Far-away edge changes flip probe outcomes
+//   without dirtying any cell adjacent to the probed edge, so cache-skip
+//   admits stale results. Manifests as fuzz failures and false UNSAT.
+
 class SlitherlinkSolver {
   /**
    * @param {{

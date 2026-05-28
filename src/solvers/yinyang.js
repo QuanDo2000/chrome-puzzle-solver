@@ -1,5 +1,37 @@
 'use strict';
 
+// YinYangSolver — pure logic for Yin-Yang.
+//
+// Internal grid encoding: `0=empty, 1=black, 2=white` (cellStatus polarity,
+// same as Binairo). See `src/widget/puzzles/yinyang.js` for the page-side
+// encoding and translation contract.
+//
+// === Propagation rules ===
+//
+// `propagate()` iterates four local rules to fixpoint:
+// - `_apply2x2` — no 2×2 monochrome / diagonal checkerboard.
+// - `_applyReachability` — BFS the `{colour ∪ empty}` graph; empty cells
+//   unreachable from a colour's placed cells forced to the other.
+// - `_applyCut` — articulation points whose removal severs a colour's
+//   placed cells forced to that colour; iterative Tarjan.
+// - `_applyBorderArc` — perimeter cycle has ≤2 colour transitions;
+//   ≥4 is contradiction, cell whose wrong colour would create a 3rd arc
+//   forced.
+//
+// After local rules stall, at top-level only (`_depth === 0`, with
+// `_inLookahead` re-entry guard) runs 1-step lookahead (`_applyLookahead`).
+// Then most-constrained backtracking. On a complete grid a successful
+// `propagate()` IS the validity proof.
+//
+// === Hint strategy ===
+//
+// `getHint` runs local rules only first (`_localHint`, fast); falls back to
+// `_lookaheadStepHint` (single lookahead deduction + the local cascade it
+// triggers — not the whole solvable remainder) so Hint never dead-ends while
+// the puzzle is still solvable. Static `_solutionCache` keyed on FNV-1a of
+// `(rows, cols, task)`, 50-entry LRU. Worker `maxMs=30s` (35×35 weekly solves
+// by deduction in ~5 s).
+
 class YinYangSolver {
   /**
    * @param {{

@@ -1,5 +1,16 @@
 'use strict';
 
+// ShikakuSolver — pure logic for Shikaku rectangle partitioning.
+//
+// Per-clue enumerate rectangle candidates (axis-aligned, correct area, no
+// other clue inside, fits grid); single-candidate forcing + most-constrained
+// backtracking. `getHint` runs propagation → forward-checking →
+// solve-and-reveal. Static `_solutionCache` keyed on FNV-1a of
+// `(rows, cols, clues sorted)`, 50-entry LRU.
+//
+// See `src/widget/puzzles/shikaku.js` for the page encoding, the area-shape
+// contract the page mutates, and preview/loop-done-check details.
+
 class ShikakuSolver {
   /**
    * @param {{

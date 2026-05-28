@@ -1,5 +1,41 @@
 'use strict';
 
+// BinairoSolver — pure logic for Binairo and Binairo Plus.
+//
+// Internal grid encoding: `0=empty, 1=one, 2=zero` (cellStatus polarity).
+// Givens (page-native `-1=blank, 0=given-zero, 1=given-one`) are translated
+// at construction; downstream code never sees the `-1/0/1` triad. See
+// `src/widget/puzzles/binairo.js` for the page-side encoding and the Binairo
+// Plus comparison-clue contract.
+//
+// === Triples inline, duplicates at completion ===
+//
+// `_applyBalance` and `_applyUniqueness` call `_wouldCreateTriple` before each
+// write; `_backtrack` calls it before branch assign. Propagation cannot produce
+// a triple-bearing state, so `_gridHasTriple()` post-validation in `_backtrack`
+// is gone. `_hasDuplicateLines()` IS still called at completion (only on full
+// grid) because backtracking can complete a line into a duplicate, and
+// uniqueness only catches duplicates when one line has exactly 2 empty cells.
+// `solve()` calls `_gridHasTriple()` once up-front to reject invalid givens
+// (no-triples rule scans empty cells only). Covered by
+// `tests/binairo-fuzz.test.js`.
+//
+// === Lookahead ===
+//
+// After local rules (no-triples, balance, uniqueness) exhaust at top level,
+// 1-step lookahead: probe each empty cell with each value, run lookahead-free
+// `propagate()`, force survivor if exactly one. `_inLookahead` prevents
+// recursion; `_depth` ensures lookahead only at depth 0. Without lookahead the
+// 30×30 weekly was effectively unsolvable (minutes); with lookahead ~75 ms.
+//
+// === `maxMs` budget ===
+//
+// `BinairoSolver` accepts instance `maxMs` (default 0 = no limit). When set,
+// `_backtrack` and `_applyLookahead` check elapsed between iterations; over
+// budget returns `{solved: false, error: 'timed out'}`. UI should always set
+// `maxMs` to avoid minute-long hangs. `tests/solver.test.js` has a `maxMs=1`
+// regression that asserts bail within 500 ms.
+
 class BinairoSolver {
   /**
    * @param {{ rows: number, cols: number, givens: number[][], initialState?: number[][], comparisonClues?: (number|null)[][] }} opts

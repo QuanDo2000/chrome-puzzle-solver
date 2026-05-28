@@ -1,5 +1,14 @@
 'use strict';
 
+// GalaxiesSolver — pure logic for Galaxies (Tentai Show).
+//
+// === Shared geometry statics ===
+//
+// `GalaxiesSolver.seedCellsForStar(star, rows, cols)` and
+// `GalaxiesSolver.regionsToLines(grid, rows, cols)` are static, used by this
+// solver, `src/widget/galaxies-hint.js`, and `handler.js` (DOM lines). Don't
+// reintroduce per-file copies — they drifted before.
+
 class GalaxiesSolver {
   /**
    * @param {Star[] | null | undefined} stars

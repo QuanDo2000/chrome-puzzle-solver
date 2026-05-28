@@ -1,5 +1,38 @@
 'use strict';
 
+// NorinoriSolver — pure logic for Norinori as enforced on puzzles-mobile.com
+// (NOT textbook Norinori). See `src/widget/puzzles/norinori.js` for the
+// rules-of-the-site and the cross-region domino allowance.
+//
+// === Propagation rules (fixpoint of four rules) ===
+//
+// - `_applyRegionCount` — region nB>2 → contradiction; nB+nU<2 →
+//   contradiction; nB=2 → other unknowns forced WHITE; nB+nU=2 → both
+//   unknowns forced BLACK.
+// - `_apply2x2` — any 2×2 with nB>2 → contradiction; nB=2 with unknowns →
+//   unknowns forced WHITE.
+// - `_apply3InRow` — any 3-cell horizontal or vertical line with nB=3 →
+//   contradiction; nB=2 with the third cell unknown → forced WHITE.
+// - `_applyNeighborConstraints` — black with >1 black neighbour →
+//   contradiction (L or 3-in-row); black with 1 black neighbour → other
+//   neighbours forced WHITE; black with 0 black neighbours and 0 unknown
+//   neighbours → contradiction (solo); black with 0 black neighbours and
+//   exactly 1 unknown neighbour → that neighbour forced BLACK.
+//
+// `_set` is a plain trail-record assign — **no cascade**. After local rules
+// stall, at top-level only (`_depth === 0`, `_inLookahead` re-entry guard)
+// runs 1-step lookahead. Most-constrained variable for backtracking
+// prefers cells with the most KNOWN neighbours (more local constraints =
+// higher score).
+//
+// Don't reintroduce `dominoCandidates`, `_applyDominoes` (per-region
+// domino enumeration), or `_applyCrossRegionDominate` — those encoded the
+// textbook rule that the site does not enforce, and they make the 30×30
+// daily provably unsolvable.
+//
+// Static `_solutionCache` keyed on FNV-1a of `(rows, cols, cellToRoom[])`,
+// 50-entry LRU; 20-entry partial LRU. Worker `maxMs=30s`.
+
 class NorinoriSolver {
   constructor(data) {
     const { rows, cols, rooms, initialState, maxMs } = data;

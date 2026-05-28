@@ -1,5 +1,41 @@
 'use strict';
 
+// HashiSolver — pure logic for Hashi (bridges) puzzles.
+//
+// One variable per candidate edge between adjacent islands (skipping
+// crossings), tracked as `lo`/`hi` ∈ {0..2} representing the current feasible
+// range. Trail-based undo (`_assign` pushes flat 3-int groups, `_rollback`
+// restores). See `src/widget/puzzles/hashi.js` for the page-side encoding,
+// apply contract, loop done-check, and diff.
+//
+// === Propagation fixpoint ===
+//
+// - **Crossing exclusion** — two edges that geometrically cross cannot both
+//   have `hi > 0`; force one to 0.
+// - **Degree forcing** — sum of `hi` at an island ≥ required ≥ sum of `lo`;
+//   tighten edges to make both bounds reachable.
+// - **Two-1s isolation** — an edge between two `required=1` islands cannot
+//   be the only edge connecting them to the rest (would form a 2-island
+//   sub-component).
+// - **Connectivity cut** — if removing an UNKNOWN edge would disconnect a
+//   known-required-positive sub-component from the rest, force it positive.
+//
+// After local rules stall, at `_depth === 0` and `!_inLookahead`, runs 1-step
+// lookahead: probe each unsettled edge with each feasible value, run
+// lookahead-free inner propagate, force survivor on single-side
+// contradictions. Then most-constrained backtracking.
+//
+// === Solution shape ===
+//
+// `{solved, edges: [{a, b, orientation: 'H'|'V', bridges: 1|2}, ...]}`.
+// `a`/`b` are island indices in solver-edge-construction order (owner-first
+// by iteration), NOT canonically sorted — the diff arm and `applyHashiState`
+// both normalize via `Math.min`/`Math.max` so ordering doesn't matter
+// downstream. Static `_solutionCache` 50-entry LRU keyed FNV-1a of
+// `(rows, cols, islands sorted by (r, c), target each)`; **deep-copy via
+// `_cloneResult` on store and get** (the edge list could otherwise be
+// mutated by callers and corrupt the cache).
+
 class HashiSolver {
   constructor(data) {
     const { rows, cols, islands } = data;
