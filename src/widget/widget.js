@@ -974,19 +974,13 @@ function makeWidget() {
       await pendingAutoSolve;
     }
     setStatus('Computing hint...', 'info');
-    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
-    let result;
-    if (reg?.hintDispatch) {
-      result = await reg.hintDispatch({
-        boardState: null, detectedGrid,
-        rows: puzzleData.rows, cols: puzzleData.cols,
-        solution: puzzleData.solution,
-        firstMismatch, getCached: getCachedGridSolution,
-        puzzleData,
-      });
-    } else {
-      result = await getHint({ solution: puzzleData.solution });
-    }
+    // content.js's getHint contains the registry-first dispatcher (Stage D
+    // T7). The Stage-B duplicate dispatcher here was passing an incomplete
+    // ctx (no `grid`), so hooks fell back to propagating from givens-only
+    // and reported nonsense counts like "385 cells can be deduced" on the
+    // 30×30 binairo weekly. Always route through getHint so the rich ctx
+    // is built in one place.
+    const result = await getHint({ solution: puzzleData.solution });
     if (!result?.success) {
       clearPendingHint();
       setStatus(`Hint failed: ${result?.error || 'Unknown error'}`, 'error');
