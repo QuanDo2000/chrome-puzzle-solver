@@ -244,18 +244,6 @@ async function getHint(request = {}) {
         rule: step.rule,
         description: step.description,
       };
-    } else if (detectedGrid.type === 'norinori') {
-      if (solution && firstMismatch(grid, solution)) {
-        return { success: false, error: 'Current game state is wrong.' };
-      }
-      const solver = new NorinoriSolver({
-        rows, cols, rooms: detectedGrid.rooms,
-      });
-      const hintCells = solver.getHint(grid);
-      if (!hintCells || hintCells.length === 0) {
-        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-      }
-      hint = { type: 'norinori', extraCells: hintCells, count: hintCells.length };
     } else if (detectedGrid.type === 'nurikabe') {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
