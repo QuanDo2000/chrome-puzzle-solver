@@ -164,6 +164,33 @@ const hashi = {
     const r = await applyHashiHintEdges(hint);
     return !!r?.success;
   },
+
+  // Hint dispatch for Hashi. grid here is { edges } from hashiHandler.
+  // readState; getStepwiseHint returns one rule firing at a time
+  // {edges, rule, description} so the user (and Loop) sees one logical
+  // deduction per click, explained. Mirrors the previous inline arm in
+  // content.js's getHint verbatim.
+  hintDispatch(ctx) {
+    const { detectedGrid, grid, solution, rows, cols } = ctx;
+    const solver = new HashiSolver({
+      rows, cols, islands: detectedGrid.islands,
+    });
+    const step = solver.getStepwiseHint(grid.edges || []);
+    if (step && step.contradiction) {
+      return { success: false, error: 'Current bridges conflict with the puzzle — undo, or click Solve to reset.' };
+    }
+    if (!step || !step.edges || step.edges.length === 0) {
+      return { success: false, error: 'No more bridges can be deduced from the current state. Click Solve to finish.' };
+    }
+    const hint = {
+      type: 'hashi',
+      edges: step.edges,
+      count: step.edges.length,
+      rule: step.rule,
+      description: step.description,
+    };
+    return { success: true, hint, grid, solution };
+  },
 };
 
 // Local copy of preview.js's drawHashiIslandsOn — only used by

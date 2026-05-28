@@ -193,27 +193,6 @@ async function getHint(request = {}) {
           hint = nextChunkHint(grid, getAquariumPath(sol, detectedGrid.regionMap));
         }
       }
-    } else if (detectedGrid.type === 'hashi') {
-      // grid here is { edges } from hashiHandler.readState. Stepwise hint
-      // returns one rule firing at a time {edges, rule, description} so the
-      // user (and Loop) sees one logical deduction per click, explained.
-      const solver = new HashiSolver({
-        rows, cols, islands: detectedGrid.islands,
-      });
-      const step = solver.getStepwiseHint(grid.edges || []);
-      if (step && step.contradiction) {
-        return { success: false, error: 'Current bridges conflict with the puzzle — undo, or click Solve to reset.' };
-      }
-      if (!step || !step.edges || step.edges.length === 0) {
-        return { success: false, error: 'No more bridges can be deduced from the current state. Click Solve to finish.' };
-      }
-      hint = {
-        type: 'hashi',
-        edges: step.edges,
-        count: step.edges.length,
-        rule: step.rule,
-        description: step.description,
-      };
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
