@@ -987,6 +987,25 @@ function makeWidget() {
       return;
     }
     const h = result.hint;
+    // Cap single-click Hint at MAX_HINT_CELLS forced cells so the user gets a
+    // nudge-sized reveal instead of dropping half the board at once (e.g.
+    // 30×30 binairo weekly hint was returning ~385 forced cells). Loop's
+    // runLoop path calls getHint directly and is intentionally NOT capped —
+    // it sizes batches for the ~10 s wall budget. Edge/line-shape hints
+    // (slitherlink, hashi, galaxies) and shikaku rectangle hints keep their
+    // natural granularity.
+    const MAX_HINT_CELLS = 10;
+    if (h && Array.isArray(h.cells) && Array.isArray(h.extraCells)
+        && puzzleData.type !== 'shikaku') {
+      const total = h.cells.length + h.extraCells.length;
+      if (total > MAX_HINT_CELLS) {
+        h._fullCount = total;
+        const keepCells = Math.min(h.cells.length, MAX_HINT_CELLS);
+        const keepExtra = MAX_HINT_CELLS - keepCells;
+        h.cells = h.cells.slice(0, keepCells);
+        h.extraCells = h.extraCells.slice(0, Math.max(0, keepExtra));
+      }
+    }
     if (result.solution) puzzleData.solution = result.solution;
     puzzleData.pendingHint = h;
     q('[data-action="applyHint"]').disabled = false;
