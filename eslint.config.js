@@ -184,6 +184,7 @@ module.exports = [
         MUTATING_OP_TIMEOUT_MS: 'readonly',
         setMutatingOp: 'readonly',
         clearMutatingOp: 'readonly',
+        assertCtxHas: 'readonly',
         // src/widget/worker.js
         solverWorker: 'writable',
         solverWorkerInit: 'writable',

@@ -53,11 +53,34 @@ function saveWidgetPref(pref) {
   try { localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(pref)); } catch {}
 }
 
+// ── Dispatcher contract assertions ────────────────────────────
+//
+// Each registry hook (`hintDispatch`, `loopDoneCheck`, `applyHint`,
+// `partialResultArm`, `cacheKey`) is called via a dispatcher that builds a
+// ctx object from widget closure state. When a dispatcher silently passes
+// an incomplete ctx, the puzzle's hook destructures undefined and produces
+// hard-to-debug downstream failures (e.g. Stage D T7's duplicate-dispatcher
+// where the binairo hook silently propagated from givens-only because grid
+// was missing). assertCtxHas surfaces those bugs at the dispatcher boundary
+// — devs see the warn AND the surrounding try/catch (in hintHandler,
+// applyHintHandler, etc.) catches the throw so the user sees an error
+// message instead of a crash.
+function assertCtxHas(ctx, fields, hookName) {
+  for (const f of fields) {
+    if (!ctx || ctx[f] === undefined) {
+      const msg = `Dispatcher contract violation: ${hookName} missing ctx.${f}`;
+      console.warn('[puzzle-solver]', msg);
+      throw new Error(msg);
+    }
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     detectedGrid, suppressStateWatch, undoStack, redoStack, MAX_UNDO,
     mutatingOp, mutatingOpTimer, MUTATING_OP_TIMEOUT_MS,
     setMutatingOp, clearMutatingOp,
     WIDGET_STORAGE_KEY, loadWidgetPref, saveWidgetPref,
+    assertCtxHas,
   };
 }

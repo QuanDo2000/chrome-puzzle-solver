@@ -107,6 +107,7 @@ function cacheGalaxiesSolution(data, grid) {
 
 function getCachedGridSolution(data) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
+  if (reg?.cacheKey) assertCtxHas(data, ['type'], 'cacheKey');
   const key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) return null;
   try {
@@ -131,6 +132,7 @@ function getCachedGridSolution(data) {
 
 function cacheGridSolution(data, grid) {
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
+  if (reg?.cacheKey) assertCtxHas(data, ['type'], 'cacheKey');
   const key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) return;
   try {

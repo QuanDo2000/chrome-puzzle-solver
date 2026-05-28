@@ -630,13 +630,15 @@ function makeWidget() {
   function applyPartialResult(result) {
     const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
     if (reg?.partialResultArm) {
-      reg.partialResultArm(result, {
+      const ctx = {
         clearPendingHint, setStatus, drawPreview,
         applyGridPartialResult, applyHashiPartialResult,
         setConfirming: (v) => { confirming = v; },
         setLoopConfirming: (v) => { loopConfirming = v; },
         setSolveBtnText: (t) => { solveBtn.textContent = t; },
-      });
+      };
+      assertCtxHas(ctx, ['applyGridPartialResult', 'applyHashiPartialResult', 'setStatus'], 'partialResultArm');
+      reg.partialResultArm(result, ctx);
     }
   }
 
@@ -822,9 +824,9 @@ function makeWidget() {
       let gsComplete;
       const regLoop = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
       if (regLoop?.loopDoneCheck) {
-        gsComplete = await regLoop.loopDoneCheck({
-          boardState: gs.grid, solution: puzzleData.solution, puzzleData,
-        });
+        const ctx = { boardState: gs.grid, solution: puzzleData.solution ?? null, puzzleData };
+        assertCtxHas(ctx, ['boardState', 'solution', 'puzzleData'], 'loopDoneCheck');
+        gsComplete = await regLoop.loopDoneCheck(ctx);
       } else {
         gsComplete = gs.grid.every(row => row.every(c => c !== 0));
       }
@@ -888,9 +890,9 @@ function makeWidget() {
       if (end?.grid) {
         const regEnd = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
         if (regEnd?.loopDoneCheck) {
-          endComplete = await regEnd.loopDoneCheck({
-            boardState: end.grid, solution: puzzleData.solution, puzzleData,
-          });
+          const ctx = { boardState: end.grid, solution: puzzleData.solution ?? null, puzzleData };
+          assertCtxHas(ctx, ['boardState', 'solution', 'puzzleData'], 'loopDoneCheck');
+          endComplete = await regEnd.loopDoneCheck(ctx);
         } else {
           // Default cell-state done-check: every cell non-zero. Puzzle types
           // with edge/island/owner-id shapes (slitherlink, hashi, shikaku)
@@ -1050,13 +1052,15 @@ function makeWidget() {
       ? PUZZLES[hint?.type === 'galaxies' ? 'galaxies' : puzzleData?.type]
       : null;
     if (reg?.applyHint) {
-      return !!(await reg.applyHint(hint, {
+      const ctx = {
         applySolution,
         callMainWorld,
         applyHashiHintEdges,
         hintAbsoluteCells,
         puzzleData,
-      }));
+      };
+      assertCtxHas(ctx, ['applySolution', 'callMainWorld', 'puzzleData', 'hintAbsoluteCells'], 'applyHint');
+      return !!(await reg.applyHint(hint, ctx));
     }
     const hintCells = hintAbsoluteCells(hint);
     return !!(await callMainWorld('applyHintCells', [hintCells]));

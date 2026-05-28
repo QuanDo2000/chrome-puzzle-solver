@@ -222,6 +222,7 @@ async function getHint(request = {}) {
         getAquariumPath, getNonogramPath,
         addAquariumRegionHints,
       };
+      assertCtxHas(ctx, ['detectedGrid', 'grid', 'rows', 'cols', 'firstMismatch'], 'hintDispatch');
       return await reg.hintDispatch(ctx);
     }
     // Nonogram fallback (unmigrated by Stage D Task 7 — task spec keeps
