@@ -891,36 +891,12 @@ function makeWidget() {
           endComplete = await regEnd.loopDoneCheck({
             boardState: end.grid, solution: puzzleData.solution, puzzleData,
           });
-        } else if (puzzleData.type === 'slitherlink') {
-          // Dispatch on type FIRST. For slitherlink, end.grid is
-          // { horizontal, vertical } (not a 2D array), so the cell-grid
-          // `.every` check below would TypeError. Even if solution is missing
-          // (auto-solve failed or still running), stay in the slitherlink arm
-          // and report not-complete instead of crashing.
-          if (puzzleData.solution?.horizontal && puzzleData.solution?.vertical) {
-            const edgeState = await callMainWorld('readSlitherlinkState', [puzzleData.rows, puzzleData.cols]);
-            const bh = edgeState?.horizontal || [];
-            const bv = edgeState?.vertical || [];
-            endComplete = true;
-            for (let r = 0; endComplete && r < puzzleData.solution.horizontal.length; r++) {
-              for (let c = 0; c < (puzzleData.solution.horizontal[r]?.length || 0); c++) {
-                if (puzzleData.solution.horizontal[r][c] === 1 && bh[r]?.[c] !== 1) { endComplete = false; break; }
-              }
-            }
-            for (let r = 0; endComplete && r < puzzleData.solution.vertical.length; r++) {
-              for (let c = 0; c < (puzzleData.solution.vertical[r]?.length || 0); c++) {
-                if (puzzleData.solution.vertical[r][c] === 1 && bv[r]?.[c] !== 1) { endComplete = false; break; }
-              }
-            }
-          } else {
-            endComplete = false;
-          }
         } else {
-          endComplete = puzzleData.type === 'shikaku'
-            ? end.grid.every(row => row.every(c => c !== -1))
-            : puzzleData.type === 'hashi'
-              ? hashiDoneCheck(end.grid, puzzleData.solution)
-              : end.grid.every(row => row.every(c => c !== 0));
+          // Default cell-state done-check: every cell non-zero. Puzzle types
+          // with edge/island/owner-id shapes (slitherlink, hashi, shikaku)
+          // declare a loopDoneCheck hook and dispatch above; the in-loop
+          // site uses the same pattern.
+          endComplete = end.grid.every(row => row.every(c => c !== 0));
         }
       }
       const done = end?.grid && puzzleData.type !== 'galaxies' && endComplete;
