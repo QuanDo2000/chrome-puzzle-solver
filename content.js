@@ -165,34 +165,6 @@ async function getHint(request = {}) {
           hint = nextGalaxyHint(grid, sol);
         }
       }
-    } else if (detectedGrid.type === 'aquarium') {
-      if (solution && firstMismatch(grid, solution)) {
-        return { success: false, error: 'Current game state is wrong.' };
-      }
-      const solver = new AquariumSolver(rowClues, colClues, detectedGrid.regionMap, rows, cols);
-      hint = solver.getHint(grid);
-      // Solver fallback when AquariumSolver.getHint exhausts. The aquarium
-      // heuristic is purely per-line — on the 30x30 monthly it produces one
-      // hint and then stalls with 98% of cells still empty. Use the full
-      // solver via localStorage cache → in-memory cache → fresh solve, and
-      // emit one region per Hint (smallest first) via the cached path.
-      if (!hint) {
-        let sol = hintSolution || getCachedGridSolution(detectedGrid);
-        if (!sol) {
-          const result = await runSolve(rowClues, colClues, grid, 'aquarium', solveExtraData());
-          if (result?.solved && result.grid) {
-            cacheGridSolution(detectedGrid, result.grid);
-            sol = result.grid;
-          }
-        }
-        if (sol) {
-          if (firstMismatch(grid, sol)) {
-            return { success: false, error: 'Current game state is wrong.' };
-          }
-          hintSolution = sol;
-          hint = nextChunkHint(grid, getAquariumPath(sol, detectedGrid.regionMap));
-        }
-      }
     } else {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -220,9 +192,6 @@ async function getHint(request = {}) {
           hint = nextChunkHint(grid, getNonogramPath(sol));
         }
       }
-    }
-    if (detectedGrid.type === 'aquarium') {
-      hint = addAquariumRegionHints(hint, grid, hintSolution, detectedGrid.regionMap);
     }
     if (!hint) return { success: false, error: 'No hint available' };
     return { success: true, hint, grid, solution: hintSolution };

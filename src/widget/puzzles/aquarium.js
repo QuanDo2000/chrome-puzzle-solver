@@ -44,6 +44,49 @@ const aquarium = {
       regionMap: data.regionMap, rows: data.rows, cols: data.cols,
     };
   },
+
+  // Hint dispatch for Aquarium. The heuristic is purely per-line — on
+  // hard boards it produces one hint and stalls. Falls back to the full
+  // solver via localStorage cache → in-memory cache → fresh solve, then
+  // emits one region per Hint (smallest first) via the cached path.
+  // Folds in the post-hook addAquariumRegionHints augmentation that the
+  // old getHint ran after the if-chain. Mirrors the previous inline arm
+  // verbatim modulo the augment lift.
+  async hintDispatch(ctx) {
+    const {
+      detectedGrid, grid, solution, hintSolution: initialHintSolution,
+      rows, cols, rowClues, colClues,
+      firstMismatch, getCachedGridSolution, cacheGridSolution,
+      runSolve, solveExtraData,
+      nextChunkHint, getAquariumPath, addAquariumRegionHints,
+    } = ctx;
+    if (solution && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    let hintSolution = initialHintSolution ?? solution;
+    const solver = new AquariumSolver(rowClues, colClues, detectedGrid.regionMap, rows, cols);
+    let hint = solver.getHint(grid);
+    if (!hint) {
+      let sol = hintSolution || getCachedGridSolution(detectedGrid);
+      if (!sol) {
+        const result = await runSolve(rowClues, colClues, grid, 'aquarium', solveExtraData());
+        if (result?.solved && result.grid) {
+          cacheGridSolution(detectedGrid, result.grid);
+          sol = result.grid;
+        }
+      }
+      if (sol) {
+        if (firstMismatch(grid, sol)) {
+          return { success: false, error: 'Current game state is wrong.' };
+        }
+        hintSolution = sol;
+        hint = nextChunkHint(grid, getAquariumPath(sol, detectedGrid.regionMap));
+      }
+    }
+    hint = addAquariumRegionHints(hint, grid, hintSolution, detectedGrid.regionMap);
+    if (!hint) return { success: false, error: 'No hint available' };
+    return { success: true, hint, grid, solution: hintSolution };
+  },
 };
 
 if (typeof module !== 'undefined' && module.exports) {
