@@ -153,6 +153,9 @@ const binairo = {
         ' must be ', bold(valueStr),
       ];
     }
+    if (h._fullCount && h._fullCount > total) {
+      return [bold(String(total)), ` (of ${h._fullCount}) cells can be deduced`];
+    }
     return [bold(String(total)), ' cells can be deduced'];
   },
 

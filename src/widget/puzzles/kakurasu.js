@@ -128,6 +128,9 @@ const kakurasu = {
         ' must be ', bold(valueStr),
       ];
     }
+    if (h._fullCount && h._fullCount > cells.length) {
+      return [bold(String(cells.length)), ` (of ${h._fullCount}) cells can be deduced`];
+    }
     return [bold(String(cells.length)), ' cells can be deduced'];
   },
 
