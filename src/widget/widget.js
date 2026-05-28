@@ -381,7 +381,14 @@ function makeWidget() {
     else if (action === 'dump') dumpHandler();
   });
 
+  // Tracks the URL path of the last successful detect. The urlWatch poll
+  // below compares against location.pathname and re-runs detect when the
+  // user SPA-navigates to a different puzzle on the same tab. Also stamped
+  // on every detectHandler entry so a manual click resets the baseline.
+  let lastDetectedPath = '';
+
   async function detectHandler() {
+    lastDetectedPath = window.location.pathname || '';
     setStatus('Detecting...', 'info');
     const result = await detectPuzzle();
     if (!result || !result.found) {
@@ -1259,6 +1266,27 @@ function makeWidget() {
       solverWorker = null;
       solverWorkerInit = null;
     }
+  });
+
+  // Auto-redetect on SPA navigation. puzzles-mobile.com navigates between
+  // puzzles within the same tab without reloading the page, so the widget
+  // would otherwise show stale puzzleData until the user clicks Detect.
+  // Polls location.pathname every second — cheap and works regardless of
+  // how the page swaps puzzles (pushState, hash route, etc.).
+  const urlWatchInterval = setInterval(() => {
+    const cur = window.location.pathname || '';
+    if (cur && cur !== lastDetectedPath) {
+      lastDetectedPath = cur;
+      detectHandler().catch(() => {});
+    }
+  }, 1000);
+
+  // Clear the URL-watch poll alongside the worker / state-watch teardown.
+  // pagehide(persisted=true) is BFCache — keep the interval running so the
+  // widget keeps auto-redetecting after a back/forward navigation.
+  window.addEventListener('pagehide', (e) => {
+    if (e.persisted) return;
+    clearInterval(urlWatchInterval);
   });
 
   detectHandler().catch(() => {});
