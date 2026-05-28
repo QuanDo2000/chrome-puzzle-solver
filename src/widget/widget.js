@@ -642,8 +642,17 @@ function makeWidget() {
     clearPendingHint();
     solveBtn.textContent = 'Confirm';
     confirming = true;
+    // Denom for the progress percentage: total bridges required by the
+    // puzzle = sum of island numbers / 2 (each bridge contributes to both
+    // endpoints). Then deduced bridges = sum(e.bridges) over the partial.
+    let deduced = 0;
+    for (const e of (result.edges || [])) deduced += e.bridges || 0;
+    let totalBridges = 0;
+    for (const isl of (puzzleData?.islands || [])) totalBridges += isl.number || 0;
+    totalBridges = Math.floor(totalBridges / 2);
+    const pct = totalBridges > 0 ? Math.round(100 * deduced / totalBridges) : 0;
     setStatus(
-      `Partial only: ${result.edges.length} bridges deduced (board too hard for full solve). Apply, then finish manually.`,
+      `Partial only: ${result.edges.length} bridges deduced (${pct}% of board, too hard for full solve). Apply, then finish manually.`,
       'info',
     );
     drawPreview({ edges: result.edges });
@@ -660,11 +669,16 @@ function makeWidget() {
     solveBtn.textContent = 'Confirm';
     confirming = true;
     let filled = 0;
+    let total = 0;
     for (const row of result.grid) {
-      for (const v of row) if (v !== 0) filled++;
+      for (const v of row) {
+        total++;
+        if (v !== 0) filled++;
+      }
     }
+    const pct = total > 0 ? Math.round(100 * filled / total) : 0;
     setStatus(
-      `Partial only: ${filled} cells deduced (board too hard for full solve). Apply, then finish manually.`,
+      `Partial only: ${filled} cells deduced (${pct}% of board, too hard for full solve). Apply, then finish manually.`,
       'info',
     );
     drawPreview(result.grid);

@@ -206,10 +206,25 @@ const slitherlink = {
     setSolveBtnText('Confirm');
     setConfirming(true);
     let lines = 0;
-    for (const row of result.horizontal) for (const v of row) if (v === 1) lines++;
-    for (const row of result.vertical)   for (const v of row) if (v === 1) lines++;
+    let decided = 0;
+    let total = 0;
+    for (const row of result.horizontal) {
+      for (const v of row) {
+        total++;
+        if (v === 1) lines++;
+        if (v !== 0) decided++;
+      }
+    }
+    for (const row of result.vertical) {
+      for (const v of row) {
+        total++;
+        if (v === 1) lines++;
+        if (v !== 0) decided++;
+      }
+    }
+    const pct = total > 0 ? Math.round(100 * decided / total) : 0;
     setStatus(
-      `Partial only: ${lines} edges deduced (board too hard for full solve). Apply, then finish manually.`,
+      `Partial only: ${lines} edges deduced (${pct}% of board, too hard for full solve). Apply, then finish manually.`,
       'info',
     );
     drawPreview({ horizontal: result.horizontal, vertical: result.vertical });
