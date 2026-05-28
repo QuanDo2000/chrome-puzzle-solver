@@ -119,6 +119,24 @@ async function getHint(request = {}) {
     const solution = request.solution || null;
     let hintSolution = solution;
     let hint = null;
+    // Per-puzzle hintDispatch (Stage D Task 7). Migrated modules return the
+    // full {success, hint, grid, solution} shape and bypass the inline chain
+    // below entirely. Unmigrated puzzles fall through.
+    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[detectedGrid.type] : null;
+    if (reg?.hintDispatch) {
+      const ctx = {
+        detectedGrid, grid, solution, hintSolution,
+        rows, cols, rowClues, colClues,
+        firstMismatch, firstGalaxiesMismatch,
+        getCachedGridSolution, cacheGridSolution,
+        getCachedGalaxiesSolution, cacheGalaxiesSolution,
+        runSolve, callMainWorld, solveExtraData,
+        nextChunkHint, nextGalaxyHint, getGalaxiesHint,
+        getAquariumPath, getNonogramPath,
+        addAquariumRegionHints,
+      };
+      return await reg.hintDispatch(ctx);
+    }
     if (detectedGrid.type === 'galaxies') {
       if (solution && firstGalaxiesMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
@@ -174,22 +192,6 @@ async function getHint(request = {}) {
           hintSolution = sol;
           hint = nextChunkHint(grid, getAquariumPath(sol, detectedGrid.regionMap));
         }
-      }
-    } else if (detectedGrid.type === 'binairo') {
-      if (solution && firstMismatch(grid, solution)) {
-        return { success: false, error: 'Current game state is wrong.' };
-      }
-      const solver = new BinairoSolver({
-        rows, cols, givens: detectedGrid.givens, initialState: grid,
-        comparisonClues: detectedGrid.comparisonClues || [],
-      });
-      hint = solver.getHint(grid);
-      // No solve-fallback for binairo: hint is pure deduction by design.
-      // When propagation exhausts, the user clicks Solve (which does
-      // backtracking) — keeping Hint logic-only avoids minute-long hangs
-      // on 30x30 puzzles where backtracking is required.
-      if (!hint) {
-        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
       }
     } else if (detectedGrid.type === 'yinyang') {
       if (solution && firstMismatch(grid, solution)) {

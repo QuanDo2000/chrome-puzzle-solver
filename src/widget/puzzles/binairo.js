@@ -164,6 +164,26 @@ const binairo = {
       comparisonClues: data.comparisonClues || [],
     };
   },
+
+  // Hint dispatch for Binairo. Pure deduction by design — when propagation
+  // exhausts, the hook surfaces an error pointing the user at Solve instead
+  // of falling back to the solver (which could hang for minutes on a 30×30).
+  // Mirrors the previous inline arm in content.js's getHint verbatim.
+  hintDispatch(ctx) {
+    const { detectedGrid, grid, solution, rows, cols, firstMismatch } = ctx;
+    if (solution && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    const solver = new BinairoSolver({
+      rows, cols, givens: detectedGrid.givens, initialState: grid,
+      comparisonClues: detectedGrid.comparisonClues || [],
+    });
+    const hint = solver.getHint(grid);
+    if (!hint) {
+      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+    }
+    return { success: true, hint, grid, solution };
+  },
 };
 
 // Sparse comparison-clue stable signature. FNV-like rolling number so a
