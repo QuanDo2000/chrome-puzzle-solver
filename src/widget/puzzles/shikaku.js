@@ -136,6 +136,21 @@ const shikaku = {
     for (const cell of hintCells) grid[cell.row][cell.col] = cell.value;
     return !!(await callMainWorld('applyShikakuState', [grid, puzzleData.clues]));
   },
+
+  // Hint dispatch for Shikaku. No "current state is wrong" pre-check —
+  // owner-index grids don't compare with firstMismatch (cell-state-only).
+  // Mirrors the previous inline arm in content.js's getHint verbatim.
+  hintDispatch(ctx) {
+    const { detectedGrid, grid, solution, rows, cols } = ctx;
+    const solver = new ShikakuSolver({
+      rows, cols, clues: detectedGrid.clues, initialState: grid,
+    });
+    const hint = solver.getHint(grid);
+    if (!hint) {
+      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+    }
+    return { success: true, hint, grid, solution };
+  },
 };
 
 // Local copy of preview.js's drawShikakuCluesOn — only used by

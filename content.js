@@ -215,14 +215,6 @@ async function getHint(request = {}) {
       // overlay onto it without re-reading.
       hint._curH = curH;
       hint._curV = curV;
-    } else if (detectedGrid.type === 'shikaku') {
-      const solver = new ShikakuSolver({
-        rows, cols, clues: detectedGrid.clues, initialState: grid,
-      });
-      hint = solver.getHint(grid);
-      if (!hint) {
-        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-      }
     } else if (detectedGrid.type === 'hashi') {
       // grid here is { edges } from hashiHandler.readState. Stepwise hint
       // returns one rule firing at a time {edges, rule, description} so the
