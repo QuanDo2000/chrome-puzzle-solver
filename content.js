@@ -137,60 +137,33 @@ async function getHint(request = {}) {
       };
       return await reg.hintDispatch(ctx);
     }
-    if (detectedGrid.type === 'galaxies') {
-      if (solution && firstGalaxiesMismatch(grid, solution)) {
-        return { success: false, error: 'Current game state is wrong.' };
-      }
-      hint = getGalaxiesHint(grid, detectedGrid.stars);
-      if (hint?.error) return { success: false, error: hint.error };
-      // Solver fallback when the heuristic exhausts. Walks a per-galaxy
-      // path built from the solver's ground-truth solution: each call emits
-      // exactly one galaxy's worth of remaining boundary lines (smallest
-      // first), so the loop keeps progressing one galaxy at a time instead
-      // of dumping every remaining line at once.
-      if (!hint) {
-        let sol = hintSolution || getCachedGalaxiesSolution(detectedGrid);
-        if (!sol) {
-          const result = await runSolve(null, null, null, 'galaxies', solveExtraData());
-          if (result?.solved && result.grid) {
-            cacheGalaxiesSolution(detectedGrid, result.grid);
-            sol = result.grid;
-          }
-        }
-        if (sol) {
-          if (firstGalaxiesMismatch(grid, sol)) {
-            return { success: false, error: 'Current game state is wrong.' };
-          }
-          hintSolution = sol;
-          hint = nextGalaxyHint(grid, sol);
+    // Nonogram fallback (unmigrated by Stage D Task 7 — task spec keeps
+    // nonogram on this generic cell-state path since its hints work via
+    // the solution-grid path rather than an inline solver call).
+    if (solution && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    const solver = new NonogramSolver(rowClues, colClues);
+    hint = solver.getHint(grid);
+    // Same fallback pattern for nonogram: if the per-line solveLine
+    // narrowing dries up, fall back to the cached / freshly-solved
+    // solution and emit one row at a time. The 50x50 monthly finishes
+    // via the heuristic alone, but harder puzzles can stall.
+    if (!hint) {
+      let sol = hintSolution || getCachedGridSolution(detectedGrid);
+      if (!sol) {
+        const result = await runSolve(rowClues, colClues, grid, 'nonogram', solveExtraData());
+        if (result?.solved && result.grid) {
+          cacheGridSolution(detectedGrid, result.grid);
+          sol = result.grid;
         }
       }
-    } else {
-      if (solution && firstMismatch(grid, solution)) {
-        return { success: false, error: 'Current game state is wrong.' };
-      }
-      const solver = new NonogramSolver(rowClues, colClues);
-      hint = solver.getHint(grid);
-      // Same fallback pattern for nonogram: if the per-line solveLine
-      // narrowing dries up, fall back to the cached / freshly-solved
-      // solution and emit one row at a time. The 50x50 monthly finishes
-      // via the heuristic alone, but harder puzzles can stall.
-      if (!hint) {
-        let sol = hintSolution || getCachedGridSolution(detectedGrid);
-        if (!sol) {
-          const result = await runSolve(rowClues, colClues, grid, 'nonogram', solveExtraData());
-          if (result?.solved && result.grid) {
-            cacheGridSolution(detectedGrid, result.grid);
-            sol = result.grid;
-          }
+      if (sol) {
+        if (firstMismatch(grid, sol)) {
+          return { success: false, error: 'Current game state is wrong.' };
         }
-        if (sol) {
-          if (firstMismatch(grid, sol)) {
-            return { success: false, error: 'Current game state is wrong.' };
-          }
-          hintSolution = sol;
-          hint = nextChunkHint(grid, getNonogramPath(sol));
-        }
+        hintSolution = sol;
+        hint = nextChunkHint(grid, getNonogramPath(sol));
       }
     }
     if (!hint) return { success: false, error: 'No hint available' };

@@ -130,6 +130,46 @@ const galaxies = {
     const r = await applySolution({ type: 'galaxies-lines', lines: hint.lines });
     return !!r?.success;
   },
+
+  // Hint dispatch for Galaxies. The galaxiesHint heuristic walks regions
+  // one at a time; when it exhausts, fall back to the cached/freshly-solved
+  // ground-truth solution and emit one galaxy's worth of remaining boundary
+  // lines per call (smallest first) via nextGalaxyHint. Mirrors the previous
+  // inline arm in content.js's getHint verbatim.
+  async hintDispatch(ctx) {
+    const {
+      detectedGrid, grid, solution, hintSolution: initialHintSolution,
+      firstGalaxiesMismatch,
+      getCachedGalaxiesSolution, cacheGalaxiesSolution,
+      runSolve, solveExtraData,
+      nextGalaxyHint, getGalaxiesHint,
+    } = ctx;
+    if (solution && firstGalaxiesMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    let hintSolution = initialHintSolution ?? solution;
+    let hint = getGalaxiesHint(grid, detectedGrid.stars);
+    if (hint?.error) return { success: false, error: hint.error };
+    if (!hint) {
+      let sol = hintSolution || getCachedGalaxiesSolution(detectedGrid);
+      if (!sol) {
+        const result = await runSolve(null, null, null, 'galaxies', solveExtraData());
+        if (result?.solved && result.grid) {
+          cacheGalaxiesSolution(detectedGrid, result.grid);
+          sol = result.grid;
+        }
+      }
+      if (sol) {
+        if (firstGalaxiesMismatch(grid, sol)) {
+          return { success: false, error: 'Current game state is wrong.' };
+        }
+        hintSolution = sol;
+        hint = nextGalaxyHint(grid, sol);
+      }
+    }
+    if (!hint) return { success: false, error: 'No hint available' };
+    return { success: true, hint, grid, solution: hintSolution };
+  },
 };
 
 if (typeof module !== 'undefined' && module.exports) {
