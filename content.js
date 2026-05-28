@@ -193,19 +193,6 @@ async function getHint(request = {}) {
           hint = nextChunkHint(grid, getAquariumPath(sol, detectedGrid.regionMap));
         }
       }
-    } else if (detectedGrid.type === 'yinyang') {
-      if (solution && firstMismatch(grid, solution)) {
-        return { success: false, error: 'Current game state is wrong.' };
-      }
-      const solver = new YinYangSolver({
-        rows, cols, task: detectedGrid.task, initialState: grid,
-      });
-      hint = solver.getHint(grid);
-      // Pure deduction by design — no solve fallback. When propagation
-      // exhausts, the user clicks Solve (which backtracks).
-      if (!hint) {
-        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-      }
     } else if (detectedGrid.type === 'slitherlink') {
       // Re-read edge state. The grid we have is the cell-flood-fill grid
       // produced by readGridState for displays, but slitherlink's solver

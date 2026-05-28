@@ -106,6 +106,24 @@ const yinyang = {
   solveExtraData(data) {
     return { rows: data.rows, cols: data.cols, task: data.task };
   },
+
+  // Hint dispatch for Yin-Yang. Pure deduction by design (no solve fallback)
+  // — propagation exhaustion surfaces a "click Solve" error. Mirrors the
+  // previous inline arm in content.js's getHint verbatim.
+  hintDispatch(ctx) {
+    const { detectedGrid, grid, solution, rows, cols, firstMismatch } = ctx;
+    if (solution && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    const solver = new YinYangSolver({
+      rows, cols, task: detectedGrid.task, initialState: grid,
+    });
+    const hint = solver.getHint(grid);
+    if (!hint) {
+      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+    }
+    return { success: true, hint, grid, solution };
+  },
 };
 
 if (typeof module !== 'undefined' && module.exports) {
