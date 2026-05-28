@@ -244,16 +244,6 @@ async function getHint(request = {}) {
         rule: step.rule,
         description: step.description,
       };
-    } else if (detectedGrid.type === 'hitori') {
-      if (solution && firstMismatch(grid, solution)) {
-        return { success: false, error: 'Current game state is wrong.' };
-      }
-      const solver = new HitoriSolver({ rows, cols, task: detectedGrid.task });
-      const hintCells = solver.getHint(grid);
-      if (!hintCells || hintCells.length === 0) {
-        return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-      }
-      hint = { type: 'hitori', extraCells: hintCells, count: hintCells.length };
     } else if (detectedGrid.type === 'kakurasu') {
       if (solution && firstMismatch(grid, solution)) {
         return { success: false, error: 'Current game state is wrong.' };
