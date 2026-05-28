@@ -33,6 +33,7 @@ const norinori = {
   skipAutoSolveGate: true,
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
+  renderEmptyCells: true,
 
   cacheKey(data) {
     if (data?.type !== 'norinori' || !data.areas) return null;

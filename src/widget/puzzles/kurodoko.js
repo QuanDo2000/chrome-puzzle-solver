@@ -33,6 +33,7 @@ const kurodoko = {
   skipAutoSolveGate: true,
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
+  renderEmptyCells: true,
 
   cacheKey(data) {
     if (data?.type !== 'kurodoko' || !data.task) return null;

@@ -34,6 +34,7 @@ const hitori = {
   skipAutoSolveGate: true,
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
+  renderEmptyCells: true,
 
   cacheKey(data) {
     if (data?.type !== 'hitori' || !data.task) return null;

@@ -286,7 +286,6 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   // (cell-loop gates, dynamic-render arms, mistake-overlay branches).
   const isSlitherlink = puzzleData?.type === 'slitherlink';
   const isHashi = puzzleData?.type === 'hashi';
-  const isKakurasu = puzzleData?.type === 'kakurasu';
 
   // Idempotent: ensure the preview is visible whether or not we redraw.
   previewWrap.classList.add('ns-visible');
@@ -338,11 +337,12 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const galaxiesColors = ['#dbeafe', '#fee2e2', '#dcfce7', '#fef3c7', '#ede9fe', '#cffafe', '#fce7f3', '#e5e7eb'];
   const xPad = Math.max(1, Math.floor(cellSize / 5));
   const isShikaku = puzzleData?.type === 'shikaku';
-  const isHitori = puzzleData?.type === 'hitori';
-  const isKurodoko = puzzleData?.type === 'kurodoko';
-  const isMosaic = puzzleData?.type === 'mosaic';
-  const isNorinori = puzzleData?.type === 'norinori';
-  const isNurikabe = puzzleData?.type === 'nurikabe';
+  // renderEmptyCells: hand-listed chain "shikaku/hitori/kakurasu/kurodoko/
+  // mosaic/norinori/nurikabe" need to render v===0 cells (clue digits, walls,
+  // region borders, etc.). Lifted to a per-module flag so adding a new
+  // empty-rendering puzzle stays a one-file change in src/widget/puzzles/.
+  const renderEmpty = !!(typeof PUZZLES !== 'undefined'
+    && PUZZLES?.[puzzleData?.type]?.renderEmptyCells);
   const discR = puzzleData?.type === 'binairo' ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
   if (isSlitherlink) {
     ctx.save();
@@ -471,7 +471,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const v = grid[r][c];
-        if (v === 0 && !isShikaku && !isHitori && !isKakurasu && !isKurodoko && !isMosaic && !isNorinori && !isNurikabe) continue;
+        if (v === 0 && !renderEmpty) continue;
         if (v === -1 && isShikaku) continue;
         const x = c * cellSize, y = r * cellSize;
         if (cellReg?.drawPreviewCell) {

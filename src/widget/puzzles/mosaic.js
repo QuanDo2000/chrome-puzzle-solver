@@ -33,6 +33,7 @@ const mosaic = {
   skipAutoSolveGate: true,
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
+  renderEmptyCells: true,
 
   cacheKey(data) {
     if (data?.type !== 'mosaic' || !data.task) return null;

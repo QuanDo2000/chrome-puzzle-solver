@@ -40,6 +40,7 @@ const nurikabe = {
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
   customLattice: true,
+  renderEmptyCells: true,
 
   cacheKey(data) {
     if (data?.type !== 'nurikabe' || !data.task) return null;

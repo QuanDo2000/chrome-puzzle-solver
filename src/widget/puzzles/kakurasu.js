@@ -37,6 +37,7 @@ const kakurasu = {
   skipAutoSolveGate: true,
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
+  renderEmptyCells: true,
 
   cacheKey(data) {
     if (data?.type !== 'kakurasu' || !data.rowClues || !data.colClues) return null;
