@@ -140,6 +140,25 @@ const nurikabe = {
   partialResultArm(result, { applyGridPartialResult }) {
     applyGridPartialResult(result);
   },
+
+  // Hint dispatch for Nurikabe. hintCells from the solver is absolute
+  // {row, col, value} packed as extraCells. Mirrors the previous inline arm
+  // in content.js's getHint verbatim.
+  hintDispatch(ctx) {
+    const { detectedGrid, grid, solution, rows, cols, firstMismatch } = ctx;
+    if (solution && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    const solver = new NurikabeSolver({
+      rows, cols, task: detectedGrid.task,
+    });
+    const hintCells = solver.getHint(grid);
+    if (!hintCells || hintCells.length === 0) {
+      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+    }
+    const hint = { type: 'nurikabe', extraCells: hintCells, count: hintCells.length };
+    return { success: true, hint, grid, solution };
+  },
 };
 
 // Local copy of preview.js's nurikabeTaskSig — only used by staticSig
