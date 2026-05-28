@@ -193,28 +193,6 @@ async function getHint(request = {}) {
           hint = nextChunkHint(grid, getAquariumPath(sol, detectedGrid.regionMap));
         }
       }
-    } else if (detectedGrid.type === 'slitherlink') {
-      // Re-read edge state. The grid we have is the cell-flood-fill grid
-      // produced by readGridState for displays, but slitherlink's solver
-      // needs the raw H/V edge arrays.
-      const edgeState = await callMainWorld('readSlitherlinkState', [rows, cols]);
-      const curH = edgeState?.horizontal
-        || Array.from({ length: rows + 1 }, () => new Array(cols).fill(0));
-      const curV = edgeState?.vertical
-        || Array.from({ length: rows },     () => new Array(cols + 1).fill(0));
-      const solver = new SlitherlinkSolver({
-        width: cols, height: rows, task: detectedGrid.task,
-        initialState: { horizontal: curH, vertical: curV },
-      });
-      solver.maxMs = 5000;
-      hint = solver.getHint(curH, curV);
-      if (!hint) {
-        return { success: false, error: 'No more edges can be deduced from the current state. Click Solve to finish.' };
-      }
-      // Carry the current edge state along so applyHintHandler / loop can
-      // overlay onto it without re-reading.
-      hint._curH = curH;
-      hint._curV = curV;
     } else if (detectedGrid.type === 'hashi') {
       // grid here is { edges } from hashiHandler.readState. Stepwise hint
       // returns one rule firing at a time {edges, rule, description} so the

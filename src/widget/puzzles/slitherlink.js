@@ -214,6 +214,32 @@ const slitherlink = {
     );
     drawPreview({ horizontal: result.horizontal, vertical: result.vertical });
   },
+
+  // Hint dispatch for Slitherlink. Re-reads raw H/V edge state from MAIN
+  // world (the `grid` argument from readGridState is the flood-fill cell
+  // grid, not the edge arrays the solver needs). Carries _curH/_curV on
+  // the hint so applyHintHandler / loop can overlay without re-reading.
+  // Mirrors the previous inline arm in content.js's getHint verbatim.
+  async hintDispatch(ctx) {
+    const { detectedGrid, grid, solution, rows, cols, callMainWorld } = ctx;
+    const edgeState = await callMainWorld('readSlitherlinkState', [rows, cols]);
+    const curH = edgeState?.horizontal
+      || Array.from({ length: rows + 1 }, () => new Array(cols).fill(0));
+    const curV = edgeState?.vertical
+      || Array.from({ length: rows },     () => new Array(cols + 1).fill(0));
+    const solver = new SlitherlinkSolver({
+      width: cols, height: rows, task: detectedGrid.task,
+      initialState: { horizontal: curH, vertical: curV },
+    });
+    solver.maxMs = 5000;
+    const hint = solver.getHint(curH, curV);
+    if (!hint) {
+      return { success: false, error: 'No more edges can be deduced from the current state. Click Solve to finish.' };
+    }
+    hint._curH = curH;
+    hint._curV = curV;
+    return { success: true, hint, grid, solution };
+  },
 };
 
 // Local copy of preview.js's slitherlinkCluesSig — only used by staticSig
