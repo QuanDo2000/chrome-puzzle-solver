@@ -95,12 +95,14 @@ function loadWidgetSources() {
     vm.runInContext(fs.readFileSync(fullPath, 'utf8'), ctx,
       { filename: path.basename(fullPath) });
   }
-  // Widget source files (extracted by Phase 1 / Phase 2 of the
-  // content.js split). Order matches the bundler.
+  // Widget source files (extracted by Phase 1–4 of the content.js
+  // split). Order: state/cache/worker/hint, then puzzles/*, then the
+  // widget shell, then handlers.js, then the listener+bootstrap.
+  // handler.js MUST load before listener.js, because the bootstrap
+  // synchronously calls getActiveHandler().
   const widgetDir = path.join(REPO, 'src', 'widget');
-  const widgetOrder = ['state.js', 'worker.js', 'cache.js',
+  const widgetPreHandler = ['state.js', 'worker.js', 'cache.js',
                         'galaxies-hint.js', 'hint.js', 'preview.js',
-                        'widget.js',
                         'puzzles/nonogram.js',
                         'puzzles/binairo.js',
                         'puzzles/hitori.js',
@@ -111,18 +113,29 @@ function loadWidgetSources() {
                         'puzzles/nurikabe.js',
                         'puzzles/heyawake.js',
                         'puzzles/yinyang.js',
+                        'puzzles/aquarium.js',
+                        'puzzles/shikaku.js',
+                        'puzzles/hashi.js',
                         'puzzles/slitherlink.js',
                         'puzzles/galaxies.js',
-                        'puzzles/index.js'];
-  for (const f of widgetOrder) {
+                        'puzzles/index.js',
+                        'widget.js',
+                        'handlers.js'];
+  for (const f of widgetPreHandler) {
     const fp = path.join(widgetDir, f);
     if (!fs.existsSync(fp)) continue;
     vm.runInContext(fs.readFileSync(fp, 'utf8'), ctx, { filename: f });
   }
-  for (const file of ['handler.js', 'content.js']) {
-    vm.runInContext(fs.readFileSync(path.join(REPO, file), 'utf8'), ctx,
-      { filename: file });
-  }
+  // handler.js after widget code but before listener.js so the bootstrap
+  // can synchronously call getActiveHandler().
+  vm.runInContext(fs.readFileSync(path.join(REPO, 'handler.js'), 'utf8'),
+    ctx, { filename: 'handler.js' });
+  vm.runInContext(fs.readFileSync(path.join(widgetDir, 'listener.js'), 'utf8'),
+    ctx, { filename: 'listener.js' });
+  // content.js is now a 2-line stub; loading it is harmless but kept so
+  // the test still mirrors the manifest.json content_scripts list.
+  vm.runInContext(fs.readFileSync(path.join(REPO, 'content.js'), 'utf8'),
+    ctx, { filename: 'content.js' });
   return ctx;
 }
 

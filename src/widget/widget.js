@@ -16,6 +16,20 @@
 // reaching into its closure.
 let widgetExpandFn = null;
 
+// Puzzle types the widget knows how to solve. Derived lazily from the
+// per-puzzle registry (PUZZLES from src/widget/puzzles/index.js) so the
+// lookup happens at call time — by then puzzles/index.js has populated
+// PUZZLES regardless of where this file lands in the bundle order. Used
+// by the "no puzzle here" status to point users at a sample URL for each
+// supported type.
+function getSupportedPuzzles() {
+  if (typeof PUZZLES === 'undefined' || !PUZZLES) return [];
+  return Object.values(PUZZLES)
+    .filter(p => p && p.label && p.url)
+    .map(p => ({ name: p.label, url: p.url }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // Hashi done-check helper: every solution edge's bridge count matches the
 // current board state AND no extra bridges exist on pairs absent from the
 // solution. Edge keys are min-max normalized so the comparison is
@@ -308,7 +322,7 @@ function makeWidget() {
 
     const list = document.createElement('ul');
     list.style.cssText = 'margin:2px 0 0 0;padding-left:18px;';
-    for (const p of SUPPORTED_PUZZLES) {
+    for (const p of getSupportedPuzzles()) {
       const li = document.createElement('li');
       const a = document.createElement('a');
       a.href = p.url;

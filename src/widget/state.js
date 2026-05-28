@@ -33,10 +33,31 @@ function clearMutatingOp() {
   if (mutatingOpTimer) { clearTimeout(mutatingOpTimer); mutatingOpTimer = null; }
 }
 
+// ── Widget storage prefs ──────────────────────────────────────
+//
+// Tiny per-user localStorage layer so the widget remembers whether it was
+// expanded/collapsed across reloads. Kept here rather than in widget.js so
+// other modules (and tests) can read the prefs key without pulling in the
+// whole DOM-building shell.
+
+const WIDGET_STORAGE_KEY = 'ns_widget_state';
+
+function loadWidgetPref() {
+  try {
+    const v = localStorage.getItem(WIDGET_STORAGE_KEY);
+    return v ? JSON.parse(v) : {};
+  } catch { return {}; }
+}
+
+function saveWidgetPref(pref) {
+  try { localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(pref)); } catch {}
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     detectedGrid, suppressStateWatch, undoStack, redoStack, MAX_UNDO,
     mutatingOp, mutatingOpTimer, MUTATING_OP_TIMEOUT_MS,
     setMutatingOp, clearMutatingOp,
+    WIDGET_STORAGE_KEY, loadWidgetPref, saveWidgetPref,
   };
 }

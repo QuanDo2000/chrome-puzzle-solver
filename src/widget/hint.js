@@ -177,9 +177,93 @@ function addAquariumRegionHints(hint, grid, solution, regionMap) {
   return { ...hint, extraCells: extra, count: (hint.count || 0) + extra.length };
 }
 
+// Top-level hint dispatcher invoked by the listener and the widget shell.
+// Registry-first: every migrated puzzle module declares a `hintDispatch`
+// hook that owns the full {success, hint, grid, solution} contract.
+// Nonogram is the lone fallback below — its hints work through
+// per-line solveLine narrowing first, then fall back to the cached /
+// freshly-solved solution row-by-row.
+//
+// Bundle order: depends on `detectedGrid` (state.js), `getActiveHandler`
+// (handler.js), `detectPuzzle` (handlers.js), `runSolve` (worker.js),
+// `firstMismatch` / `nextChunkHint` / `getNonogramPath` (above in this
+// file), `getCachedGridSolution` / `cacheGridSolution` (cache.js),
+// `firstGalaxiesMismatch` / `nextGalaxyHint` / `getGalaxiesHint`
+// (galaxies-hint.js), `solveExtraData` (handlers.js), `PUZZLES` (puzzles/
+// index.js). Concatenated AFTER puzzles/index.js so the registry lookup
+// is populated.
+
+async function getHint(request = {}) {
+  try {
+    if (!detectedGrid) {
+      const d = await detectPuzzle();
+      if (!d.found) return { success: false, error: 'No puzzle detected' };
+    }
+    const { rows, cols, rowClues, colClues } = detectedGrid;
+    const handler = getActiveHandler();
+    const grid = handler ? await handler.readState(detectedGrid) : null;
+    if (!grid) return { success: false, error: 'Cannot read grid state' };
+    const solution = request.solution || null;
+    let hintSolution = solution;
+    let hint = null;
+    // Per-puzzle hintDispatch (Stage D Task 7). Migrated modules return the
+    // full {success, hint, grid, solution} shape and bypass the inline chain
+    // below entirely. Unmigrated puzzles fall through.
+    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[detectedGrid.type] : null;
+    if (reg?.hintDispatch) {
+      const ctx = {
+        detectedGrid, grid, solution, hintSolution,
+        rows, cols, rowClues, colClues,
+        firstMismatch, firstGalaxiesMismatch,
+        getCachedGridSolution, cacheGridSolution,
+        getCachedGalaxiesSolution, cacheGalaxiesSolution,
+        runSolve, callMainWorld, solveExtraData,
+        nextChunkHint, nextGalaxyHint, getGalaxiesHint,
+        getAquariumPath, getNonogramPath,
+        addAquariumRegionHints,
+      };
+      return await reg.hintDispatch(ctx);
+    }
+    // Nonogram fallback (unmigrated by Stage D Task 7 — task spec keeps
+    // nonogram on this generic cell-state path since its hints work via
+    // the solution-grid path rather than an inline solver call).
+    if (solution && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    const solver = new NonogramSolver(rowClues, colClues);
+    hint = solver.getHint(grid);
+    // Same fallback pattern for nonogram: if the per-line solveLine
+    // narrowing dries up, fall back to the cached / freshly-solved
+    // solution and emit one row at a time. The 50x50 monthly finishes
+    // via the heuristic alone, but harder puzzles can stall.
+    if (!hint) {
+      let sol = hintSolution || getCachedGridSolution(detectedGrid);
+      if (!sol) {
+        const result = await runSolve(rowClues, colClues, grid, 'nonogram', solveExtraData());
+        if (result?.solved && result.grid) {
+          cacheGridSolution(detectedGrid, result.grid);
+          sol = result.grid;
+        }
+      }
+      if (sol) {
+        if (firstMismatch(grid, sol)) {
+          return { success: false, error: 'Current game state is wrong.' };
+        }
+        hintSolution = sol;
+        hint = nextChunkHint(grid, getNonogramPath(sol));
+      }
+    }
+    if (!hint) return { success: false, error: 'No hint available' };
+    return { success: true, hint, grid, solution: hintSolution };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     firstMismatch, getAquariumPath, getNonogramPath, hintFromCellChunk,
     nextChunkHint, hintAbsoluteCells, applyHintToGrid, addAquariumRegionHints,
+    getHint,
   };
 }

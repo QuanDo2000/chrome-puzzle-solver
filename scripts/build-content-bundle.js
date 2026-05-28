@@ -9,13 +9,19 @@ const fs = require('fs');
 const path = require('path');
 
 const WIDGET_FILES = [
+  // State (detectedGrid, undo/redo, widget prefs) — no dependencies.
   'state.js',
+  // Solver Worker proxy + the per-puzzle modules (which reference
+  // `runSolve` from worker.js in their hooks but only at call time).
   'worker.js',
   'cache.js',
   'galaxies-hint.js',
+  // hint.js declares getHint, which calls into per-puzzle hooks via
+  // PUZZLES. Function bodies are resolved at call time, so it's safe
+  // to declare hint.js before puzzles/index.js — the listener fires
+  // getHint only after the whole bundle has loaded.
   'hint.js',
   'preview.js',
-  'widget.js',
   'puzzles/nonogram.js',
   'puzzles/binairo.js',
   'puzzles/hitori.js',
@@ -31,7 +37,19 @@ const WIDGET_FILES = [
   'puzzles/hashi.js',
   'puzzles/slitherlink.js',
   'puzzles/galaxies.js',
+  // Aggregates the per-puzzle const declarations into the PUZZLES map.
+  // Must come after all puzzles/<type>.js files.
   'puzzles/index.js',
+  // The widget shell. References PUZZLES at runtime; safe after
+  // puzzles/index.js.
+  'widget.js',
+  // detectPuzzle / readGridState / applySolution / solveExtraData /
+  // handleHistory — used by listener.js and widget.js. Function bodies,
+  // so call-time refs are fine.
+  'handlers.js',
+  // chrome.runtime.onMessage listener + DOM-ready bootstrap. Last so
+  // every symbol the listener/bootstrap touches is already declared.
+  'listener.js',
 ];
 
 const EXPORT_RE =

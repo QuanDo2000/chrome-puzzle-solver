@@ -315,16 +315,22 @@ module.exports = [
         // src/widget/puzzles/galaxies.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         galaxies: 'readonly',
-        // content.js top-level (consumed by src/widget/widget.js)
+        // src/widget/state.js — widget storage prefs.
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
-        SUPPORTED_PUZZLES: 'readonly',
+        WIDGET_STORAGE_KEY: 'readonly',
+        // src/widget/widget.js — derived from PUZZLES at call time.
+        getSupportedPuzzles: 'readonly',
+        // src/widget/handlers.js — cross-puzzle dispatch glue, used by
+        // listener.js and widget.js.
         solveExtraData: 'readonly',
         detectPuzzle: 'readonly',
         readGridState: 'readonly',
         applySolution: 'readonly',
-        getHint: 'readonly',
         handleHistory: 'readonly',
+        // src/widget/hint.js — top-level dispatcher used by listener.js
+        // and widget.js.
+        getHint: 'readonly',
       },
     },
     rules: sharedRules,
