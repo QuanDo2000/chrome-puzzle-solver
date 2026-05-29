@@ -69,17 +69,22 @@ const heyawake = {
 
   drawPreviewCell(ctx, { v, x, y, cellSize }) {
     // cellStatus 1 = black cell; 2 = white-marked (not black, confirmed
-    // empty). Render black as a solid dark fill; white-marker as a small
-    // grey dot at the cell centre so the player can see deduced empties.
+    // empty). Render black as a solid dark fill; white-marker as the grey
+    // diagonal × used by every other cell-state puzzle (kurodoko, mosaic,
+    // norinori, nurikabe, kakurasu) for the same confirmed-empty semantic.
     if (v === 1) {
       ctx.fillStyle = '#1f2937';
       ctx.fillRect(x, y, cellSize, cellSize);
     } else if (v === 2) {
-      const dotR = Math.max(2, Math.floor(cellSize * 0.15));
-      ctx.fillStyle = '#9ca3af';
+      const pad = Math.max(3, Math.floor(cellSize * 0.25));
+      ctx.strokeStyle = '#9ca3af';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(x + cellSize / 2, y + cellSize / 2, dotR, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(x + pad, y + pad);
+      ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
+      ctx.moveTo(x + cellSize - pad, y + pad);
+      ctx.lineTo(x + pad, y + cellSize - pad);
+      ctx.stroke();
     }
   },
 
