@@ -337,8 +337,20 @@ function applyGalaxiesState(lines) {
     }
     window.Game.currentState.solved = false;
     window.Game.solved = false;
-    if (typeof window.Game.drawCurrentState === 'function') window.Game.drawCurrentState();
-    else if (typeof window.Game.render === 'function') window.Game.render();
+    if (typeof window.Game.drawCurrentState === 'function') {
+      window.Game.drawCurrentState();
+    } else if (typeof window.Game.render === 'function') {
+      window.Game.render();
+    } else if (typeof window.Game.redraw === 'function') {
+      window.Game.redraw();
+    } else if (typeof window.Game.redrawGrid === 'function') {
+      window.Game.redrawGrid();
+    } else if (typeof window.Game.draw === 'function') {
+      window.Game.draw();
+    } else if (window.Game.getSaved && window.Game.loadGame) {
+      var saved = window.Game.getSaved();
+      if (saved) window.Game.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Galaxies apply failed:', e);
@@ -366,12 +378,16 @@ function applyGameState(solution) {
     }
     window.Game.currentState.solved = true;
 
-    if (typeof window.Game.render === 'function') {
+    if (typeof window.Game.drawCurrentState === 'function') {
+      window.Game.drawCurrentState();
+    } else if (typeof window.Game.render === 'function') {
       window.Game.render();
     } else if (typeof window.Game.redraw === 'function') {
       window.Game.redraw();
     } else if (typeof window.Game.redrawGrid === 'function') {
       window.Game.redrawGrid();
+    } else if (typeof window.Game.draw === 'function') {
+      window.Game.draw();
     } else if (window.Game.getSaved && window.Game.loadGame) {
       var saved = window.Game.getSaved();
       if (saved) window.Game.loadGame(saved);
@@ -409,17 +425,22 @@ function applyHintCells(hintCells) {
       }
     }
 
-    // Render fallback: Game.render isn't present (or doesn't redraw cells) on
-    // every puzzle type — aquarium needs Game.redraw / Game.redrawGrid. Mirror
-    // applyGameState's fallback ladder.
-    if (typeof window.Game.render === 'function') {
+    // Canonical render ladder (see applyGameState). No single Game method
+    // repaints every puzzle type — drawCurrentState/render/redraw/redrawGrid/
+    // draw each work for some, so try them in fallthrough order and fall back
+    // to a getSaved+loadGame reload last.
+    if (typeof window.Game.drawCurrentState === 'function') {
+      window.Game.drawCurrentState();
+    } else if (typeof window.Game.render === 'function') {
       window.Game.render();
     } else if (typeof window.Game.redraw === 'function') {
       window.Game.redraw();
     } else if (typeof window.Game.redrawGrid === 'function') {
       window.Game.redrawGrid();
+    } else if (typeof window.Game.draw === 'function') {
+      window.Game.draw();
     } else if (window.Game.getSaved && window.Game.loadGame) {
-      const saved = window.Game.getSaved();
+      var saved = window.Game.getSaved();
       if (saved) window.Game.loadGame(saved);
     }
     return true;
@@ -522,10 +543,16 @@ function applyBinairoState(solution) {
       }
     }
 
-    if (typeof window.Game.redraw === 'function') {
-      window.Game.redraw();
+    if (typeof window.Game.drawCurrentState === 'function') {
+      window.Game.drawCurrentState();
     } else if (typeof window.Game.render === 'function') {
       window.Game.render();
+    } else if (typeof window.Game.redraw === 'function') {
+      window.Game.redraw();
+    } else if (typeof window.Game.redrawGrid === 'function') {
+      window.Game.redrawGrid();
+    } else if (typeof window.Game.draw === 'function') {
+      window.Game.draw();
     } else if (window.Game.getSaved && window.Game.loadGame) {
       var saved = window.Game.getSaved();
       if (saved) window.Game.loadGame(saved);
@@ -627,8 +654,12 @@ function applyYinYangState(solution) {
 
     if (typeof window.Game.drawCurrentState === 'function') {
       window.Game.drawCurrentState();
+    } else if (typeof window.Game.render === 'function') {
+      window.Game.render();
     } else if (typeof window.Game.redraw === 'function') {
       window.Game.redraw();
+    } else if (typeof window.Game.redrawGrid === 'function') {
+      window.Game.redrawGrid();
     } else if (typeof window.Game.draw === 'function') {
       window.Game.draw();
     } else if (window.Game.getSaved && window.Game.loadGame) {
@@ -749,8 +780,13 @@ function applySlitherlinkState(lines) {
       window.Game.render();
     } else if (typeof window.Game.redraw === 'function') {
       window.Game.redraw();
+    } else if (typeof window.Game.redrawGrid === 'function') {
+      window.Game.redrawGrid();
     } else if (typeof window.Game.draw === 'function') {
       window.Game.draw();
+    } else if (window.Game.getSaved && window.Game.loadGame) {
+      var saved = window.Game.getSaved();
+      if (saved) window.Game.loadGame(saved);
     }
     return true;
   } catch (e) {
@@ -890,10 +926,14 @@ function applyShikakuState(solution, clues) {
 
     if (typeof window.Game.drawCurrentState === 'function') {
       window.Game.drawCurrentState();
-    } else if (typeof window.Game.redraw === 'function') {
-      window.Game.redraw();
     } else if (typeof window.Game.render === 'function') {
       window.Game.render();
+    } else if (typeof window.Game.redraw === 'function') {
+      window.Game.redraw();
+    } else if (typeof window.Game.redrawGrid === 'function') {
+      window.Game.redrawGrid();
+    } else if (typeof window.Game.draw === 'function') {
+      window.Game.draw();
     } else if (window.Game.getSaved && window.Game.loadGame) {
       var saved = window.Game.getSaved();
       if (saved) window.Game.loadGame(saved);
@@ -1054,9 +1094,20 @@ function applyHashiState(edges) {
                  Math.max(0, c2.bb) + Math.max(0, c2.br);
     }
     // Render ladder.
-    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
-    if (typeof G.render === 'function') G.render();
-    if (typeof G.redraw === 'function') G.redraw();
+    if (typeof G.drawCurrentState === 'function') {
+      G.drawCurrentState();
+    } else if (typeof G.render === 'function') {
+      G.render();
+    } else if (typeof G.redraw === 'function') {
+      G.redraw();
+    } else if (typeof G.redrawGrid === 'function') {
+      G.redrawGrid();
+    } else if (typeof G.draw === 'function') {
+      G.draw();
+    } else if (G.getSaved && G.loadGame) {
+      var saved = G.getSaved();
+      if (saved) G.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Hashi apply failed:', e);
@@ -1112,9 +1163,20 @@ function applyHitoriState(grid) {
         cs[r][c] = grid[r][c];
       }
     }
-    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
-    if (typeof G.render === 'function') G.render();
-    if (typeof G.redraw === 'function') G.redraw();
+    if (typeof G.drawCurrentState === 'function') {
+      G.drawCurrentState();
+    } else if (typeof G.render === 'function') {
+      G.render();
+    } else if (typeof G.redraw === 'function') {
+      G.redraw();
+    } else if (typeof G.redrawGrid === 'function') {
+      G.redrawGrid();
+    } else if (typeof G.draw === 'function') {
+      G.draw();
+    } else if (G.getSaved && G.loadGame) {
+      var saved = G.getSaved();
+      if (saved) G.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Hitori apply failed:', e);
@@ -1168,9 +1230,20 @@ function applyKakurasuState(grid) {
         cs[r][c] = grid[r][c];
       }
     }
-    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
-    if (typeof G.render === 'function') G.render();
-    if (typeof G.redraw === 'function') G.redraw();
+    if (typeof G.drawCurrentState === 'function') {
+      G.drawCurrentState();
+    } else if (typeof G.render === 'function') {
+      G.render();
+    } else if (typeof G.redraw === 'function') {
+      G.redraw();
+    } else if (typeof G.redrawGrid === 'function') {
+      G.redrawGrid();
+    } else if (typeof G.draw === 'function') {
+      G.draw();
+    } else if (G.getSaved && G.loadGame) {
+      var saved = G.getSaved();
+      if (saved) G.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Kakurasu apply failed:', e);
@@ -1231,9 +1304,20 @@ function applyKurodokoState(grid) {
         cs[r][c] = grid[r][c];
       }
     }
-    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
-    if (typeof G.render === 'function') G.render();
-    if (typeof G.redraw === 'function') G.redraw();
+    if (typeof G.drawCurrentState === 'function') {
+      G.drawCurrentState();
+    } else if (typeof G.render === 'function') {
+      G.render();
+    } else if (typeof G.redraw === 'function') {
+      G.redraw();
+    } else if (typeof G.redrawGrid === 'function') {
+      G.redrawGrid();
+    } else if (typeof G.draw === 'function') {
+      G.draw();
+    } else if (G.getSaved && G.loadGame) {
+      var saved = G.getSaved();
+      if (saved) G.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Kurodoko apply failed:', e);
@@ -1292,9 +1376,20 @@ function applyMosaicState(grid) {
         cs[r][c] = grid[r][c];
       }
     }
-    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
-    if (typeof G.render === 'function') G.render();
-    if (typeof G.redraw === 'function') G.redraw();
+    if (typeof G.drawCurrentState === 'function') {
+      G.drawCurrentState();
+    } else if (typeof G.render === 'function') {
+      G.render();
+    } else if (typeof G.redraw === 'function') {
+      G.redraw();
+    } else if (typeof G.redrawGrid === 'function') {
+      G.redrawGrid();
+    } else if (typeof G.draw === 'function') {
+      G.draw();
+    } else if (G.getSaved && G.loadGame) {
+      var saved = G.getSaved();
+      if (saved) G.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Mosaic apply failed:', e);
@@ -1360,9 +1455,20 @@ function applyNorinoriState(grid) {
         cs[r][c] = grid[r][c];
       }
     }
-    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
-    if (typeof G.render === 'function') G.render();
-    if (typeof G.redraw === 'function') G.redraw();
+    if (typeof G.drawCurrentState === 'function') {
+      G.drawCurrentState();
+    } else if (typeof G.render === 'function') {
+      G.render();
+    } else if (typeof G.redraw === 'function') {
+      G.redraw();
+    } else if (typeof G.redrawGrid === 'function') {
+      G.redrawGrid();
+    } else if (typeof G.draw === 'function') {
+      G.draw();
+    } else if (G.getSaved && G.loadGame) {
+      var saved = G.getSaved();
+      if (saved) G.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Norinori apply failed:', e);
@@ -1429,9 +1535,20 @@ function applyNurikabeState(grid) {
         cs[r][c] = grid[r][c];
       }
     }
-    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
-    if (typeof G.render === 'function') G.render();
-    if (typeof G.redraw === 'function') G.redraw();
+    if (typeof G.drawCurrentState === 'function') {
+      G.drawCurrentState();
+    } else if (typeof G.render === 'function') {
+      G.render();
+    } else if (typeof G.redraw === 'function') {
+      G.redraw();
+    } else if (typeof G.redrawGrid === 'function') {
+      G.redrawGrid();
+    } else if (typeof G.draw === 'function') {
+      G.draw();
+    } else if (G.getSaved && G.loadGame) {
+      var saved = G.getSaved();
+      if (saved) G.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Nurikabe apply failed:', e);
@@ -1499,9 +1616,20 @@ function applyHeyawakeState(grid) {
         cs[r][c] = grid[r][c];
       }
     }
-    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
-    if (typeof G.render === 'function') G.render();
-    if (typeof G.redraw === 'function') G.redraw();
+    if (typeof G.drawCurrentState === 'function') {
+      G.drawCurrentState();
+    } else if (typeof G.render === 'function') {
+      G.render();
+    } else if (typeof G.redraw === 'function') {
+      G.redraw();
+    } else if (typeof G.redrawGrid === 'function') {
+      G.redrawGrid();
+    } else if (typeof G.draw === 'function') {
+      G.draw();
+    } else if (G.getSaved && G.loadGame) {
+      var saved = G.getSaved();
+      if (saved) G.loadGame(saved);
+    }
     return true;
   } catch (e) {
     console.warn('Heyawake apply failed:', e);

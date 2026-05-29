@@ -61,9 +61,14 @@ Any function mutating `window.Game.currentState` (`applyGameState`,
 `applyGalaxiesState`, `applyHintCells`) must:
 1. Call `window.Game.saveState(true)` **before** writes — without it, aquarium
    silently keeps prior visible state even though `cellStatus` updated.
-2. Fall through `Game.render → Game.redraw → Game.redrawGrid →
-   getSaved+loadGame` **after** writes. `Game.render` isn't universal; aquarium
-   needs `redraw`/`redrawGrid`.
+2. Fall through the **canonical render ladder** **after** writes — the same
+   if/else-if chain in every `apply*State` function:
+   `drawCurrentState → render → redraw → redrawGrid → draw →
+   getSaved+loadGame`. No single method repaints every puzzle type
+   (aquarium needs `redraw`/`redrawGrid`; the newer cell-state puzzles use
+   `drawCurrentState`), so the ladder tries each in order and stops at the
+   first that exists. Keep all `apply*State` functions on this identical
+   ladder — don't reintroduce per-puzzle orderings.
 
 `applyGameState` is the reference shape. Never call `window.Game.check()` — the
 site flags an instant solve as a DNF.
