@@ -19,8 +19,17 @@ function getSolverWorker() {
       fetch(chrome.runtime.getURL('solver.js')).then(r => r.text()),
       fetch(chrome.runtime.getURL('solver.worker.js')).then(r => r.text()),
     ]);
-    // Strip the importScripts line; solver.js is now inlined above it.
-    const workerEntry = workerSrc.replace(/^\s*importScripts\([^)]*\);?\s*$/m, '');
+    // Strip the importScripts line; solver.js is now inlined above it. The
+    // pattern tolerates whitespace before `(` and before `;`. If it fails to
+    // match, the importScripts call survives into the blob and re-declares
+    // every solver class (since solverSrc is already prepended), so the worker
+    // dies with a SyntaxError. Warn loudly rather than ship a silently broken
+    // worker — mirrors build-solver-bundle.js's fail-on-no-strip stance.
+    const importScriptsRe = /^\s*importScripts\s*\([^)]*\)\s*;?\s*$/m;
+    const workerEntry = workerSrc.replace(importScriptsRe, '');
+    if (workerEntry === workerSrc) {
+      console.warn('[puzzle-solver] solver.worker.js: no importScripts line found to strip; worker may fail to load solver.js');
+    }
     const blob = new Blob([solverSrc + '\n' + workerEntry], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
     const w = new Worker(url);
