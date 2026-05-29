@@ -19,3 +19,10 @@ test('solver hashFNV1a is deterministic and order-sensitive', () => {
   assert.equal(a, b);
   assert.notEqual(a, c);
 });
+
+const widgetShared = require('../src/widget/shared.js');
+
+test('widget hashFNV1a matches the solver implementation for the same feed', () => {
+  const feed = (mix) => { mix(5); mix(9); mix(0); };
+  assert.equal(widgetShared.hashFNV1a(feed), solverShared.hashFNV1a(feed));
+});
