@@ -114,3 +114,39 @@ test('collectChangedCells reports 0→nonzero cells as {row,col,value}', () => {
     { row: 1, col: 1, value: 1 },
   ]);
 });
+
+test('absoluteCellHintStatus formats single-cell, multi-cell, and partial', () => {
+  const bold = (t) => ({ b: t });
+  assert.deepEqual(
+    widgetShared.absoluteCellHintStatus({ extraCells: [{ row: 0, col: 2, value: 1 }] }, { bold }, 'black', 'white'),
+    ['Cell ', { b: '(row 1, col 3)' }, ' must be ', { b: 'black' }]);
+  assert.deepEqual(
+    widgetShared.absoluteCellHintStatus({ extraCells: [{ row: 1, col: 0, value: 2 }] }, { bold }, 'black', 'white'),
+    ['Cell ', { b: '(row 2, col 1)' }, ' must be ', { b: 'white' }]);
+  assert.deepEqual(widgetShared.absoluteCellHintStatus({ extraCells: [] }, { bold }, 'black', 'white'), ['No hint available']);
+  assert.deepEqual(
+    widgetShared.absoluteCellHintStatus({ extraCells: [{}, {}], _fullCount: 5 }, { bold }, 'black', 'white'),
+    [{ b: '2' }, ' (of 5) cells can be deduced']);
+  assert.deepEqual(
+    widgetShared.absoluteCellHintStatus({ extraCells: [{}, {}, {}] }, { bold }, 'black', 'white'),
+    [{ b: '3' }, ' cells can be deduced']);
+});
+
+test('drawCrossCell draws a padded diagonal cross', () => {
+  const calls = [];
+  const ctx = {
+    set strokeStyle(v) { calls.push(['strokeStyle', v]); },
+    set lineWidth(v) { calls.push(['lineWidth', v]); },
+    beginPath() { calls.push(['beginPath']); },
+    moveTo(a, b) { calls.push(['moveTo', a, b]); },
+    lineTo(a, b) { calls.push(['lineTo', a, b]); },
+    stroke() { calls.push(['stroke']); },
+  };
+  widgetShared.drawCrossCell(ctx, 0, 0, 20); // pad = max(3, floor(5)) = 5
+  assert.deepEqual(calls, [
+    ['strokeStyle', '#9ca3af'], ['lineWidth', 2], ['beginPath'],
+    ['moveTo', 5, 5], ['lineTo', 15, 15],
+    ['moveTo', 15, 5], ['lineTo', 5, 15],
+    ['stroke'],
+  ]);
+});

@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a } = require('../shared.js');
+const { hashFNV1a, drawCrossCell } = require('../shared.js');
 
 // Heyawake puzzle module — Stage C migration.
 //
@@ -77,15 +77,7 @@ const heyawake = {
       ctx.fillStyle = '#1f2937';
       ctx.fillRect(x, y, cellSize, cellSize);
     } else if (v === 2) {
-      const pad = Math.max(3, Math.floor(cellSize * 0.25));
-      ctx.strokeStyle = '#9ca3af';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x + pad, y + pad);
-      ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
-      ctx.moveTo(x + cellSize - pad, y + pad);
-      ctx.lineTo(x + pad, y + cellSize - pad);
-      ctx.stroke();
+      drawCrossCell(ctx, x, y, cellSize);
     }
   },
 

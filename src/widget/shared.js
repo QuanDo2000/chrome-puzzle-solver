@@ -17,6 +17,38 @@ function hashFNV1a(feed, mask = true) {
   return h >>> 0;
 }
 
+// Grey diagonal × for a confirmed-empty cell — the shared "v===2" glyph used by
+// the cell-state puzzle previews (kurodoko, mosaic, norinori, nurikabe,
+// kakurasu, heyawake). Hitori intentionally does NOT use this (its v=2 is a
+// light fill).
+function drawCrossCell(ctx, x, y, cellSize) {
+  const pad = Math.max(3, Math.floor(cellSize * 0.25));
+  ctx.strokeStyle = '#9ca3af';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + pad, y + pad);
+  ctx.lineTo(x + cellSize - pad, y + cellSize - pad);
+  ctx.moveTo(x + cellSize - pad, y + pad);
+  ctx.lineTo(x + pad, y + cellSize - pad);
+  ctx.stroke();
+}
+
+// Single-cell hint-status template for absolute-cell puzzles. `h.extraCells` is
+// a flat list of forced {row,col,value} cells; value 1 → v1Label, else v2Label.
+function absoluteCellHintStatus(h, { bold }, v1Label, v2Label) {
+  const cells = h.extraCells || [];
+  if (cells.length === 0) return ['No hint available'];
+  if (cells.length === 1) {
+    const cell = cells[0];
+    const valueStr = cell.value === 1 ? v1Label : v2Label;
+    return ['Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`), ' must be ', bold(valueStr)];
+  }
+  if (h._fullCount && h._fullCount > cells.length) {
+    return [bold(String(cells.length)), ` (of ${h._fullCount}) cells can be deduced`];
+  }
+  return [bold(String(cells.length)), ' cells can be deduced'];
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a };
+  module.exports = { hashFNV1a, drawCrossCell, absoluteCellHintStatus };
 }
