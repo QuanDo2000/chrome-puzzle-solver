@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 // YinYangSolver — pure logic for Yin-Yang.
 //
 // Internal grid encoding: `0=empty, 1=black, 2=white` (cellStatus polarity,
@@ -649,15 +651,14 @@ class YinYangSolver {
 
   _cacheKey() {
     // FNV-1a over (rows, cols, flattened task). Returns a 32-bit uint string.
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(this.rows);
-    mix(this.cols);
-    for (let r = 0; r < this.rows; r++) {
-      const row = this.task[r] || [];
-      for (let c = 0; c < this.cols; c++) mix((row[c] | 0) + 2); // -1..1 -> 1..3
-    }
-    return String(h >>> 0);
+    return String(hashFNV1a((mix) => {
+      mix(this.rows);
+      mix(this.cols);
+      for (let r = 0; r < this.rows; r++) {
+        const row = this.task[r] || [];
+        for (let c = 0; c < this.cols; c++) mix((row[c] | 0) + 2); // -1..1 -> 1..3
+      }
+    }, false));
   }
 
   _storeInCache(key, grid) {

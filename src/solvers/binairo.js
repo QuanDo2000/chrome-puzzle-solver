@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 // BinairoSolver — pure logic for Binairo and Binairo Plus.
 //
 // Internal grid encoding: `0=empty, 1=one, 2=zero` (cellStatus polarity).
@@ -1029,23 +1031,22 @@ class BinairoSolver {
 
   _cacheKey() {
     // FNV-1a over (rows, cols, flattened givens). Returns a 32-bit unsigned int as string.
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(this.rows);
-    mix(this.cols);
-    for (let r = 0; r < this.rows; r++) {
-      const row = this.givens[r] || [];
-      for (let c = 0; c < this.cols; c++) mix((row[c] | 0) + 2); // +2 to map -1..1 to 1..3
-    }
-    // Mix comparison constraints. Stable ordering is _decodeComparison's
-    // emission order: outer row then col, with bit order (R-EQ, R-NE,
-    // D-EQ, D-NE). Length sentinel up front so an empty list still mixes.
-    mix(this.compConstraints.length);
-    for (const k of this.compConstraints) {
-      mix(k.aR); mix(k.aC); mix(k.bR); mix(k.bC);
-      mix(k.sameSign ? 1 : 0);
-    }
-    return String(h >>> 0);
+    return String(hashFNV1a((mix) => {
+      mix(this.rows);
+      mix(this.cols);
+      for (let r = 0; r < this.rows; r++) {
+        const row = this.givens[r] || [];
+        for (let c = 0; c < this.cols; c++) mix((row[c] | 0) + 2); // +2 to map -1..1 to 1..3
+      }
+      // Mix comparison constraints. Stable ordering is _decodeComparison's
+      // emission order: outer row then col, with bit order (R-EQ, R-NE,
+      // D-EQ, D-NE). Length sentinel up front so an empty list still mixes.
+      mix(this.compConstraints.length);
+      for (const k of this.compConstraints) {
+        mix(k.aR); mix(k.aC); mix(k.bR); mix(k.bC);
+        mix(k.sameSign ? 1 : 0);
+      }
+    }, false));
   }
 
   _storeInCache(key, grid) {

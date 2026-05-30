@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 class HitoriSolver {
   constructor(data) {
     const { rows, cols, task, initialState, maxMs } = data;
@@ -479,11 +481,10 @@ class HitoriSolver {
   }
 
   _cacheKey() {
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(this.rows); mix(this.cols);
-    for (let i = 0; i < this.rows * this.cols; i++) mix(this.task[i]);
-    return h >>> 0;
+    return hashFNV1a((mix) => {
+      mix(this.rows); mix(this.cols);
+      for (let i = 0; i < this.rows * this.cols; i++) mix(this.task[i]);
+    });
   }
 
   _cloneResult(r) {

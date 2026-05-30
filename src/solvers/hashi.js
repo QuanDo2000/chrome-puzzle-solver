@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 // HashiSolver — pure logic for Hashi (bridges) puzzles.
 //
 // One variable per candidate edge between adjacent islands (skipping
@@ -318,13 +320,12 @@ class HashiSolver {
 
   _cacheKey() {
     // FNV-1a over (rows, cols, islands sorted by (row, col)).
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(this.rows); mix(this.cols); mix(this.islands.length);
-    const sorted = this.islands.slice().sort((a, b) =>
-      a.r - b.r || a.c - b.c);
-    for (const i of sorted) { mix(i.r); mix(i.c); mix(i.target); }
-    return h >>> 0;
+    return hashFNV1a((mix) => {
+      mix(this.rows); mix(this.cols); mix(this.islands.length);
+      const sorted = this.islands.slice().sort((a, b) =>
+        a.r - b.r || a.c - b.c);
+      for (const i of sorted) { mix(i.r); mix(i.c); mix(i.target); }
+    });
   }
 
   _cloneResult(result) {

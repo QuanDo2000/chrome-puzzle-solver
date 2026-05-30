@@ -91,9 +91,15 @@ function loadWidgetSources() {
   const solverFiles = fs.readdirSync(solverDir)
     .filter(f => f.endsWith('.js') && f !== 'index.js')
     .map(f => path.join(solverDir, f));
+  // Strip `const { ... } = require('./shared.js')` consumer lines — in this VM
+  // context shared.js is loaded first into the shared global scope (its
+  // top-level function declarations become context globals), mirroring how the
+  // bundler concatenates shared.js first and strips these requires.
+  const SHARED_REQUIRE_RE =
+    /^\s*const\s*\{[^}]*\}\s*=\s*require\(['"]\.{1,2}\/(?:[\w.-]+\/)*shared\.js['"]\);?\s*$/mg;
   for (const fullPath of solverFiles) {
-    vm.runInContext(fs.readFileSync(fullPath, 'utf8'), ctx,
-      { filename: path.basename(fullPath) });
+    const src = fs.readFileSync(fullPath, 'utf8').replace(SHARED_REQUIRE_RE, '');
+    vm.runInContext(src, ctx, { filename: path.basename(fullPath) });
   }
   // Widget source files (extracted by Phase 1–4 of the content.js
   // split). Order: state/cache/worker/hint, then puzzles/*, then the

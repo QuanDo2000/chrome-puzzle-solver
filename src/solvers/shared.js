@@ -9,9 +9,11 @@
 // FNV-1a 32-bit hash. Callers feed bytes via the `mix` callback so each
 // call site keeps its own byte sequence; this preserves byte-identical keys
 // versus the previous per-solver inline implementations.
-function hashFNV1a(feed) {
+function hashFNV1a(feed, mask = true) {
   let h = 0x811c9dc5;
-  const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
+  const mix = mask
+    ? (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; }
+    : (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
   feed(mix);
   return h >>> 0;
 }

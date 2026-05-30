@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 class KakurasuSolver {
   constructor(data) {
     const { rows, cols, rowClues, colClues, initialState, maxMs } = data;
@@ -399,12 +401,11 @@ class KakurasuSolver {
   }
 
   _cacheKey() {
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(this.rows); mix(this.cols);
-    for (let r = 0; r < this.rows; r++) mix(this.rowClues[r]);
-    for (let c = 0; c < this.cols; c++) mix(this.colClues[c]);
-    return h >>> 0;
+    return hashFNV1a((mix) => {
+      mix(this.rows); mix(this.cols);
+      for (let r = 0; r < this.rows; r++) mix(this.rowClues[r]);
+      for (let c = 0; c < this.cols; c++) mix(this.colClues[c]);
+    });
   }
 
   _cloneResult(r) {

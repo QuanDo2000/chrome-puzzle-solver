@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 // ShikakuSolver — pure logic for Shikaku rectangle partitioning.
 //
 // Per-clue enumerate rectangle candidates (axis-aligned, correct area, no
@@ -170,17 +172,16 @@ class ShikakuSolver {
   }
 
   _cacheKey() {
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(this.rows);
-    mix(this.cols);
-    mix(this.clues.length);
-    const sorted = this.clues.slice().sort((a, b) =>
-      a.row - b.row || a.col - b.col || a.area - b.area);
-    for (const k of sorted) {
-      mix(k.row); mix(k.col); mix(k.area);
-    }
-    return String(h >>> 0);
+    return String(hashFNV1a((mix) => {
+      mix(this.rows);
+      mix(this.cols);
+      mix(this.clues.length);
+      const sorted = this.clues.slice().sort((a, b) =>
+        a.row - b.row || a.col - b.col || a.area - b.area);
+      for (const k of sorted) {
+        mix(k.row); mix(k.col); mix(k.area);
+      }
+    }, false));
   }
 
   _storeInCache(key, grid) {

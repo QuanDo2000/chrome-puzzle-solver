@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 // SlitherlinkSolver — pure logic for Slitherlink loop puzzles.
 //
 // Internal edge encoding: `0=UNKNOWN, 1=LINE, 2=EMPTY` (passthrough to page
@@ -2506,16 +2508,15 @@ class SlitherlinkSolver {
 
   _cacheKey() {
     // FNV-1a over (width, height, flattened task).
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x4C); // 'L' nameplate so slitherlink keys don't collide
-    mix(this.width);
-    mix(this.height);
-    for (let r = 0; r < this.height; r++) {
-      const row = this.task[r] || [];
-      for (let c = 0; c < this.width; c++) mix((row[c] | 0) + 2);
-    }
-    return String(h >>> 0);
+    return String(hashFNV1a((mix) => {
+      mix(0x4C); // 'L' nameplate so slitherlink keys don't collide
+      mix(this.width);
+      mix(this.height);
+      for (let r = 0; r < this.height; r++) {
+        const row = this.task[r] || [];
+        for (let c = 0; c < this.width; c++) mix((row[c] | 0) + 2);
+      }
+    }, false));
   }
 
   _storeInCache(key, out) {

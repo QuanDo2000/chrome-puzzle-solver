@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 // NorinoriSolver — pure logic for Norinori as enforced on puzzles-mobile.com
 // (NOT textbook Norinori). See `src/widget/puzzles/norinori.js` for the
 // rules-of-the-site and the cross-region domino allowance.
@@ -359,11 +361,10 @@ class NorinoriSolver {
   }
 
   _cacheKey() {
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(this.rows); mix(this.cols); mix(this.K);
-    for (let i = 0; i < this.rows * this.cols; i++) mix(this.cellToRoom[i]);
-    return h >>> 0;
+    return hashFNV1a((mix) => {
+      mix(this.rows); mix(this.cols); mix(this.K);
+      for (let i = 0; i < this.rows * this.cols; i++) mix(this.cellToRoom[i]);
+    });
   }
 
   _cloneResult(r) {

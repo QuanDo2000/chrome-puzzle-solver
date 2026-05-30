@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('./shared.js');
+
 class HeyawakeSolver {
   constructor(data) {
     const { rows, cols, rooms, initialState, maxMs } = data;
@@ -555,12 +557,11 @@ class HeyawakeSolver {
   }
 
   _cacheKey() {
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(this.rows); mix(this.cols); mix(this.K);
-    for (let k = 0; k < this.K; k++) mix(this.target[k] + 1);
-    for (let i = 0; i < this.rows * this.cols; i++) mix(this.cellToRoom[i]);
-    return h >>> 0;
+    return hashFNV1a((mix) => {
+      mix(this.rows); mix(this.cols); mix(this.K);
+      for (let k = 0; k < this.K; k++) mix(this.target[k] + 1);
+      for (let i = 0; i < this.rows * this.cols; i++) mix(this.cellToRoom[i]);
+    });
   }
 
   _cloneResult(r) {

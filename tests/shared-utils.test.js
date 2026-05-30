@@ -20,6 +20,17 @@ test('solver hashFNV1a is deterministic and order-sensitive', () => {
   assert.notEqual(a, c);
 });
 
+test('solver hashFNV1a mask=false leaves bytes >= 256 unmasked (differs from masked)', () => {
+  const feed = (mix) => { mix(300); mix(1); };
+  // masked folds 300 -> 300 & 0xff (44); unmasked XORs the full value.
+  assert.notEqual(solverShared.hashFNV1a(feed, true), solverShared.hashFNV1a(feed, false));
+});
+
+test('solver hashFNV1a mask=true equals mask=false when all bytes < 256', () => {
+  const feed = (mix) => { mix(5); mix(200); mix(0); };
+  assert.equal(solverShared.hashFNV1a(feed, true), solverShared.hashFNV1a(feed, false));
+});
+
 const widgetShared = require('../src/widget/shared.js');
 
 test('widget hashFNV1a matches the solver implementation for the same feed', () => {
