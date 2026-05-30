@@ -1,4 +1,7 @@
 'use strict';
+
+const { hashFNV1a } = require('./shared.js');
+
 // Canvas-rendering helpers for the puzzle-preview overlay. Extracted
 // from content.js's makeWidget closure (Stage A of the Phase 2
 // refactor — see docs/superpowers/specs/2026-05-25-content-js-split-
@@ -18,85 +21,68 @@ function hintSig(hint) {
   return id;
 }
 
-// FNV-1a 32-bit hash. Called per state-watch tick (every ~200ms) for grids
-// up to 50×50; the prior O(N²) string concat dominated the early-bail check
-// it fed. Cell values are shifted into a non-negative range before mixing.
-const FNV_OFFSET = 0x811c9dc5 | 0;
-const FNV_PRIME = 16777619;
+// FNV-1a 32-bit hashes via the shared hashFNV1a. Called per state-watch tick
+// (every ~200ms) for grids up to 50×50; the prior O(N²) string concat
+// dominated the early-bail check these feed. Cell values are shifted into a
+// non-negative range before mixing. regionMapSig and the default gridDataSig
+// branch feed bytes UNMASKED (mask=false) and return a signed int
+// (`hashFNV1a(...) | 0`) to stay byte-identical with the original inline hashes
+// (whose ids/values can exceed 255, so masking would change the result).
 
 function regionMapSig(rm) {
   if (!rm) return 0;
-  let h = FNV_OFFSET;
-  for (let r = 0; r < rm.length; r++) {
-    const row = rm[r];
-    for (let c = 0; c < row.length; c++) {
-      h ^= row[c];
-      h = Math.imul(h, FNV_PRIME);
+  return hashFNV1a((mix) => {
+    for (let r = 0; r < rm.length; r++) {
+      const row = rm[r];
+      for (let c = 0; c < row.length; c++) mix(row[c]);
+      // Row separator so [[1,2],[3]] and [[1],[2,3]] don't collide.
+      mix(0xff);
     }
-    // Row separator so [[1,2],[3]] and [[1],[2,3]] don't collide.
-    h ^= 0xff;
-    h = Math.imul(h, FNV_PRIME);
-  }
-  return h;
+  }, false) | 0;
 }
 
 function gridDataSig(grid) {
   // Hashi grids: { edges: [...] }. No 2D state — bridges encode everything
   // visible. (No .horizontal/.vertical, so test before the slitherlink arm.)
   if (grid && Array.isArray(grid.edges) && !grid.horizontal) {
-    let h = 0x811c9dc5;
-    for (const e of grid.edges) {
-      h ^= (e.a | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-      h ^= (e.b | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-      h ^= (e.bridges | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    }
-    return (h >>> 0).toString(16);
+    return hashFNV1a((mix) => {
+      for (const e of grid.edges) { mix(e.a | 0); mix(e.b | 0); mix(e.bridges | 0); }
+    }).toString(16);
   }
   if (grid && grid.horizontal && grid.vertical) {
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    for (const row of grid.horizontal) for (const v of row) mix(v | 0);
-    mix(0xFF);
-    for (const row of grid.vertical) for (const v of row) mix(v | 0);
+    return hashFNV1a((mix) => {
+      for (const row of grid.horizontal) for (const v of row) mix(v | 0);
+      mix(0xFF);
+      for (const row of grid.vertical) for (const v of row) mix(v | 0);
+      if (grid.galaxies) {
+        mix(0xEE);
+        for (const row of grid.galaxies.horizontal || []) for (const v of row) mix(v | 0);
+        for (const row of grid.galaxies.vertical   || []) for (const v of row) mix(v | 0);
+      }
+    }, false).toString(16);
+  }
+  return hashFNV1a((mix) => {
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r];
+      // shift {-1, 0, 1, star indices} into positives
+      for (let c = 0; c < row.length; c++) mix(row[c] + 2);
+    }
     if (grid.galaxies) {
-      mix(0xEE);
-      for (const row of grid.galaxies.horizontal || []) for (const v of row) mix(v | 0);
-      for (const row of grid.galaxies.vertical   || []) for (const v of row) mix(v | 0);
-    }
-    return (h >>> 0).toString(16);
-  }
-  let h = FNV_OFFSET;
-  for (let r = 0; r < grid.length; r++) {
-    const row = grid[r];
-    for (let c = 0; c < row.length; c++) {
-      h ^= (row[c] + 2);  // shift {-1, 0, 1, star indices} into positives
-      h = Math.imul(h, FNV_PRIME);
-    }
-  }
-  if (grid.galaxies) {
-    const g = grid.galaxies;
-    if (g.horizontal) {
-      for (const row of g.horizontal) {
-        for (const v of row) {
-          h ^= (v + 2);
-          h = Math.imul(h, FNV_PRIME);
+      const g = grid.galaxies;
+      if (g.horizontal) {
+        for (const row of g.horizontal) {
+          for (const v of row) mix(v + 2);
+          mix(0xfe);
         }
-        h ^= 0xfe;
-        h = Math.imul(h, FNV_PRIME);
+      }
+      if (g.vertical) {
+        for (const row of g.vertical) {
+          for (const v of row) mix(v + 2);
+          mix(0xfd);
+        }
       }
     }
-    if (g.vertical) {
-      for (const row of g.vertical) {
-        for (const v of row) {
-          h ^= (v + 2);
-          h = Math.imul(h, FNV_PRIME);
-        }
-        h ^= 0xfd;
-        h = Math.imul(h, FNV_PRIME);
-      }
-    }
-  }
-  return h;
+  }, false) | 0;
 }
 
 function buildLatticeLayer(rows, cols, cellSize, w, h, pd) {
@@ -690,7 +676,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     hintIdCounter, hintIdCache,
-    hintSig, FNV_OFFSET, FNV_PRIME,
+    hintSig,
     regionMapSig,
     gridDataSig,
     buildLatticeLayer, buildStaticLayer,
