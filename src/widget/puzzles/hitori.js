@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a } = require('../shared.js');
+const { hashFNV1a, absoluteCellHintStatus, makeSimpleHintDispatch } = require('../shared.js');
 
 // Hitori puzzle module — third migrated puzzle in Stage C of the
 // content.js split. Bundle-concatenated; ends with a CJS export footer
@@ -93,23 +93,9 @@ const hitori = {
     }
   },
 
-  hintStatusNodes(h, { bold }) {
-    // Hitori hints carry absolute cells in extraCells.
+  hintStatusNodes(h, ctx) {
     // cellStatus 1 = shaded (black), 2 = unshaded (circled/white).
-    const cells = h.extraCells || [];
-    if (cells.length === 0) return ['No hint available'];
-    if (cells.length === 1) {
-      const cell = cells[0];
-      const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
-      return [
-        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
-        ' must be ', bold(valueStr),
-      ];
-    }
-    if (h._fullCount && h._fullCount > cells.length) {
-      return [bold(String(cells.length)), ` (of ${h._fullCount}) cells can be deduced`];
-    }
-    return [bold(String(cells.length)), ' cells can be deduced'];
+    return absoluteCellHintStatus(h, ctx, 'shaded', 'unshaded');
   },
 
   solveExtraData(data) {
@@ -123,19 +109,8 @@ const hitori = {
   // Hint dispatch for Hitori. hintCells from the solver is absolute
   // {row, col, value} packed as extraCells. Mirrors the previous inline arm
   // in content.js's getHint verbatim.
-  hintDispatch(ctx) {
-    const { detectedGrid, grid, solution, rows, cols, firstMismatch } = ctx;
-    if (solution && firstMismatch(grid, solution)) {
-      return { success: false, error: 'Current game state is wrong.' };
-    }
-    const solver = new HitoriSolver({ rows, cols, task: detectedGrid.task });
-    const hintCells = solver.getHint(grid);
-    if (!hintCells || hintCells.length === 0) {
-      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-    }
-    const hint = { type: 'hitori', extraCells: hintCells, count: hintCells.length };
-    return { success: true, hint, grid, solution };
-  },
+  hintDispatch: makeSimpleHintDispatch('hitori', (ctx) =>
+    new HitoriSolver({ rows: ctx.rows, cols: ctx.cols, task: ctx.detectedGrid.task })),
 };
 
 // Local copy of preview.js's hitoriTaskSig — only used by staticSig

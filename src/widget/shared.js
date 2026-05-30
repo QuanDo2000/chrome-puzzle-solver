@@ -49,6 +49,25 @@ function absoluteCellHintStatus(h, { bold }, v1Label, v2Label) {
   return [bold(String(cells.length)), ' cells can be deduced'];
 }
 
+// Factory for the simple synchronous hint dispatcher shared by the cell-state
+// puzzles. `makeSolver(ctx)` is a THUNK that constructs the solver from ctx — it
+// MUST defer the solver-class reference to call time so the puzzle module stays
+// require-safe under Node (where solver classes aren't globals).
+function makeSimpleHintDispatch(type, makeSolver) {
+  return function hintDispatch(ctx) {
+    const { grid, solution, firstMismatch } = ctx;
+    if (solution && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    const solver = makeSolver(ctx);
+    const hintCells = solver.getHint(grid);
+    if (!hintCells || hintCells.length === 0) {
+      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
+    }
+    return { success: true, hint: { type, extraCells: hintCells, count: hintCells.length }, grid, solution };
+  };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a, drawCrossCell, absoluteCellHintStatus };
+  module.exports = { hashFNV1a, drawCrossCell, absoluteCellHintStatus, makeSimpleHintDispatch };
 }

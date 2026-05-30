@@ -107,7 +107,7 @@ function loadWidgetSources() {
   // handler.js MUST load before listener.js, because the bootstrap
   // synchronously calls getActiveHandler().
   const widgetDir = path.join(REPO, 'src', 'widget');
-  const widgetPreHandler = ['state.js', 'worker.js', 'cache.js',
+  const widgetPreHandler = ['shared.js', 'state.js', 'worker.js', 'cache.js',
                         'galaxies-hint.js', 'hint.js', 'preview.js',
                         'puzzles/nonogram.js',
                         'puzzles/binairo.js',
@@ -131,8 +131,9 @@ function loadWidgetSources() {
     const fp = path.join(widgetDir, f);
     if (!fs.existsSync(fp)) continue;
     // Strip the same `require('../shared.js')` consumer lines — widget
-    // puzzle modules import hashFNV1a from src/widget/shared.js, which the
-    // bundler (and this VM loader) provides as a context global.
+    // puzzle modules import from src/widget/shared.js, which is loaded
+    // first in this list (mirroring the bundler) so its exports are
+    // already in the VM context as globals.
     const src = fs.readFileSync(fp, 'utf8').replace(SHARED_REQUIRE_RE, '');
     vm.runInContext(src, ctx, { filename: f });
   }

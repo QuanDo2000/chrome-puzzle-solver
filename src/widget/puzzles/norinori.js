@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, drawCrossCell } = require('../shared.js');
+const { hashFNV1a, drawCrossCell, absoluteCellHintStatus, makeSimpleHintDispatch } = require('../shared.js');
 
 // Norinori puzzle module — Stage C migration.
 //
@@ -110,23 +110,9 @@ const norinori = {
     }
   },
 
-  hintStatusNodes(h, { bold }) {
-    // Norinori hints carry absolute cells in extraCells.
+  hintStatusNodes(h, ctx) {
     // cellStatus 1 = shaded (black), 2 = unshaded (white).
-    const cells = h.extraCells || [];
-    if (cells.length === 0) return ['No hint available'];
-    if (cells.length === 1) {
-      const cell = cells[0];
-      const valueStr = cell.value === 1 ? 'shaded' : 'unshaded';
-      return [
-        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
-        ' must be ', bold(valueStr),
-      ];
-    }
-    if (h._fullCount && h._fullCount > cells.length) {
-      return [bold(String(cells.length)), ` (of ${h._fullCount}) cells can be deduced`];
-    }
-    return [bold(String(cells.length)), ' cells can be deduced'];
+    return absoluteCellHintStatus(h, ctx, 'shaded', 'unshaded');
   },
 
   solveExtraData(data) {
@@ -140,21 +126,8 @@ const norinori = {
   // Hint dispatch for Norinori. hintCells from the solver is absolute
   // {row, col, value} packed as extraCells. Mirrors the previous inline arm
   // in content.js's getHint verbatim.
-  hintDispatch(ctx) {
-    const { detectedGrid, grid, solution, rows, cols, firstMismatch } = ctx;
-    if (solution && firstMismatch(grid, solution)) {
-      return { success: false, error: 'Current game state is wrong.' };
-    }
-    const solver = new NorinoriSolver({
-      rows, cols, rooms: detectedGrid.rooms,
-    });
-    const hintCells = solver.getHint(grid);
-    if (!hintCells || hintCells.length === 0) {
-      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-    }
-    const hint = { type: 'norinori', extraCells: hintCells, count: hintCells.length };
-    return { success: true, hint, grid, solution };
-  },
+  hintDispatch: makeSimpleHintDispatch('norinori', (ctx) =>
+    new NorinoriSolver({ rows: ctx.rows, cols: ctx.cols, rooms: ctx.detectedGrid.rooms })),
 };
 
 // Local copy of preview.js's norinoriAreasSig — only used by staticSig

@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, drawCrossCell } = require('../shared.js');
+const { hashFNV1a, drawCrossCell, absoluteCellHintStatus, makeSimpleHintDispatch } = require('../shared.js');
 
 // Kakurasu puzzle module — Stage C migration.
 //
@@ -110,23 +110,9 @@ const kakurasu = {
     }
   },
 
-  hintStatusNodes(h, { bold }) {
-    // Kakurasu hints carry absolute cells in extraCells.
+  hintStatusNodes(h, ctx) {
     // cellStatus 1 = filled (black), 2 = empty (white).
-    const cells = h.extraCells || [];
-    if (cells.length === 0) return ['No hint available'];
-    if (cells.length === 1) {
-      const cell = cells[0];
-      const valueStr = cell.value === 1 ? 'filled' : 'empty';
-      return [
-        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
-        ' must be ', bold(valueStr),
-      ];
-    }
-    if (h._fullCount && h._fullCount > cells.length) {
-      return [bold(String(cells.length)), ` (of ${h._fullCount}) cells can be deduced`];
-    }
-    return [bold(String(cells.length)), ' cells can be deduced'];
+    return absoluteCellHintStatus(h, ctx, 'filled', 'empty');
   },
 
   solveExtraData(data) {
@@ -140,23 +126,8 @@ const kakurasu = {
   // Hint dispatch for Kakurasu. hintCells from the solver is absolute
   // {row, col, value} packed as extraCells. Mirrors the previous inline arm
   // in content.js's getHint verbatim.
-  hintDispatch(ctx) {
-    const { detectedGrid, grid, solution, rows, cols, firstMismatch } = ctx;
-    if (solution && firstMismatch(grid, solution)) {
-      return { success: false, error: 'Current game state is wrong.' };
-    }
-    const solver = new KakurasuSolver({
-      rows, cols,
-      rowClues: detectedGrid.rowClues,
-      colClues: detectedGrid.colClues,
-    });
-    const hintCells = solver.getHint(grid);
-    if (!hintCells || hintCells.length === 0) {
-      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-    }
-    const hint = { type: 'kakurasu', extraCells: hintCells, count: hintCells.length };
-    return { success: true, hint, grid, solution };
-  },
+  hintDispatch: makeSimpleHintDispatch('kakurasu', (ctx) =>
+    new KakurasuSolver({ rows: ctx.rows, cols: ctx.cols, rowClues: ctx.detectedGrid.rowClues, colClues: ctx.detectedGrid.colClues })),
 };
 
 // Local copy of preview.js's kakurasuCluesSig — only used by staticSig

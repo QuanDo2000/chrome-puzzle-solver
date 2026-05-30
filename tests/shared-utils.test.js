@@ -132,6 +132,19 @@ test('absoluteCellHintStatus formats single-cell, multi-cell, and partial', () =
     [{ b: '3' }, ' cells can be deduced']);
 });
 
+test('makeSimpleHintDispatch: wrong-state, no-hint, and success branches', () => {
+  const okCtx = { grid: 'G', solution: 'S', firstMismatch: () => false };
+  const wrong = widgetShared.makeSimpleHintDispatch('t', () => { throw new Error('should not construct'); })(
+    { grid: 'G', solution: 'S', firstMismatch: () => true });
+  assert.deepEqual(wrong, { success: false, error: 'Current game state is wrong.' });
+  const none = widgetShared.makeSimpleHintDispatch('t', () => ({ getHint: () => [] }))(okCtx);
+  assert.equal(none.success, false);
+  assert.match(none.error, /No more cells/);
+  const cells = [{ row: 0, col: 0, value: 1 }];
+  const ok = widgetShared.makeSimpleHintDispatch('hitori', () => ({ getHint: () => cells }))(okCtx);
+  assert.deepEqual(ok, { success: true, hint: { type: 'hitori', extraCells: cells, count: 1 }, grid: 'G', solution: 'S' });
+});
+
 test('drawCrossCell draws a padded diagonal cross', () => {
   const calls = [];
   const ctx = {

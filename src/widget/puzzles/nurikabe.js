@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, drawCrossCell } = require('../shared.js');
+const { hashFNV1a, drawCrossCell, absoluteCellHintStatus, makeSimpleHintDispatch } = require('../shared.js');
 
 // Nurikabe puzzle module — Stage C migration.
 //
@@ -112,23 +112,9 @@ const nurikabe = {
     }
   },
 
-  hintStatusNodes(h, { bold }) {
-    // Nurikabe hints carry absolute cells in extraCells.
+  hintStatusNodes(h, ctx) {
     // cellStatus 1 = sea (black), 2 = island (white).
-    const cells = h.extraCells || [];
-    if (cells.length === 0) return ['No hint available'];
-    if (cells.length === 1) {
-      const cell = cells[0];
-      const valueStr = cell.value === 1 ? 'sea (black)' : 'island (white)';
-      return [
-        'Cell ', bold(`(row ${cell.row + 1}, col ${cell.col + 1})`),
-        ' must be ', bold(valueStr),
-      ];
-    }
-    if (h._fullCount && h._fullCount > cells.length) {
-      return [bold(String(cells.length)), ` (of ${h._fullCount}) cells can be deduced`];
-    }
-    return [bold(String(cells.length)), ' cells can be deduced'];
+    return absoluteCellHintStatus(h, ctx, 'sea (black)', 'island (white)');
   },
 
   solveExtraData(data) {
@@ -142,21 +128,8 @@ const nurikabe = {
   // Hint dispatch for Nurikabe. hintCells from the solver is absolute
   // {row, col, value} packed as extraCells. Mirrors the previous inline arm
   // in content.js's getHint verbatim.
-  hintDispatch(ctx) {
-    const { detectedGrid, grid, solution, rows, cols, firstMismatch } = ctx;
-    if (solution && firstMismatch(grid, solution)) {
-      return { success: false, error: 'Current game state is wrong.' };
-    }
-    const solver = new NurikabeSolver({
-      rows, cols, task: detectedGrid.task,
-    });
-    const hintCells = solver.getHint(grid);
-    if (!hintCells || hintCells.length === 0) {
-      return { success: false, error: 'No more cells can be deduced from the current state. Click Solve to finish.' };
-    }
-    const hint = { type: 'nurikabe', extraCells: hintCells, count: hintCells.length };
-    return { success: true, hint, grid, solution };
-  },
+  hintDispatch: makeSimpleHintDispatch('nurikabe', (ctx) =>
+    new NurikabeSolver({ rows: ctx.rows, cols: ctx.cols, task: ctx.detectedGrid.task })),
 };
 
 // Local copy of preview.js's nurikabeTaskSig — only used by staticSig
