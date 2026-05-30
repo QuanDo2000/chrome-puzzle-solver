@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Shikaku puzzle module — Stage C migration.
 //
 // More complex than the prior cell-state migrations because Shikaku uses
@@ -88,21 +90,21 @@ const shikaku = {
 
   cacheKey(data) {
     if (data?.type !== 'shikaku') return null;
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x53); // 'S' nameplate
-    mix(data.rows | 0);
-    mix(data.cols | 0);
-    const clues = Array.isArray(data.clues) ? data.clues : [];
-    mix(clues.length);
-    const sorted = clues.slice().sort((a, b) =>
-      a.row - b.row || a.col - b.col || a.area - b.area);
-    for (const k of sorted) {
-      mix(k.row | 0);
-      mix(k.col | 0);
-      mix(k.area | 0);
-    }
-    return 'shikaku-solution:' + (h >>> 0).toString(16);
+    const h = hashFNV1a((mix) => {
+      mix(0x53); // 'S' nameplate
+      mix(data.rows | 0);
+      mix(data.cols | 0);
+      const clues = Array.isArray(data.clues) ? data.clues : [];
+      mix(clues.length);
+      const sorted = clues.slice().sort((a, b) =>
+        a.row - b.row || a.col - b.col || a.area - b.area);
+      for (const k of sorted) {
+        mix(k.row | 0);
+        mix(k.col | 0);
+        mix(k.area | 0);
+      }
+    }, false);
+    return 'shikaku-solution:' + h.toString(16);
   },
 
   staticSig(data) {
@@ -210,12 +212,12 @@ function _drawShikakuCluesOn(ctx, cellSize, clues) {
 // Local copy of preview.js's shikakuCluesSig — only used by staticSig above.
 function _shikakuCluesSig(clues) {
   if (!Array.isArray(clues) || clues.length === 0) return '0';
-  let h = 0x811c9dc5;
-  for (const k of clues) {
-    h ^= (k.row | 0) * 65537 + (k.col | 0) * 31 + (k.area | 0);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(36);
+  const h = hashFNV1a((mix) => {
+    for (const k of clues) {
+      mix((k.row | 0) * 65537 + (k.col | 0) * 31 + (k.area | 0));
+    }
+  }, false);
+  return h.toString(36);
 }
 
 if (typeof module !== 'undefined' && module.exports) {

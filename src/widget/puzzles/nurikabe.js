@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Nurikabe puzzle module — Stage C migration.
 //
 // Hooks consumed by the Stage-B dispatchers (cache.js, preview.js,
@@ -44,12 +46,12 @@ const nurikabe = {
 
   cacheKey(data) {
     if (data?.type !== 'nurikabe' || !data.task) return null;
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x4F); // distinct from Norinori (0x4E)
-    mix(data.rows); mix(data.cols);
-    for (const row of data.task) for (const v of row) { mix(v & 0xff); mix((v >>> 8) & 0xff); }
-    return 'nurikabe-solution:' + (h >>> 0).toString(16);
+    const h = hashFNV1a((mix) => {
+      mix(0x4F); // distinct from Norinori (0x4E)
+      mix(data.rows); mix(data.cols);
+      for (const row of data.task) for (const v of row) { mix(v & 0xff); mix((v >>> 8) & 0xff); }
+    });
+    return 'nurikabe-solution:' + h.toString(16);
   },
 
   staticSig(data) {
@@ -170,12 +172,13 @@ const nurikabe = {
 // the module is self-contained.
 function _nurikabeTaskSig(task) {
   if (!task) return '0';
-  let h = 0x811c9dc5;
-  for (const row of task) for (const v of row) {
-    h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    h ^= (v >>> 8) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(16);
+  const h = hashFNV1a((mix) => {
+    for (const row of task) for (const v of row) {
+      mix(v & 0xff);
+      mix((v >>> 8) & 0xff);
+    }
+  });
+  return h.toString(16);
 }
 
 if (typeof module !== 'undefined' && module.exports) {

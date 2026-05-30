@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Heyawake puzzle module — Stage C migration.
 //
 // Hooks consumed by the Stage-B dispatchers (cache.js, preview.js,
@@ -39,24 +41,23 @@ const heyawake = {
   cacheKey(data) {
     if (data?.type !== 'heyawake') return null;
     // FNV-1a over (nameplate, rows, cols, flattened areas 2-D room-ID map).
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x57); // 'W' nameplate (heWawake) so heyawake keys can't collide
-    mix(data.rows | 0);
-    mix(data.cols | 0);
-    const areas = data.areas || [];
-    for (let r = 0; r < data.rows; r++) {
-      const row = areas[r] || [];
-      for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 1);
-    }
-    if (data.rooms) {
-      for (const room of data.rooms) {
-        const t = room.target;
-        h ^= (t + 1) & 0xff;
-        h = Math.imul(h, 0x01000193) >>> 0;
+    const h = hashFNV1a((mix) => {
+      mix(0x57); // 'W' nameplate (heWawake) so heyawake keys can't collide
+      mix(data.rows | 0);
+      mix(data.cols | 0);
+      const areas = data.areas || [];
+      for (let r = 0; r < data.rows; r++) {
+        const row = areas[r] || [];
+        for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 1);
       }
-    }
-    return 'heyawake-solution:' + (h >>> 0).toString(16);
+      if (data.rooms) {
+        for (const room of data.rooms) {
+          const t = room.target;
+          mix((t + 1) & 0xff);
+        }
+      }
+    });
+    return 'heyawake-solution:' + h.toString(16);
   },
 
   staticSig(data) {
@@ -156,19 +157,20 @@ const heyawake = {
 // the module is self-contained.
 function _heyawakeAreasSig(areas, rooms) {
   if (!Array.isArray(areas) || areas.length === 0) return '0';
-  let h = 0x811c9dc5;
-  for (const row of areas) {
-    for (const v of row) {
-      h ^= (v + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+  const h = hashFNV1a((mix) => {
+    for (const row of areas) {
+      for (const v of row) {
+        mix((v + 1) & 0xff);
+      }
     }
-  }
-  if (Array.isArray(rooms)) {
-    for (const room of rooms) {
-      const t = room.target;
-      h ^= (t + 1) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
+    if (Array.isArray(rooms)) {
+      for (const room of rooms) {
+        const t = room.target;
+        mix((t + 1) & 0xff);
+      }
     }
-  }
-  return (h >>> 0).toString(36);
+  });
+  return h.toString(36);
 }
 
 if (typeof module !== 'undefined' && module.exports) {

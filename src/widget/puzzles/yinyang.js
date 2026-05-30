@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Yin-Yang puzzle module — Stage C migration.
 //
 // Hooks consumed by the Stage-B dispatchers (cache.js, preview.js,
@@ -51,17 +53,17 @@ const yinyang = {
   cacheKey(data) {
     if (data?.type !== 'yinyang') return null;
     // FNV-1a over (type nameplate, rows, cols, flattened task).
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x59); // 'Y' nameplate so yin-yang keys can't collide with other types
-    mix(data.rows | 0);
-    mix(data.cols | 0);
-    const t = data.task || [];
-    for (let r = 0; r < data.rows; r++) {
-      const row = t[r] || [];
-      for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
-    }
-    return 'yinyang-solution:' + (h >>> 0).toString(16);
+    const h = hashFNV1a((mix) => {
+      mix(0x59); // 'Y' nameplate so yin-yang keys can't collide with other types
+      mix(data.rows | 0);
+      mix(data.cols | 0);
+      const t = data.task || [];
+      for (let r = 0; r < data.rows; r++) {
+        const row = t[r] || [];
+        for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
+      }
+    }, false);
+    return 'yinyang-solution:' + h.toString(16);
   },
 
   drawPreviewCell(ctx, { r, c, v, x, y, cellSize, puzzleData }) {

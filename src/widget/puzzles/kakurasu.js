@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Kakurasu puzzle module — Stage C migration.
 //
 // Hooks consumed by the Stage-B dispatchers (cache.js, preview.js,
@@ -41,13 +43,13 @@ const kakurasu = {
 
   cacheKey(data) {
     if (data?.type !== 'kakurasu' || !data.rowClues || !data.colClues) return null;
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x4B); // 'K' nameplate
-    mix(data.rows); mix(data.cols);
-    for (const v of data.rowClues) mix(v + 1);
-    for (const v of data.colClues) mix(v + 1);
-    return 'kakurasu-solution:' + (h >>> 0).toString(16);
+    const h = hashFNV1a((mix) => {
+      mix(0x4B); // 'K' nameplate
+      mix(data.rows); mix(data.cols);
+      for (const v of data.rowClues) mix(v + 1);
+      for (const v of data.colClues) mix(v + 1);
+    });
+    return 'kakurasu-solution:' + h.toString(16);
   },
 
   staticSig(data) {
@@ -170,10 +172,11 @@ const kakurasu = {
 // the module is self-contained.
 function _kakurasuCluesSig(rowClues, colClues) {
   if (!rowClues || !colClues) return '0';
-  let h = 0x811c9dc5;
-  for (const v of rowClues) { h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0; }
-  for (const v of colClues) { h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0; }
-  return (h >>> 0).toString(16);
+  const h = hashFNV1a((mix) => {
+    for (const v of rowClues) mix(v & 0xff);
+    for (const v of colClues) mix(v & 0xff);
+  });
+  return h.toString(16);
 }
 
 if (typeof module !== 'undefined' && module.exports) {

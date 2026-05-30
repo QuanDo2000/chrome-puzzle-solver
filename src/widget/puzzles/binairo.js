@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Binairo puzzle module — second migrated puzzle in Stage C of the
 // content.js split. Bundle-concatenated; ends with a CJS export footer
 // the bundler strips before emit. Covers both standard Binairo
@@ -78,28 +80,28 @@ const binairo = {
   cacheKey(data) {
     if (data?.type !== 'binairo') return null;
     // FNV-1a over (type, rows, cols, flattened givens, comparison clues).
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x42); // 'B' nameplate so binairo keys can't collide with nonogram keys
-    mix(data.rows | 0);
-    mix(data.cols | 0);
-    const g = data.givens || [];
-    for (let r = 0; r < data.rows; r++) {
-      const row = g[r] || [];
-      for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
-    }
-    // Mix comparison clues so binairo and binairo-plus boards with identical
-    // givens hash to distinct keys. Sparse 2D — outer row index, inner col
-    // index, value or 0 for missing. Length sentinels up front keep zero-
-    // comparison and 1-comparison-of-flag-0 cases distinguishable.
-    const cc = Array.isArray(data.comparisonClues) ? data.comparisonClues : [];
-    mix(cc.length);
-    for (let r = 0; r < cc.length; r++) {
-      const row = Array.isArray(cc[r]) ? cc[r] : [];
-      mix(row.length);
-      for (let c = 0; c < row.length; c++) mix((row[c] | 0) + 1);
-    }
-    return 'binairo-solution:' + (h >>> 0).toString(16);
+    const h = hashFNV1a((mix) => {
+      mix(0x42); // 'B' nameplate so binairo keys can't collide with nonogram keys
+      mix(data.rows | 0);
+      mix(data.cols | 0);
+      const g = data.givens || [];
+      for (let r = 0; r < data.rows; r++) {
+        const row = g[r] || [];
+        for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
+      }
+      // Mix comparison clues so binairo and binairo-plus boards with identical
+      // givens hash to distinct keys. Sparse 2D — outer row index, inner col
+      // index, value or 0 for missing. Length sentinels up front keep zero-
+      // comparison and 1-comparison-of-flag-0 cases distinguishable.
+      const cc = Array.isArray(data.comparisonClues) ? data.comparisonClues : [];
+      mix(cc.length);
+      for (let r = 0; r < cc.length; r++) {
+        const row = Array.isArray(cc[r]) ? cc[r] : [];
+        mix(row.length);
+        for (let c = 0; c < row.length; c++) mix((row[c] | 0) + 1);
+      }
+    }, false);
+    return 'binairo-solution:' + h.toString(16);
   },
 
   staticSig(data) {
@@ -238,15 +240,15 @@ const binairo = {
 // Inlined from preview.js so this module is self-contained.
 function _comparisonCluesSig(cc) {
   if (!Array.isArray(cc) || cc.length === 0) return '0';
-  let h = 0x811c9dc5;
-  for (let r = 0; r < cc.length; r++) {
-    const row = Array.isArray(cc[r]) ? cc[r] : [];
-    for (let c = 0; c < row.length; c++) {
-      h ^= r * 65537 + c * 31 + ((row[c] | 0) + 1);
-      h = Math.imul(h, 0x01000193) >>> 0;
+  const h = hashFNV1a((mix) => {
+    for (let r = 0; r < cc.length; r++) {
+      const row = Array.isArray(cc[r]) ? cc[r] : [];
+      for (let c = 0; c < row.length; c++) {
+        mix(r * 65537 + c * 31 + ((row[c] | 0) + 1));
+      }
     }
-  }
-  return (h >>> 0).toString(36);
+  }, false);
+  return h.toString(36);
 }
 
 if (typeof module !== 'undefined' && module.exports) {

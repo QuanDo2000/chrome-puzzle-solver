@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Slitherlink puzzle module — Stage C migration.
 //
 // Slitherlink is one of the two most cross-file shape-specific migrations
@@ -122,17 +124,17 @@ const slitherlink = {
   cacheKey(data) {
     if (data?.type !== 'slitherlink') return null;
     // FNV-1a over (nameplate, rows, cols, flattened task).
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x4C); // 'L' nameplate (Loop) so slitherlink keys don't collide
-    mix(data.rows | 0);
-    mix(data.cols | 0);
-    const t = data.task || [];
-    for (let r = 0; r < data.rows; r++) {
-      const row = t[r] || [];
-      for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
-    }
-    return 'slitherlink-solution:' + (h >>> 0).toString(16);
+    const h = hashFNV1a((mix) => {
+      mix(0x4C); // 'L' nameplate (Loop) so slitherlink keys don't collide
+      mix(data.rows | 0);
+      mix(data.cols | 0);
+      const t = data.task || [];
+      for (let r = 0; r < data.rows; r++) {
+        const row = t[r] || [];
+        for (let c = 0; c < data.cols; c++) mix((row[c] | 0) + 2);
+      }
+    }, false);
+    return 'slitherlink-solution:' + h.toString(16);
   },
 
   staticSig(data) {
@@ -318,15 +320,15 @@ const slitherlink = {
 // is self-contained.
 function _slitherlinkCluesSig(task) {
   if (!Array.isArray(task)) return '';
-  let h = 0x811c9dc5;
-  for (let r = 0; r < task.length; r++) {
-    const row = task[r] || [];
-    for (let c = 0; c < row.length; c++) {
-      h ^= (row[c] | 0) + 2;
-      h = Math.imul(h, 0x01000193) >>> 0;
+  const h = hashFNV1a((mix) => {
+    for (let r = 0; r < task.length; r++) {
+      const row = task[r] || [];
+      for (let c = 0; c < row.length; c++) {
+        mix((row[c] | 0) + 2);
+      }
     }
-  }
-  return (h >>> 0).toString(16);
+  }, false);
+  return h.toString(16);
 }
 
 if (typeof module !== 'undefined' && module.exports) {

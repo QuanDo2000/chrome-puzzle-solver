@@ -130,7 +130,11 @@ function loadWidgetSources() {
   for (const f of widgetPreHandler) {
     const fp = path.join(widgetDir, f);
     if (!fs.existsSync(fp)) continue;
-    vm.runInContext(fs.readFileSync(fp, 'utf8'), ctx, { filename: f });
+    // Strip the same `require('../shared.js')` consumer lines — widget
+    // puzzle modules import hashFNV1a from src/widget/shared.js, which the
+    // bundler (and this VM loader) provides as a context global.
+    const src = fs.readFileSync(fp, 'utf8').replace(SHARED_REQUIRE_RE, '');
+    vm.runInContext(src, ctx, { filename: f });
   }
   // handler.js after widget code but before listener.js so the bootstrap
   // can synchronously call getActiveHandler().

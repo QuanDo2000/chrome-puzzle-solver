@@ -37,3 +37,10 @@ test('widget hashFNV1a matches the solver implementation for the same feed', () 
   const feed = (mix) => { mix(5); mix(9); mix(0); };
   assert.equal(widgetShared.hashFNV1a(feed), solverShared.hashFNV1a(feed));
 });
+
+test('widget hashFNV1a mask flag matches solver helper (both modes)', () => {
+  const feedBig = (mix) => { mix(300); mix(1); };
+  assert.equal(widgetShared.hashFNV1a(feedBig, true), solverShared.hashFNV1a(feedBig, true));
+  assert.equal(widgetShared.hashFNV1a(feedBig, false), solverShared.hashFNV1a(feedBig, false));
+  assert.notEqual(widgetShared.hashFNV1a(feedBig, true), widgetShared.hashFNV1a(feedBig, false));
+});

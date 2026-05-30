@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Hitori puzzle module — third migrated puzzle in Stage C of the
 // content.js split. Bundle-concatenated; ends with a CJS export footer
 // the bundler strips before emit.
@@ -38,12 +40,12 @@ const hitori = {
 
   cacheKey(data) {
     if (data?.type !== 'hitori' || !data.task) return null;
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n & 0xff; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x49); // 'I' nameplate
-    mix(data.rows); mix(data.cols);
-    for (const row of data.task) for (const v of row) mix(v + 1);
-    return 'hitori-solution:' + (h >>> 0).toString(16);
+    const h = hashFNV1a((mix) => {
+      mix(0x49); // 'I' nameplate
+      mix(data.rows); mix(data.cols);
+      for (const row of data.task) for (const v of row) mix(v + 1);
+    });
+    return 'hitori-solution:' + h.toString(16);
   },
 
   staticSig(data) {
@@ -141,11 +143,12 @@ const hitori = {
 // so the module is self-contained.
 function _hitoriTaskSig(task) {
   if (!task) return '0';
-  let h = 0x811c9dc5;
-  for (const row of task) for (const v of row) {
-    h ^= v & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(16);
+  const h = hashFNV1a((mix) => {
+    for (const row of task) for (const v of row) {
+      mix(v & 0xff);
+    }
+  });
+  return h.toString(16);
 }
 
 if (typeof module !== 'undefined' && module.exports) {

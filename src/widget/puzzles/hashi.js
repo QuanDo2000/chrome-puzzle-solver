@@ -1,5 +1,7 @@
 'use strict';
 
+const { hashFNV1a } = require('../shared.js');
+
 // Hashi puzzle module — Stage C migration.
 //
 // Hashi is the most cross-file shape-specific migration so far because its
@@ -122,21 +124,21 @@ const hashi = {
   cacheKey(data) {
     if (data?.type !== 'hashi') return null;
     // FNV-1a over (nameplate, rows, cols, sorted islands flattened).
-    let h = 0x811c9dc5;
-    const mix = (n) => { h ^= n; h = Math.imul(h, 0x01000193) >>> 0; };
-    mix(0x48); // 'H' nameplate so hashi keys can't collide with other types
-    mix(data.rows | 0);
-    mix(data.cols | 0);
-    const islands = Array.isArray(data.islands) ? data.islands : [];
-    mix(islands.length);
-    const sorted = islands.slice().sort((a, b) =>
-      a.row - b.row || a.col - b.col || a.number - b.number);
-    for (const i of sorted) {
-      mix(i.row | 0);
-      mix(i.col | 0);
-      mix(i.number | 0);
-    }
-    return 'hashi-solution:' + (h >>> 0).toString(16);
+    const h = hashFNV1a((mix) => {
+      mix(0x48); // 'H' nameplate so hashi keys can't collide with other types
+      mix(data.rows | 0);
+      mix(data.cols | 0);
+      const islands = Array.isArray(data.islands) ? data.islands : [];
+      mix(islands.length);
+      const sorted = islands.slice().sort((a, b) =>
+        a.row - b.row || a.col - b.col || a.number - b.number);
+      for (const i of sorted) {
+        mix(i.row | 0);
+        mix(i.col | 0);
+        mix(i.number | 0);
+      }
+    }, false);
+    return 'hashi-solution:' + h.toString(16);
   },
 
   staticSig(data) {
@@ -284,13 +286,14 @@ function _drawHashiIslandsOn(ctx, cellSize, islands) {
 // Local copy of preview.js's hashiIslandsSig — only used by staticSig above.
 function _hashiIslandsSig(islands) {
   if (!Array.isArray(islands) || islands.length === 0) return '0';
-  let h = 0x811c9dc5;
-  for (const i of islands) {
-    h ^= (i.row | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    h ^= (i.col | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-    h ^= (i.number | 0) & 0xff; h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0).toString(36);
+  const h = hashFNV1a((mix) => {
+    for (const i of islands) {
+      mix((i.row | 0) & 0xff);
+      mix((i.col | 0) & 0xff);
+      mix((i.number | 0) & 0xff);
+    }
+  });
+  return h.toString(36);
 }
 
 if (typeof module !== 'undefined' && module.exports) {
