@@ -56,6 +56,23 @@ source via `fn.toString()`**, so:
 - No references to other `main-world.js` functions — only MAIN-world globals
   (`window.Game`, `document`, etc.).
 
+### Shared utilities + bundler require-strip
+`src/solvers/shared.js` and `src/widget/shared.js` hold dependency-free
+helpers (currently `hashFNV1a`). Consumers `require('./shared.js')` (or
+`../shared.js` under `widget/puzzles/`). Each bundler concatenates `shared.js`
+**first** and strips the consumer `require('…/shared.js')` line, so the
+reference resolves to a bundle-scope global at runtime and to a real binding
+under Node. The bundlers throw if a shared-require survives or if `shared.js`
+isn't first. Keep `shared.js` dependency-free and first in the FILES list, and
+keep its header comment free of the literal `require('…')` token (the
+surviving-require guard scans the assembled bundle, and a literal in a comment
+would false-trip it). FNV-1a is duplicated once per layer by design (see
+docs/superpowers/specs/2026-05-29-solver-shared-utils-design.md) — do not
+collapse to a single cross-layer module without updating both bundlers.
+`hashFNV1a(feed, mask = true)`: pass `mask: false` for the few call sites that
+historically XORed unmasked bytes (some keys feed values ≥256), so keys stay
+byte-identical.
+
 ### MAIN-world write functions: save + render ladder
 Any function mutating `window.Game.currentState` (`applyGameState`,
 `applyGalaxiesState`, `applyHintCells`) must:
