@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, trailPush, rollbackTrail } = require('./shared.js');
 
 class HeyawakeSolver {
   constructor(data) {
@@ -42,7 +42,7 @@ class HeyawakeSolver {
     const old = this.cellStatus[idx];
     if (old === value) return true;
     if (old !== 0) return false;
-    this.trail.push(idx | (old << 24));
+    trailPush(this.trail, idx, old);
     this.cellStatus[idx] = value;
     if (value === 1) {
       const r = (idx / this.cols) | 0;
@@ -65,12 +65,7 @@ class HeyawakeSolver {
   }
 
   _rollback(mark) {
-    while (this.trail.length > mark) {
-      const e = this.trail.pop();
-      const idx = e & 0xffffff;
-      const old = (e >>> 24) & 0xff;
-      this.cellStatus[idx] = old;
-    }
+    rollbackTrail(this.trail, this.cellStatus, mark);
   }
 
   _timeUp() {

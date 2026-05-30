@@ -154,6 +154,19 @@ function whiteConnectivity(cellStatus, rows, cols, inLookahead, set) {
   return true;
 }
 
+// Trail-based undo (shared by the grid solvers). An entry packs the cell index
+// (low 24 bits) and the previous value (next 8 bits): idx | (old << 24).
+function trailPush(trail, idx, old) {
+  trail.push(idx | (old << 24));
+}
+// Undo every trail entry back to `mark`, restoring each cell's previous value.
+function rollbackTrail(trail, cellStatus, mark) {
+  while (trail.length > mark) {
+    const e = trail.pop();
+    cellStatus[e & 0xffffff] = (e >>> 24) & 0xff;
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, whiteConnectivity };
+  module.exports = { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, whiteConnectivity, trailPush, rollbackTrail };
 }

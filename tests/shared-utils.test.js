@@ -92,3 +92,16 @@ test('whiteConnectivity: connected ok, split fails, forces a cut cell', () => {
   assert.equal(res, true);
   assert.deepEqual(forced, [[1, 2]]);
 });
+
+test('trailPush + rollbackTrail round-trip cell values', () => {
+  const trail = [];
+  const cs = [5, 7, 9];
+  solverShared.trailPush(trail, 0, cs[0]); cs[0] = 1;
+  solverShared.trailPush(trail, 2, cs[2]); cs[2] = 1;
+  assert.deepEqual(cs, [1, 7, 1]);
+  solverShared.rollbackTrail(trail, cs, 1); // undo back to mark 1
+  assert.deepEqual(cs, [1, 7, 9]);
+  solverShared.rollbackTrail(trail, cs, 0);
+  assert.deepEqual(cs, [5, 7, 9]);
+  assert.equal(trail.length, 0);
+});

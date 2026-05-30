@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, cloneSolveResult, timeUp, lruSet, whiteConnectivity } = require('./shared.js');
+const { hashFNV1a, cloneSolveResult, timeUp, lruSet, whiteConnectivity, trailPush, rollbackTrail } = require('./shared.js');
 
 class KurodokoSolver {
   constructor(data) {
@@ -45,7 +45,7 @@ class KurodokoSolver {
     const old = this.cellStatus[idx];
     if (old === value) return true;
     if (old !== 0) return false;
-    this.trail.push(idx | (old << 24));
+    trailPush(this.trail, idx, old);
     this.cellStatus[idx] = value;
     if (value === 1) {
       const r = (idx / this.cols) | 0;
@@ -68,12 +68,7 @@ class KurodokoSolver {
   }
 
   _rollback(mark) {
-    while (this.trail.length > mark) {
-      const e = this.trail.pop();
-      const i = e & 0xffffff;
-      const old = (e >>> 24) & 0xff;
-      this.cellStatus[i] = old;
-    }
+    rollbackTrail(this.trail, this.cellStatus, mark);
   }
 
   _applyConnectivity() {
