@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult } = require('./shared.js');
 
 // NorinoriSolver — pure logic for Norinori as enforced on puzzles-mobile.com
 // (NOT textbook Norinori). See `src/widget/puzzles/norinori.js` for the
@@ -362,12 +362,7 @@ class NorinoriSolver {
   }
 
   _cloneResult(r) {
-    return {
-      solved: r.solved,
-      grid: r.grid ? r.grid.map(row => row.slice()) : null,
-      ...(r.error !== undefined ? { error: r.error } : {}),
-      ...(r.partial !== undefined ? { partial: r.partial } : {}),
-    };
+    return cloneSolveResult(r);
   }
 
   getHint(initialState) {

@@ -49,3 +49,12 @@ test('emitGrid rebuilds a 1-D cellStatus into a 2-D grid', () => {
   const cs = [1, 2, 0, 0, 1, 2]; // 2 rows × 3 cols
   assert.deepEqual(solverShared.emitGrid(cs, 2, 3), [[1, 2, 0], [0, 1, 2]]);
 });
+
+test('cloneSolveResult deep-copies grid and preserves flags', () => {
+  const src = { solved: true, grid: [[1, 2], [0, 1]], partial: true };
+  const out = solverShared.cloneSolveResult(src);
+  assert.deepEqual(out, src);
+  out.grid[0][0] = 9;
+  assert.equal(src.grid[0][0], 1); // deep copy, not shared
+  assert.ok(!('error' in solverShared.cloneSolveResult({ solved: false, grid: null })));
+});

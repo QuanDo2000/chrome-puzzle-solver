@@ -30,6 +30,17 @@ function emitGrid(cellStatus, rows, cols) {
   return grid;
 }
 
+// Deep-clone a grid solve result (grid deep-copied, solved/error/partial
+// preserved). Matches every grid solver's _cloneResult.
+function cloneSolveResult(r) {
+  return {
+    solved: r.solved,
+    grid: r.grid ? r.grid.map(row => row.slice()) : null,
+    ...(r.error !== undefined ? { error: r.error } : {}),
+    ...(r.partial !== undefined ? { partial: r.partial } : {}),
+  };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a, emitGrid };
+  module.exports = { hashFNV1a, emitGrid, cloneSolveResult };
 }

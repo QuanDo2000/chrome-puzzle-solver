@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult } = require('./shared.js');
 
 class MosaicSolver {
   constructor(data) {
@@ -425,12 +425,7 @@ class MosaicSolver {
   }
 
   _cloneResult(r) {
-    return {
-      solved: r.solved,
-      grid: r.grid ? r.grid.map(row => row.slice()) : null,
-      ...(r.error !== undefined ? { error: r.error } : {}),
-      ...(r.partial !== undefined ? { partial: r.partial } : {}),
-    };
+    return cloneSolveResult(r);
   }
 
   getHint(initialState) {
