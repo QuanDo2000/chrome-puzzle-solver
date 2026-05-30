@@ -55,8 +55,10 @@ const WIDGET_FILES = [
   'listener.js',
 ];
 
+// Guarded CJS export tail: object form (`module.exports = { ... }`) OR a single
+// identifier (`module.exports = heyawake;` — the per-puzzle modules' shape).
 const EXPORT_RE =
-  /\n\s*if\s*\(\s*typeof\s+module[\s\S]*?module\.exports\s*=\s*\{[\s\S]*?\}\s*;?\s*\}\s*$/;
+  /\n\s*if\s*\(\s*typeof\s+module[\s\S]*?module\.exports\s*=\s*(?:\{[\s\S]*?\}|[A-Za-z_$][\w$]*)\s*;?\s*\}\s*$/;
 
 // Strip `const { ... } = require('./shared.js')` (or `../shared.js`) from
 // consumer files — in the bundle shared.js is concatenated first, so its
@@ -81,7 +83,15 @@ function buildContentBundle() {
     if (!fs.existsSync(fullPath)) continue;
     let body = fs.readFileSync(fullPath, 'utf8');
     body = body.replace(/^\s*'use strict';\s*\n/, '');
+    // Strip the guarded CJS export tail. If a file carries the `typeof module`
+    // guard but nothing stripped, its footer drifted from the expected shape —
+    // throw rather than ship a bundle with a stray `module.exports` (mirrors
+    // build-solver-bundle.js's fail-on-no-strip stance).
+    const beforeExport = body;
     body = body.replace(EXPORT_RE, '');
+    if (/\btypeof\s+module\b/.test(beforeExport) && body === beforeExport) {
+      throw new Error(`Could not strip CJS export block from ${file}; check its footer`);
+    }
     body = body.replace(SHARED_REQUIRE_RE, '');
     parts.push(`// ── src/widget/${file} ──`);
     parts.push(body.trim());
