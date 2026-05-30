@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a } = require('./shared.js');
+const { hashFNV1a, timeUp } = require('./shared.js');
 
 // HashiSolver — pure logic for Hashi (bridges) puzzles.
 //
@@ -307,8 +307,7 @@ class HashiSolver {
   }
 
   _timeUp() {
-    if (this.maxMs <= 0) return false;
-    return (Date.now() - this._startedAt) > this.maxMs;
+    return timeUp(this.maxMs, this._startedAt);
   }
 
   static _solutionCache = new Map();

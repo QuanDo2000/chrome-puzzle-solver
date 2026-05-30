@@ -41,6 +41,12 @@ function cloneSolveResult(r) {
   };
 }
 
+// Soft wall-clock budget check. maxMs <= 0 means unlimited.
+function timeUp(maxMs, startedAt) {
+  if (maxMs <= 0) return false;
+  return (Date.now() - startedAt) > maxMs;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a, emitGrid, cloneSolveResult };
+  module.exports = { hashFNV1a, emitGrid, cloneSolveResult, timeUp };
 }

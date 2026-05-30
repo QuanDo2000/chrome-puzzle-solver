@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, cloneSolveResult } = require('./shared.js');
+const { hashFNV1a, cloneSolveResult, timeUp } = require('./shared.js');
 
 class KurodokoSolver {
   constructor(data) {
@@ -177,8 +177,7 @@ class KurodokoSolver {
   }
 
   _timeUp() {
-    if (this.maxMs <= 0) return false;
-    return (Date.now() - this._startedAt) > this.maxMs;
+    return timeUp(this.maxMs, this._startedAt);
   }
 
   _applyVisibility() {

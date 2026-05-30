@@ -58,3 +58,10 @@ test('cloneSolveResult deep-copies grid and preserves flags', () => {
   assert.equal(src.grid[0][0], 1); // deep copy, not shared
   assert.ok(!('error' in solverShared.cloneSolveResult({ solved: false, grid: null })));
 });
+
+test('timeUp: unlimited when maxMs <= 0, else compares elapsed', () => {
+  assert.equal(solverShared.timeUp(0, 0), false);
+  assert.equal(solverShared.timeUp(-1, 0), false);
+  assert.equal(solverShared.timeUp(1000, Date.now()), false);     // just started
+  assert.equal(solverShared.timeUp(10, Date.now() - 1000), true); // long over
+});

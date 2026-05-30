@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp } = require('./shared.js');
 
 class HeyawakeSolver {
   constructor(data) {
@@ -74,8 +74,7 @@ class HeyawakeSolver {
   }
 
   _timeUp() {
-    if (this.maxMs <= 0) return false;
-    return (Date.now() - this._startedAt) > this.maxMs;
+    return timeUp(this.maxMs, this._startedAt);
   }
 
   _applyRoomCounts() {
