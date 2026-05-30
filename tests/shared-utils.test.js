@@ -76,3 +76,19 @@ test('lruSet evicts the oldest entry at capacity', () => {
   solverShared.lruSet(m, 2, 'b', 20); // update existing at capacity
   assert.equal(m.get('b'), 20);
 });
+
+test('whiteConnectivity: connected ok, split fails, forces a cut cell', () => {
+  // cellStatus 1=black 2=white 0=unknown.
+  // Split: white at both ends, black wall in middle → a known white is unreachable.
+  assert.equal(solverShared.whiteConnectivity([2, 0, 1, 0, 2], 1, 5, true, () => true), false);
+  // Connected (in lookahead): two whites with unknowns between → fine.
+  assert.equal(solverShared.whiteConnectivity([2, 0, 0, 0, 2], 1, 5, true, () => true), true);
+  // Articulation forcing (outside lookahead): the lone unknown bridging two whites
+  // in [2,0,2] must be forced white via set().
+  const board = [2, 0, 2];
+  const forced = [];
+  const res = solverShared.whiteConnectivity(board, 1, 3, false,
+    (idx, v) => { forced.push([idx, v]); board[idx] = v; return true; });
+  assert.equal(res, true);
+  assert.deepEqual(forced, [[1, 2]]);
+});

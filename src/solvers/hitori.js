@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, whiteConnectivity } = require('./shared.js');
 
 class HitoriSolver {
   constructor(data) {
@@ -161,97 +161,7 @@ class HitoriSolver {
   }
 
   _applyConnectivity() {
-    const total = this.rows * this.cols;
-    let anchor = -1;
-    for (let i = 0; i < total; i++) {
-      if (this.cellStatus[i] === 2) { anchor = i; break; }
-    }
-    if (anchor < 0) return true;
-    const visited = new Uint8Array(total);
-    visited[anchor] = 1;
-    const stack = [anchor];
-    while (stack.length) {
-      const u = stack.pop();
-      const r = (u / this.cols) | 0;
-      const c = u - r * this.cols;
-      const ns = [];
-      if (r > 0) ns.push(u - this.cols);
-      if (r < this.rows - 1) ns.push(u + this.cols);
-      if (c > 0) ns.push(u - 1);
-      if (c < this.cols - 1) ns.push(u + 1);
-      for (let i = 0; i < ns.length; i++) {
-        const ni = ns[i];
-        if (!visited[ni] && this.cellStatus[ni] !== 1) { visited[ni] = 1; stack.push(ni); }
-      }
-    }
-    for (let i = 0; i < total; i++) {
-      if (this.cellStatus[i] === 2 && !visited[i]) return false;
-    }
-    if (this._inLookahead) return true;
-    const disc = new Int32Array(total).fill(-1);
-    const low = new Int32Array(total);
-    const parent = new Int32Array(total).fill(-1);
-    const subtreeKnownWhite = new Int32Array(total);
-    const articulationSplits = new Int32Array(total);
-    let timer = 0;
-    const dfsStack = [];
-    const neighboursOf = (u) => {
-      const r = (u / this.cols) | 0;
-      const c = u - r * this.cols;
-      const ns = [];
-      if (r > 0) { const ni = u - this.cols; if (this.cellStatus[ni] !== 1) ns.push(ni); }
-      if (r < this.rows - 1) { const ni = u + this.cols; if (this.cellStatus[ni] !== 1) ns.push(ni); }
-      if (c > 0) { const ni = u - 1; if (this.cellStatus[ni] !== 1) ns.push(ni); }
-      if (c < this.cols - 1) { const ni = u + 1; if (this.cellStatus[ni] !== 1) ns.push(ni); }
-      return ns;
-    };
-    disc[anchor] = low[anchor] = timer++;
-    subtreeKnownWhite[anchor] = (this.cellStatus[anchor] === 2 ? 1 : 0);
-    dfsStack.push({ u: anchor, ns: neighboursOf(anchor), idx: 0 });
-    let rootChildCount = 0;
-    while (dfsStack.length) {
-      const top = dfsStack[dfsStack.length - 1];
-      if (top.idx >= top.ns.length) {
-        const u = top.u;
-        const p = parent[u];
-        if (p >= 0) {
-          if (low[u] < low[p]) low[p] = low[u];
-          subtreeKnownWhite[p] += subtreeKnownWhite[u];
-          if (low[u] >= disc[p] && subtreeKnownWhite[u] >= 1) {
-            articulationSplits[p]++;
-          }
-        }
-        dfsStack.pop();
-        continue;
-      }
-      const v = top.ns[top.idx++];
-      const u = top.u;
-      if (disc[v] < 0) {
-        parent[v] = u;
-        disc[v] = low[v] = timer++;
-        subtreeKnownWhite[v] = (this.cellStatus[v] === 2 ? 1 : 0);
-        if (u === anchor) rootChildCount++;
-        dfsStack.push({ u: v, ns: neighboursOf(v), idx: 0 });
-      } else if (v !== parent[u]) {
-        if (disc[v] < low[u]) low[u] = disc[v];
-      }
-    }
-    const totalKnownWhites = subtreeKnownWhite[anchor];
-    for (let u = 0; u < total; u++) {
-      if (this.cellStatus[u] !== 0) continue;
-      if (disc[u] < 0) continue;
-      let critical = false;
-      if (u === anchor) {
-        critical = (rootChildCount >= 2 && articulationSplits[u] >= 2);
-      } else {
-        const restWhites = totalKnownWhites - subtreeKnownWhite[u];
-        critical = (articulationSplits[u] >= 1 && restWhites >= 1);
-      }
-      if (critical) {
-        if (!this._set(u, 2)) return false;
-      }
-    }
-    return true;
+    return whiteConnectivity(this.cellStatus, this.rows, this.cols, this._inLookahead, (idx, v) => this._set(idx, v));
   }
 
   _timeUp() {
