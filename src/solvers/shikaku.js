@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a } = require('./shared.js');
+const { hashFNV1a, lruSet } = require('./shared.js');
 
 // ShikakuSolver — pure logic for Shikaku rectangle partitioning.
 //
@@ -186,11 +186,7 @@ class ShikakuSolver {
 
   _storeInCache(key, grid) {
     const m = ShikakuSolver._solutionCache;
-    if (m.size >= ShikakuSolver._maxSolutionCache) {
-      const first = m.keys().next().value;
-      m.delete(first);
-    }
-    m.set(key, grid.map(row => row.slice()));
+    lruSet(m, ShikakuSolver._maxSolutionCache, key, grid.map(row => row.slice()));
   }
 
   solve() {

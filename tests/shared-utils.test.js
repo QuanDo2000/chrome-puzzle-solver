@@ -65,3 +65,14 @@ test('timeUp: unlimited when maxMs <= 0, else compares elapsed', () => {
   assert.equal(solverShared.timeUp(1000, Date.now()), false);     // just started
   assert.equal(solverShared.timeUp(10, Date.now() - 1000), true); // long over
 });
+
+test('lruSet evicts the oldest entry at capacity', () => {
+  const m = new Map();
+  solverShared.lruSet(m, 2, 'a', 1);
+  solverShared.lruSet(m, 2, 'b', 2);
+  solverShared.lruSet(m, 2, 'c', 3); // evicts 'a'
+  assert.deepEqual([...m.keys()], ['b', 'c']);
+  assert.equal(m.get('c'), 3);
+  solverShared.lruSet(m, 2, 'b', 20); // update existing at capacity
+  assert.equal(m.get('b'), 20);
+});

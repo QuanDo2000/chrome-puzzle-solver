@@ -1,5 +1,7 @@
 'use strict';
 
+const { lruSet } = require('./shared.js');
+
 // GalaxiesSolver — pure logic for Galaxies (Tentai Show).
 //
 // === Shared geometry statics ===
@@ -426,11 +428,7 @@ class GalaxiesSolver {
   }
 
   _storeSolution(key, grid) {
-    if (GalaxiesSolver._solutionCache.size >= GalaxiesSolver._maxSolutionCache) {
-      const first = GalaxiesSolver._solutionCache.keys().next().value;
-      GalaxiesSolver._solutionCache.delete(first);
-    }
-    GalaxiesSolver._solutionCache.set(key, this._cloneSolvedGrid(grid));
+    lruSet(GalaxiesSolver._solutionCache, GalaxiesSolver._maxSolutionCache, key, this._cloneSolvedGrid(grid));
   }
 
   _buildStaticCandidates() {

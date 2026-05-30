@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, cloneSolveResult, timeUp } = require('./shared.js');
+const { hashFNV1a, cloneSolveResult, timeUp, lruSet } = require('./shared.js');
 
 class KurodokoSolver {
   constructor(data) {
@@ -379,11 +379,7 @@ class KurodokoSolver {
   _storeInCache(key, result) {
     const m = result.partial ? KurodokoSolver._partialCache : KurodokoSolver._solutionCache;
     const max = result.partial ? KurodokoSolver._maxPartialCache : KurodokoSolver._maxSolutionCache;
-    if (m.size >= max) {
-      const first = m.keys().next().value;
-      m.delete(first);
-    }
-    m.set(key, this._cloneResult(result));
+    lruSet(m, max, key, this._cloneResult(result));
   }
 
   getHint(initialState) {

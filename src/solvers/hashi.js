@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, timeUp } = require('./shared.js');
+const { hashFNV1a, timeUp, lruSet } = require('./shared.js');
 
 // HashiSolver — pure logic for Hashi (bridges) puzzles.
 //
@@ -337,11 +337,7 @@ class HashiSolver {
 
   _storeInCache(key, result) {
     const m = HashiSolver._solutionCache;
-    if (m.size >= HashiSolver._maxSolutionCache) {
-      const first = m.keys().next().value;
-      m.delete(first);
-    }
-    m.set(key, this._cloneResult(result));
+    lruSet(m, HashiSolver._maxSolutionCache, key, this._cloneResult(result));
   }
 
   solve() {

@@ -1,5 +1,7 @@
 'use strict';
 
+const { lruSet } = require('./shared.js');
+
 class AquariumSolver {
   /**
    * @param {number[]} rowClues  Water count per row, top-to-bottom.
@@ -699,10 +701,7 @@ class AquariumSolver {
 
   _rememberDead(key) {
     if (this._deadCache.has(key)) return;
-    if (this._deadCache.size >= this._deadCacheMax) {
-      this._deadCache.delete(this._deadCache.keys().next().value);
-    }
-    this._deadCache.set(key, 1);
+    lruSet(this._deadCache, this._deadCacheMax, key, 1);
   }
 
   _assignmentTokens() {
@@ -760,10 +759,7 @@ class AquariumSolver {
 
   _cacheSet(key, value) {
     if (this._dpCache.has(key)) return;
-    if (this._dpCache.size >= this._dpCacheMax) {
-      this._dpCache.delete(this._dpCache.keys().next().value);
-    }
-    this._dpCache.set(key, value);
+    lruSet(this._dpCache, this._dpCacheMax, key, value);
   }
 
   // Deterministic xorshift32 PRNG seeded from puzzle shape (clues + aquarium

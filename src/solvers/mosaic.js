@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet } = require('./shared.js');
 
 class MosaicSolver {
   constructor(data) {
@@ -515,11 +515,7 @@ class MosaicSolver {
   _storeInCache(key, result) {
     const m = result.partial ? MosaicSolver._partialCache : MosaicSolver._solutionCache;
     const max = result.partial ? MosaicSolver._maxPartialCache : MosaicSolver._maxSolutionCache;
-    if (m.size >= max) {
-      const first = m.keys().next().value;
-      m.delete(first);
-    }
-    m.set(key, this._cloneResult(result));
+    lruSet(m, max, key, this._cloneResult(result));
   }
 
   static clearSolutionCache() {

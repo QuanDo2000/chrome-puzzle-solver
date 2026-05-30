@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet } = require('./shared.js');
 
 class HeyawakeSolver {
   constructor(data) {
@@ -564,11 +564,7 @@ class HeyawakeSolver {
   _storeInCache(key, result) {
     const m = result.partial ? HeyawakeSolver._partialCache : HeyawakeSolver._solutionCache;
     const max = result.partial ? HeyawakeSolver._maxPartialCache : HeyawakeSolver._maxSolutionCache;
-    if (m.size >= max) {
-      const first = m.keys().next().value;
-      m.delete(first);
-    }
-    m.set(key, this._cloneResult(result));
+    lruSet(m, max, key, this._cloneResult(result));
   }
 }
 

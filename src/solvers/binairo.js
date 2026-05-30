@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a } = require('./shared.js');
+const { hashFNV1a, lruSet } = require('./shared.js');
 
 // BinairoSolver — pure logic for Binairo and Binairo Plus.
 //
@@ -1051,12 +1051,8 @@ class BinairoSolver {
 
   _storeInCache(key, grid) {
     const m = BinairoSolver._solutionCache;
-    if (m.size >= BinairoSolver._maxSolutionCache) {
-      const first = m.keys().next().value;
-      m.delete(first);
-    }
     // Store a deep copy so callers can't mutate the cached grid.
-    m.set(key, grid.map(row => row.slice()));
+    lruSet(m, BinairoSolver._maxSolutionCache, key, grid.map(row => row.slice()));
   }
 }
 

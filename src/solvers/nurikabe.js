@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet } = require('./shared.js');
 
 class NurikabeSolver {
   constructor(data) {
@@ -1209,11 +1209,7 @@ class NurikabeSolver {
   _storeInCache(key, result) {
     const m = result.partial ? NurikabeSolver._partialCache : NurikabeSolver._solutionCache;
     const max = result.partial ? NurikabeSolver._maxPartialCache : NurikabeSolver._maxSolutionCache;
-    if (m.size >= max) {
-      const first = m.keys().next().value;
-      m.delete(first);
-    }
-    m.set(key, this._cloneResult(result));
+    lruSet(m, max, key, this._cloneResult(result));
   }
 
   getHint(initialState) {

@@ -47,6 +47,15 @@ function timeUp(maxMs, startedAt) {
   return (Date.now() - startedAt) > maxMs;
 }
 
+// Insertion-order LRU set: evict the oldest entry when at capacity, then set.
+// (Map preserves insertion order, so keys().next() is the oldest.)
+function lruSet(map, maxSize, key, value) {
+  if (map.size >= maxSize) {
+    map.delete(map.keys().next().value);
+  }
+  map.set(key, value);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a, emitGrid, cloneSolveResult, timeUp };
+  module.exports = { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet };
 }

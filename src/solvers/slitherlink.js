@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a } = require('./shared.js');
+const { hashFNV1a, lruSet } = require('./shared.js');
 
 // SlitherlinkSolver — pure logic for Slitherlink loop puzzles.
 //
@@ -2359,10 +2359,7 @@ class SlitherlinkSolver {
 
   static _storeInPartialCache(key, out) {
     const m = SlitherlinkSolver._partialCache;
-    if (m.size >= SlitherlinkSolver._maxPartialCache) {
-      m.delete(m.keys().next().value);
-    }
-    m.set(key, {
+    lruSet(m, SlitherlinkSolver._maxPartialCache, key, {
       horizontal: out.horizontal.map(row => row.slice()),
       vertical: out.vertical.map(row => row.slice()),
     });
@@ -2521,10 +2518,7 @@ class SlitherlinkSolver {
 
   _storeInCache(key, out) {
     const m = SlitherlinkSolver._solutionCache;
-    if (m.size >= SlitherlinkSolver._maxSolutionCache) {
-      m.delete(m.keys().next().value);
-    }
-    m.set(key, {
+    lruSet(m, SlitherlinkSolver._maxSolutionCache, key, {
       horizontal: out.horizontal.map(row => row.slice()),
       vertical: out.vertical.map(row => row.slice()),
     });

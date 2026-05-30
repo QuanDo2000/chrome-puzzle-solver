@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet } = require('./shared.js');
 
 // NorinoriSolver — pure logic for Norinori as enforced on puzzles-mobile.com
 // (NOT textbook Norinori). See `src/widget/puzzles/norinori.js` for the
@@ -438,11 +438,7 @@ class NorinoriSolver {
   _storeInCache(key, result) {
     const m = result.partial ? NorinoriSolver._partialCache : NorinoriSolver._solutionCache;
     const max = result.partial ? NorinoriSolver._maxPartialCache : NorinoriSolver._maxSolutionCache;
-    if (m.size >= max) {
-      const first = m.keys().next().value;
-      m.delete(first);
-    }
-    m.set(key, this._cloneResult(result));
+    lruSet(m, max, key, this._cloneResult(result));
   }
 }
 
