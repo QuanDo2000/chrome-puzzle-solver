@@ -44,3 +44,8 @@ test('widget hashFNV1a mask flag matches solver helper (both modes)', () => {
   assert.equal(widgetShared.hashFNV1a(feedBig, false), solverShared.hashFNV1a(feedBig, false));
   assert.notEqual(widgetShared.hashFNV1a(feedBig, true), widgetShared.hashFNV1a(feedBig, false));
 });
+
+test('emitGrid rebuilds a 1-D cellStatus into a 2-D grid', () => {
+  const cs = [1, 2, 0, 0, 1, 2]; // 2 rows × 3 cols
+  assert.deepEqual(solverShared.emitGrid(cs, 2, 3), [[1, 2, 0], [0, 1, 2]]);
+});

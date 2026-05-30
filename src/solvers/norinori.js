@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a } = require('./shared.js');
+const { hashFNV1a, emitGrid } = require('./shared.js');
 
 // NorinoriSolver — pure logic for Norinori as enforced on puzzles-mobile.com
 // (NOT textbook Norinori). See `src/widget/puzzles/norinori.js` for the
@@ -283,13 +283,7 @@ class NorinoriSolver {
   }
 
   _emit() {
-    const grid = [];
-    for (let r = 0; r < this.rows; r++) {
-      const row = new Array(this.cols);
-      for (let c = 0; c < this.cols; c++) row[c] = this.cellStatus[r * this.cols + c];
-      grid.push(row);
-    }
-    return grid;
+    return emitGrid(this.cellStatus, this.rows, this.cols);
   }
 
   _pickBestUnknown() {

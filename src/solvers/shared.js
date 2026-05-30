@@ -18,6 +18,18 @@ function hashFNV1a(feed, mask = true) {
   return h >>> 0;
 }
 
+// Rebuild a 1-D cellStatus array into a rows×cols 2-D grid (the shape every
+// grid solver's _emit() returns).
+function emitGrid(cellStatus, rows, cols) {
+  const grid = [];
+  for (let r = 0; r < rows; r++) {
+    const row = new Array(cols);
+    for (let c = 0; c < cols; c++) row[c] = cellStatus[r * cols + c];
+    grid.push(row);
+  }
+  return grid;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a };
+  module.exports = { hashFNV1a, emitGrid };
 }
