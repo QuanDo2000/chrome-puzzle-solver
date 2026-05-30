@@ -58,7 +58,7 @@ source via `fn.toString()`**, so:
 
 ### Shared utilities + bundler require-strip
 `src/solvers/shared.js` and `src/widget/shared.js` hold dependency-free
-helpers (currently `hashFNV1a`). Consumers `require('./shared.js')` (or
+helpers (`hashFNV1a`, plus the solver layer's `emitGrid`, `cloneSolveResult`, `timeUp`, `lruSet`). Consumers `require('./shared.js')` (or
 `../shared.js` under `widget/puzzles/`). Each bundler concatenates `shared.js`
 **first** and strips the consumer `require('…/shared.js')` line, so the
 reference resolves to a bundle-scope global at runtime and to a real binding
