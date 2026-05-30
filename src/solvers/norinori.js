@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, trailPush, rollbackTrail } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, trailPush, rollbackTrail, collectChangedCells } = require('./shared.js');
 
 // NorinoriSolver — pure logic for Norinori as enforced on puzzles-mobile.com
 // (NOT textbook Norinori). See `src/widget/puzzles/norinori.js` for the
@@ -373,17 +373,7 @@ class NorinoriSolver {
     this._inLookahead = false;
     this._startedAt = Date.now();
 
-    const collectChanged = () => {
-      const out = [];
-      for (let i = 0; i < total; i++) {
-        if (before[i] === 0 && this.cellStatus[i] !== 0) {
-          const r = (i / this.cols) | 0;
-          const c = i - r * this.cols;
-          out.push({ row: r, col: c, value: this.cellStatus[i] });
-        }
-      }
-      return out;
-    };
+    const collectChanged = () => collectChangedCells(this.cellStatus, before, this.cols);
 
     if (!this._applyRegionCount()) return null;
     {

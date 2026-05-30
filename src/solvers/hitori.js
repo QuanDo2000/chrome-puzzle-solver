@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, whiteConnectivity, trailPush, rollbackTrail } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, whiteConnectivity, trailPush, rollbackTrail, collectChangedCells } = require('./shared.js');
 
 class HitoriSolver {
   constructor(data) {
@@ -285,17 +285,7 @@ class HitoriSolver {
     this._inLookahead = false;
     this._startedAt = Date.now();
 
-    const collectChanged = () => {
-      const out = [];
-      for (let i = 0; i < total; i++) {
-        if (before[i] === 0 && this.cellStatus[i] !== 0) {
-          const r = (i / this.cols) | 0;
-          const c = i - r * this.cols;
-          out.push({ row: r, col: c, value: this.cellStatus[i] });
-        }
-      }
-      return out;
-    };
+    const collectChanged = () => collectChangedCells(this.cellStatus, before, this.cols);
 
     // Rule 1: static sandwich/triplet.
     if (!this._applyStaticForcedWhites()) return null;

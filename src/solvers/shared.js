@@ -167,6 +167,20 @@ function rollbackTrail(trail, cellStatus, mark) {
   }
 }
 
+// getHint change-collector: cells that went from 0 (in `before`) to a nonzero
+// value (in `cellStatus`), as {row, col, value}. before.length defines the cell
+// count, so callers don't pass rows explicitly.
+function collectChangedCells(cellStatus, before, cols) {
+  const out = [];
+  for (let i = 0; i < before.length; i++) {
+    if (before[i] === 0 && cellStatus[i] !== 0) {
+      const r = (i / cols) | 0;
+      out.push({ row: r, col: i - r * cols, value: cellStatus[i] });
+    }
+  }
+  return out;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, whiteConnectivity, trailPush, rollbackTrail };
+  module.exports = { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, whiteConnectivity, trailPush, rollbackTrail, collectChangedCells };
 }

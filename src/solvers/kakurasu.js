@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, collectChangedCells } = require('./shared.js');
 
 class KakurasuSolver {
   constructor(data) {
@@ -264,17 +264,7 @@ class KakurasuSolver {
     this._inLookahead = false;
     this._startedAt = Date.now();
 
-    const collectChanged = () => {
-      const out = [];
-      for (let i = 0; i < total; i++) {
-        if (before[i] === 0 && this.cellStatus[i] !== 0) {
-          const r = (i / this.cols) | 0;
-          const c = i - r * this.cols;
-          out.push({ row: r, col: c, value: this.cellStatus[i] });
-        }
-      }
-      return out;
-    };
+    const collectChanged = () => collectChangedCells(this.cellStatus, before, this.cols);
 
     // Rebuild mask domains from current state so narrowing starts fresh.
     this._buildMaskDomains();

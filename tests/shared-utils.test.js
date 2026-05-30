@@ -105,3 +105,12 @@ test('trailPush + rollbackTrail round-trip cell values', () => {
   assert.deepEqual(cs, [5, 7, 9]);
   assert.equal(trail.length, 0);
 });
+
+test('collectChangedCells reports 0→nonzero cells as {row,col,value}', () => {
+  const before = new Uint8Array([0, 0, 1, 0]); // 2×2
+  const after  = [0, 2, 1, 1];                 // idx1: 0→2, idx3: 0→1; idx2 already 1
+  assert.deepEqual(solverShared.collectChangedCells(after, before, 2), [
+    { row: 0, col: 1, value: 2 },
+    { row: 1, col: 1, value: 1 },
+  ]);
+});

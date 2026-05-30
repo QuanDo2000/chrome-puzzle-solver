@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, trailPush, rollbackTrail } = require('./shared.js');
+const { hashFNV1a, emitGrid, cloneSolveResult, timeUp, lruSet, trailPush, rollbackTrail, collectChangedCells } = require('./shared.js');
 
 class NurikabeSolver {
   constructor(data) {
@@ -1229,17 +1229,7 @@ class NurikabeSolver {
     this._inLookahead = false;
     this._startedAt = Date.now();
 
-    const collectChanged = () => {
-      const out = [];
-      for (let i = 0; i < this.N; i++) {
-        if (before[i] === 0 && this.cellStatus[i] !== 0) {
-          const r = (i / this.cols) | 0;
-          const c = i - r * this.cols;
-          out.push({ row: r, col: c, value: this.cellStatus[i] });
-        }
-      }
-      return out;
-    };
+    const collectChanged = () => collectChangedCells(this.cellStatus, before, this.cols);
 
     const rules = [
       () => this._applyClueAdjacency(),
