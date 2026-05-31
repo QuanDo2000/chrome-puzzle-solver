@@ -600,18 +600,17 @@ registerHandler(hitoriHandler);
 
 // ── Pipes handler (puzzles-mobile.com/pipes/) ────────────────
 //
-// The solver returns solved arm MASKS (N=1,E=2,S=4,W=8); the page applies
-// rotation COUNTS. Verified live (Task-9 probe): the page's getNextStatus is
-// `e ? t++ : t--, (t+4)%4` and a CLOCKWISE turn takes the `t--` branch (one CW
-// click moved cellStatus 0 -> 3), so cellStatus = the number of
-// COUNTER-CLOCKWISE quarter-turns from the given orientation. Convert
-// masks->counts with the CCW step. The rotation logic is INLINED (not
-// require()d from src/widget/pipes-rotation.js) because handler.js loads under
-// Node `require` for the parseGalaxiesTask test tail and carries no
-// widget-module imports. Mirrors rotationCount() with pageCW=false.
+// The solver returns solved arm MASKS; the page applies rotation COUNTS.
+// MEASURED live (/pipes/quest/4x4, task=8: cellStatus 1 → mask 1, 2 → mask 2):
+// each +1 cellStatus increment advances the mask bits via (m<<1)|(m>>3). So we
+// count how many such increments turn the given task mask into the solved mask.
+// (Proven by applying the counts through this transform and recovering the
+// solved grid.) Inlined (not require()d from src/widget/pipes-rotation.js)
+// because handler.js loads under Node `require` for the parseGalaxiesTask test
+// tail and carries no widget-module imports. Mirrors rotationCount(pageCW=true).
 
 function pipesMasksToRotations(task, solution, rows, cols) {
-  const stepCCW = (m) => ((m >> 1) | (m << 3)) & 0xF; // N->W->S->E
+  const pageStep = (m) => ((m << 1) | (m >> 3)) & 0xF; // page's per-increment transform
   const out = [];
   for (let r = 0; r < rows; r++) {
     const row = new Array(cols);
@@ -619,7 +618,7 @@ function pipesMasksToRotations(task, solution, rows, cols) {
       let m = task[r][c] & 0xF;
       const target = solution[r][c] & 0xF;
       let k = 0;
-      for (; k < 4; k++) { if (m === target) break; m = stepCCW(m); }
+      for (; k < 4; k++) { if (m === target) break; m = pageStep(m); }
       row[c] = k < 4 ? k : 0;
     }
     out.push(row);

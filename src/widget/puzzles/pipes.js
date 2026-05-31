@@ -22,13 +22,15 @@ const { rotationCount } = require('../pipes-rotation.js');
 //     cols, firstMismatch, ... } (hint.js getHint). grid is the live
 //     rotation-count board.
 //
-// PIPE_PAGE_CW selects which direction one cellStatus step represents. Verified
-// live (Task-9 probe): the page's getNextStatus DECREMENTS the count for a
-// clockwise turn (one CW click moved cellStatus 0 -> 3), so cellStatus counts
-// COUNTER-CLOCKWISE steps from the given orientation — hence false.
-// rotationCount(task, solved, false) yields the count the page needs.
+// PIPE_PAGE_CW selects which per-increment bit transform a cellStatus step
+// applies. MEASURED live (/pipes/quest/4x4, task=8: cellStatus 1 → mask 1=E,
+// 2 → mask 2=N): each +1 increment advances bits via (m<<1)|(m>>3), i.e. the
+// solver's rotateCW. So rotationCount(task, solved, true) gives the number of
+// page increments that turn the given mask into the solved mask. (This is
+// proven by applying the counts through the real page transform and recovering
+// the solved grid; see the pipes fuzz/integration tests.)
 
-const PIPE_PAGE_CW = false;
+const PIPE_PAGE_CW = true;
 
 const pipes = {
   type: 'pipes',

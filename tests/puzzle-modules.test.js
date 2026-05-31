@@ -717,11 +717,30 @@ test('galaxies: hintStatusNodes wraps galaxiesHintLineDesc', () => {
 });
 
 // --- pipes module ---
+test('pipes: applying solutionToRotations counts via the page transform recovers the solved grid', () => {
+  // Ground-truth contract: the page applies each count as N increments of its
+  // per-increment transform (m<<1)|(m>>3) (measured live). Solving the captured
+  // 4x4, the computed counts MUST turn each given task mask into the solver's
+  // solved mask. This is the end-to-end check that distinguishes the correct
+  // rotation direction from its inverse (a passing unit test on hand-picked
+  // values does not).
+  const { PipesSolver } = require('../solver.js');
+  const task = [[8, 3, 2, 6], [8, 7, 1, 10], [10, 13, 13, 11], [6, 3, 1, 8]];
+  const res = new PipesSolver({ rows: 4, cols: 4, task, wrap: false }).solve();
+  assert.equal(res.solved, true);
+  const counts = pipes.solutionToRotations(task, res.grid, 4, 4);
+  const pageStep = (m) => ((m << 1) | (m >> 3)) & 0xF;
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    let m = task[r][c];
+    for (let k = 0; k < counts[r][c]; k++) m = pageStep(m);
+    assert.equal(m, res.grid[r][c], `cell (${r},${c}): ${counts[r][c]} increments of task ${task[r][c]} must reach solved ${res.grid[r][c]}`);
+  }
+});
 test('pipes: solutionToRotations maps solved masks to rotation counts', () => {
   const rot = pipes.solutionToRotations([[1, 5]], [[2, 10]], 1, 2);
-  // cellStatus counts COUNTER-CLOCKWISE steps (live-probe verified): N->E is 3
-  // CCW steps; the symmetric straight N|S->E|W is 1.
-  assert.deepEqual(rot, [[3, 1]]);
+  // Page increment transform is (m<<1)|(m>>3) (measured live). 1->2 is 1 step;
+  // the symmetric straight 5->10 is 1 step.
+  assert.deepEqual(rot, [[1, 1]]);
 });
 test('pipes: cacheKey is type-gated and stable', () => {
   const d = { type: 'pipes', rows: 1, cols: 2, task: [[1, 5]] };
@@ -737,18 +756,18 @@ test('pipes: hintDispatch flags cells whose rotation differs from target', () =>
   const ctx = {
     detectedGrid: { task: [[1, 5]] },
     grid: [[0, 1]], // current rotation counts
-    solution: [[2, 10]], // solved masks -> CCW targets [[3,1]]
+    solution: [[2, 10]], // solved masks -> targets [[1,1]]
     rows: 1, cols: 2, firstMismatch: () => null,
   };
   const r = pipes.hintDispatch(ctx);
   assert.equal(r.success, true);
-  // cell(0,0): current 0 != target 3 -> flagged; cell(0,1): current 1 == target 1 -> ok.
-  assert.deepEqual(r.hint.extraCells, [{ row: 0, col: 0, value: 3 }]);
+  // cell(0,0): current 0 != target 1 -> flagged; cell(0,1): current 1 == target 1 -> ok.
+  assert.deepEqual(r.hint.extraCells, [{ row: 0, col: 0, value: 1 }]);
 });
 test('pipes: loopDoneCheck true only when board matches target rotations', () => {
   const pd = { task: [[1, 5]], rows: 1, cols: 2 };
-  const solution = [[2, 10]]; // CCW targets [[3,1]]
-  assert.equal(pipes.loopDoneCheck({ boardState: [[3, 1]], solution, puzzleData: pd }), true);
+  const solution = [[2, 10]]; // targets [[1,1]]
+  assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution, puzzleData: pd }), true);
   assert.equal(pipes.loopDoneCheck({ boardState: [[0, 1]], solution, puzzleData: pd }), false);
-  assert.equal(pipes.loopDoneCheck({ boardState: [[3, 1]], solution: null, puzzleData: pd }), false);
+  assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution: null, puzzleData: pd }), false);
 });
