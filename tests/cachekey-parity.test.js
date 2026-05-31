@@ -132,7 +132,7 @@ const GOLDEN = {
   "widget:slitherlink:cacheKey": "slitherlink-solution:c8bbacac",
   "widget:slitherlink:staticSig": "sl=25daffc4",
   "widget:yinyang:cacheKey": "yinyang-solution:2a47b033",
-  "widget:pipes:cacheKey": "pipes-solution:86dd8f7f"
+  "widget:pipes:cacheKey": "pipes-solution:77aabe38"
 };
 
 // ── key collection ──────────────────────────────────────────────────────────

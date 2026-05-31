@@ -45,7 +45,10 @@ const pipes = {
   cacheKey(data) {
     if (!data || data.type !== 'pipes' || !data.task) return null;
     const h = hashFNV1a((mix) => {
-      mix(0x50); // 'P' nameplate
+      // Nameplate bumped 0x50 ('P') -> 0x51 to invalidate solution-cache
+      // entries written by pre-geometry-fix builds (which cached wrong masks).
+      // Bump again if the solved-mask encoding ever changes.
+      mix(0x51);
       mix(data.rows | 0); mix(data.cols | 0);
       for (const row of data.task) for (const v of row) mix((v | 0) + 1);
     });
