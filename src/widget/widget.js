@@ -14,6 +14,10 @@
 // Reference set by makeWidget() so the top-level message listener (for the
 // toolbar-icon click → expandWidget action) can drive the widget without
 // reaching into its closure.
+/* exported widgetExpandFn, hashiDoneCheck, galaxiesHintLineDesc --
+   defined in widget.js but consumed in sibling bundle files after
+   concatenation (listener.js, puzzles/hashi.js, puzzles/galaxies.js),
+   so eslint's per-file no-unused-vars can't see the use. */
 let widgetExpandFn = null;
 
 // Puzzle types the widget knows how to solve. Derived lazily from the
