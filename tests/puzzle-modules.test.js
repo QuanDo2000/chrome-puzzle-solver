@@ -64,6 +64,7 @@ const mosaic      = require('../src/widget/puzzles/mosaic.js');
 const nonogram    = require('../src/widget/puzzles/nonogram.js');
 const norinori    = require('../src/widget/puzzles/norinori.js');
 const nurikabe    = require('../src/widget/puzzles/nurikabe.js');
+const pipes       = require('../src/widget/puzzles/pipes.js');
 const shikaku     = require('../src/widget/puzzles/shikaku.js');
 const slitherlink = require('../src/widget/puzzles/slitherlink.js');
 const yinyang     = require('../src/widget/puzzles/yinyang.js');
@@ -713,4 +714,38 @@ test('galaxies: hintStatusNodes wraps galaxiesHintLineDesc', () => {
   assertNodeArray(nodes);
   // Stub returns "line@horizontal:1,2"; assert that string is bolded.
   assert.ok(nodes.some(n => n?.tag === 'b' && n.text === 'line@horizontal:1,2'));
+});
+
+// --- pipes module ---
+test('pipes: solutionToRotations maps solved masks to rotation counts', () => {
+  const rot = pipes.solutionToRotations([[1, 5]], [[2, 10]], 1, 2);
+  assert.deepEqual(rot, [[1, 1]]); // N->E =1 step; N|S->E|W =1 step
+});
+test('pipes: cacheKey is type-gated and stable', () => {
+  const d = { type: 'pipes', rows: 1, cols: 2, task: [[1, 5]] };
+  assert.equal(pipes.cacheKey({ type: 'other' }), null);
+  assert.equal(pipes.cacheKey(d), pipes.cacheKey(d));
+});
+test('pipes: hintStatusNodes phrasing', () => {
+  const bold = (t) => ({ b: t });
+  assert.deepEqual(pipes.hintStatusNodes({ extraCells: [{ row: 0, col: 0, value: 1 }] }, { bold }),
+    ['Rotate ', { b: '(row 1, col 1)' }, ' to its correct orientation']);
+});
+test('pipes: hintDispatch flags cells whose rotation differs from target', () => {
+  const ctx = {
+    detectedGrid: { task: [[1, 5]] },
+    grid: [[0, 1]], // current rotation counts
+    solution: [[2, 10]], // solved masks -> targets [[1,1]]
+    rows: 1, cols: 2, firstMismatch: () => null,
+  };
+  const r = pipes.hintDispatch(ctx);
+  assert.equal(r.success, true);
+  assert.deepEqual(r.hint.extraCells, [{ row: 0, col: 0, value: 1 }]);
+});
+test('pipes: loopDoneCheck true only when board matches target rotations', () => {
+  const pd = { task: [[1, 5]], rows: 1, cols: 2 };
+  const solution = [[2, 10]]; // targets [[1,1]]
+  assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution, puzzleData: pd }), true);
+  assert.equal(pipes.loopDoneCheck({ boardState: [[0, 1]], solution, puzzleData: pd }), false);
+  assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution: null, puzzleData: pd }), false);
 });

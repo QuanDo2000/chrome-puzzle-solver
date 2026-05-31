@@ -598,6 +598,83 @@ const hitoriHandler = {
 
 registerHandler(hitoriHandler);
 
+// ── Pipes handler (puzzles-mobile.com/pipes/) ────────────────
+//
+// The solver returns solved arm MASKS (N=1,E=2,S=4,W=8); the page applies
+// rotation COUNTS. applyPipesState rotates each cell n quarter-turns CLOCKWISE
+// (N->E->S->W on the boolean flags), so convert masks->counts with the CW step
+// here. The rotation logic is INLINED (not require()d from
+// src/widget/pipes-rotation.js) because handler.js loads under Node `require`
+// for the parseGalaxiesTask test tail and carries no widget-module imports.
+// Mirrors rotationCount() with pageCW=true.
+
+function pipesMasksToRotations(task, solution, rows, cols) {
+  const stepCW = (m) => ((m << 1) | (m >> 3)) & 0xF; // N->E->S->W
+  const out = [];
+  for (let r = 0; r < rows; r++) {
+    const row = new Array(cols);
+    for (let c = 0; c < cols; c++) {
+      let m = task[r][c] & 0xF;
+      const target = solution[r][c] & 0xF;
+      let k = 0;
+      for (; k < 4; k++) { if (m === target) break; m = stepCW(m); }
+      row[c] = k < 4 ? k : 0;
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+const pipesHandler = {
+  name: 'puzzles-mobile-pipes',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/pipes/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readPipesData', []);
+    if (!data || !data.found) return { ...result, error: 'No Pipes task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'pipes',
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    // readPipesState returns { success, grid } (rotation counts); the handler
+    // contract is a BARE grid (or null), matching readGridState consumers.
+    const state = await callMainWorld('readPipesState', [ctx.rows, ctx.cols]);
+    if (state && state.success && state.grid) return state.grid;
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, ctx) {
+    // solution is the solved arm-MASK grid; convert vs the detected task into
+    // per-cell rotation counts the page can apply.
+    const rotations = pipesMasksToRotations(ctx.task, solution, ctx.rows, ctx.cols);
+    const ok = await callMainWorld('applyPipesState', [rotations]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Pipes apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(pipesHandler);
+
 // ── Kakurasu handler (puzzles-mobile.com/kakurasu/) ────────────
 
 const kakurasuHandler = {

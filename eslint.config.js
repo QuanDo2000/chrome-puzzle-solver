@@ -316,6 +316,9 @@ module.exports = [
         // src/widget/puzzles/galaxies.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         galaxies: 'readonly',
+        // src/widget/puzzles/pipes.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        pipes: 'readonly',
         // src/widget/state.js — widget storage prefs.
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',

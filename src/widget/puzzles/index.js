@@ -22,6 +22,7 @@ if (typeof shikaku !== 'undefined') PUZZLES[shikaku.type] = shikaku;
 if (typeof hashi !== 'undefined') PUZZLES[hashi.type] = hashi;
 if (typeof slitherlink !== 'undefined') PUZZLES[slitherlink.type] = slitherlink;
 if (typeof galaxies !== 'undefined') PUZZLES[galaxies.type] = galaxies;
+if (typeof pipes !== 'undefined') PUZZLES[pipes.type] = pipes;
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { PUZZLES };
