@@ -1,8 +1,9 @@
 # Project conventions for Claude Code
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
-Binairo Plus, Shikaku, Yin-Yang, Slitherlink, and Hashi puzzles on
-puzzles-mobile.com. Eight solver classes in `solver.js`, a content-script
+Binairo Plus, Shikaku, Yin-Yang, Slitherlink, Hashi, Heyawake, Hitori,
+Kakurasu, Kurodoko, Mosaic, Norinori, Nurikabe, and Pipes puzzles on
+puzzles-mobile.com. Sixteen solver classes in `src/solvers/`, a content-script
 widget in `content.js`, and a small service worker in `background.js`.
 
 ## Version control: use `jj`, never plain `git`
@@ -220,6 +221,13 @@ Click the widget's **📋 Dump** button. Writes a JSON snippet (matching
   serialized; inlined as nested `syncTimer` in each caller).
 - `tests/snapshots/` directory + its eslint ignore (dead infrastructure).
 
+### Pipes encoding + rotation direction
+Pipes is a rotation puzzle — `task` = 4-bit arm masks in the page's current
+(scrambled) orientation, `cellStatus` = rotation counts; the solver returns
+solved masks and the widget/handler convert to rotation counts via
+`src/widget/pipes-rotation.js` (`PIPE_PAGE_CW` pins the page's rotation
+direction, set by live probe).
+
 ## Per-puzzle design notes
 
 Encoding/algorithm details for each puzzle live in the relevant module
@@ -239,5 +247,6 @@ Modules with detailed design notes in their headers:
   `src/solvers/slitherlink.js`
 - Hashi — `src/widget/puzzles/hashi.js`, `src/solvers/hashi.js`
 - Norinori — `src/widget/puzzles/norinori.js`, `src/solvers/norinori.js`
+- Pipes — `src/widget/puzzles/pipes.js`, `src/solvers/pipes.js`
 - Galaxies (shared statics) — `src/widget/galaxies-hint.js`,
   `src/solvers/galaxies.js`

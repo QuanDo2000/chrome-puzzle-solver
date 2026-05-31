@@ -51,6 +51,7 @@ global.getFailedGalaxiesPartials = () => [];
 
 const binairoW    = require('../src/widget/puzzles/binairo.js');
 const hashiW      = require('../src/widget/puzzles/hashi.js');
+const pipesW      = require('../src/widget/puzzles/pipes.js');
 const heyawakeW   = require('../src/widget/puzzles/heyawake.js');
 const hitoriW     = require('../src/widget/puzzles/hitori.js');
 const kakurasuW   = require('../src/widget/puzzles/kakurasu.js');
@@ -130,7 +131,8 @@ const GOLDEN = {
   "widget:shikaku:staticSig": "sk=oukt4d",
   "widget:slitherlink:cacheKey": "slitherlink-solution:c8bbacac",
   "widget:slitherlink:staticSig": "sl=25daffc4",
-  "widget:yinyang:cacheKey": "yinyang-solution:2a47b033"
+  "widget:yinyang:cacheKey": "yinyang-solution:2a47b033",
+  "widget:pipes:cacheKey": "pipes-solution:86dd8f7f"
 };
 
 // ── key collection ──────────────────────────────────────────────────────────
@@ -350,6 +352,14 @@ function currentKeys() {
     const p = fixtures.yinyang6x6;
     const data = { type: 'yinyang', rows: p.rows, cols: p.cols, task: p.task };
     out['widget:yinyang:cacheKey'] = yinyangW.cacheKey(data);
+  }
+
+  // pipes widget: cacheKey only (no staticSig on this module)
+  {
+    out['widget:pipes:cacheKey'] = pipesW.cacheKey({
+      type: 'pipes', rows: 4, cols: 4,
+      task: [[8,3,2,6],[8,7,1,10],[10,13,13,11],[6,3,1,8]],
+    });
   }
 
   return out;
