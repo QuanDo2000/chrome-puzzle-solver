@@ -79,9 +79,13 @@ byte-identical.
 
 ### MAIN-world write functions: save + render ladder
 Any function mutating `window.Game.currentState` (`applyGameState`,
-`applyGalaxiesState`, `applyHintCells`) must:
+`applyHintCells`, and the per-puzzle `apply*State` writers) must:
 1. Call `window.Game.saveState(true)` **before** writes — without it, aquarium
    silently keeps prior visible state even though `cellStatus` updated.
+   Exception: `applyGalaxiesState` does **not** call `saveState` — galaxies
+   mutates `cellHorizontalStatus`/`cellVerticalStatus` and repaints via
+   `drawCurrentState()`, which reads those arrays directly; the save isn't
+   needed and it works in production without it.
 2. Fall through the **canonical render ladder** **after** writes — the same
    if/else-if chain in every `apply*State` function:
    `drawCurrentState → render → redraw → redrawGrid → draw →
