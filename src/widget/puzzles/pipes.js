@@ -32,6 +32,11 @@ const { rotationCount } = require('../pipes-rotation.js');
 
 const PIPE_PAGE_CW = true;
 
+// Smallest Loop batch on tiny boards: with ceil(rows*cols/30), a 4x4 would emit
+// 1 cell/step (16 steps). A floor of 4 keeps tiny boards to a few brisk steps
+// while ceil(rows*cols/30) dominates on large boards (~30 steps max).
+const PIPE_HINT_FLOOR = 4;
+
 const pipes = {
   type: 'pipes',
   label: 'Pipes',
@@ -134,6 +139,16 @@ const pipes = {
   // hintDispatch(ctx): ctx = { grid, solution, rows, cols, ... }. Both grid (live
   // board) and solution are rotation-COUNT grids (solution was converted by
   // solutionFromResult), so compare them directly — no mask→count conversion.
+  //
+  // Batch cap: return only the next `batchSize` mismatched cells, NOT all of
+  // them. This is the documented Loop convention (see CLAUDE.md hint-batch
+  // scaling): Loop calls hintDispatch each step, so an uncapped hint would
+  // rotate the whole board in a single programmatic move — which both makes
+  // Loop pointless (identical to Solve) and applies a from-scratch full solve
+  // in one shot. Capping makes Loop take ceil(mismatched/batchSize) small
+  // steps (~10 s total), mirroring how every other puzzle's Loop drips moves
+  // in. batchSize = max(PIPE_HINT_FLOOR, ceil(rows*cols/30)) so big boards
+  // still finish in ~30 steps while tiny boards reveal a sensible chunk.
   hintDispatch(ctx) {
     const { grid, solution, rows, cols } = ctx;
     if (!solution) return { success: false, error: 'No solution available yet. Click Solve first.' };
@@ -144,7 +159,9 @@ const pipes = {
       if (cur !== target) cells.push({ row: r, col: c, value: target });
     }
     if (cells.length === 0) return { success: false, error: 'Already solved. Nothing to rotate.' };
-    return { success: true, hint: { type: 'pipes', extraCells: cells, count: cells.length }, grid, solution };
+    const batchSize = Math.max(PIPE_HINT_FLOOR, Math.ceil((rows * cols) / 30));
+    const batch = cells.slice(0, batchSize);
+    return { success: true, hint: { type: 'pipes', extraCells: batch, count: batch.length }, grid, solution };
   },
 
   // loopDoneCheck(ctx): SINGLE ctx arg { boardState, solution, puzzleData }.

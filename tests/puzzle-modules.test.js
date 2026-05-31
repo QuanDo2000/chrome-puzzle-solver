@@ -780,3 +780,24 @@ test('pipes: loopDoneCheck true only when board matches the solution counts', ()
   assert.equal(pipes.loopDoneCheck({ boardState: [[0, 1]], solution, puzzleData: pd }), false);
   assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution: null, puzzleData: pd }), false);
 });
+test('pipes: Loop hint drips an incremental batch per step until solved', () => {
+  // Reproduces the runLoop cycle: hintDispatch (capped batch) -> merge into the
+  // board -> repeat until loopDoneCheck. An uncapped hint would solve the whole
+  // board in one programmatic step (the one-shot full solve the page rejects);
+  // the cap forces multiple small steps, matching every other puzzle's Loop.
+  const solution = [[1, 2, 3, 1], [0, 3, 2, 0], [0, 1, 0, 2], [3, 1, 1, 2]];
+  const puzzleData = { type: 'pipes', rows: 4, cols: 4, task: [[8, 3, 2, 6], [8, 7, 1, 10], [10, 13, 13, 11], [6, 3, 1, 8]] };
+  let board = Array.from({ length: 4 }, () => new Array(4).fill(0));
+  let steps = 0;
+  let maxBatch = 0;
+  while (!pipes.loopDoneCheck({ boardState: board, solution, puzzleData })) {
+    const hr = pipes.hintDispatch({ grid: board, solution, rows: 4, cols: 4, firstMismatch: () => null });
+    assert.equal(hr.success, true);
+    maxBatch = Math.max(maxBatch, hr.hint.extraCells.length);
+    for (const cell of hr.hint.extraCells) board[cell.row][cell.col] = cell.value;
+    if (++steps > 50) { assert.fail('Loop did not converge'); }
+  }
+  assert.deepEqual(board, solution);
+  assert.ok(steps > 1, `expected multiple Loop steps (incremental), got ${steps}`);
+  assert.ok(maxBatch <= 4, `batch must respect the cap (4), saw ${maxBatch}`);
+});
