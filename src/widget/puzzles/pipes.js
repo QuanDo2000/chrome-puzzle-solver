@@ -4,23 +4,23 @@ const { hashFNV1a } = require('../shared.js');
 const { rotationCount } = require('../pipes-rotation.js');
 
 // Pipes (Net) rotation puzzle. detectedGrid.task / puzzleData.task = per-cell
-// 4-bit arm masks in the page's CURRENT (scrambled) orientation. solution =
-// per-cell SOLVED masks (N=1,E=2,S=4,W=8). The board state read back by
-// readPipesState = per-cell rotation COUNTS (0..3), NOT masks.
-// See docs/superpowers/specs/2026-05-30-pipes-design.md.
+// 4-bit arm masks in the page's CURRENT (scrambled) orientation. The solver
+// returns solved arm masks, but EVERYTHING in this module speaks rotation
+// COUNTS (0..3): solutionFromResult converts masks→counts once at the
+// solver→widget boundary, so puzzleData.solution, the preview, hint,
+// loopDoneCheck, apply, and cache all uniformly consume counts (the same shape
+// readPipesState returns). See docs/superpowers/specs/2026-05-30-pipes-design.md.
 //
-// Integration points verified against the live dispatchers (Task 8):
-//   drawPreviewCell(ctx, {r,c,v,x,y,cellSize,puzzleData,...}) — preview.js
-//     (renderPreview) feeds v = grid[r][c] = the BOARD's rotation count, NOT
-//     the solved mask. So the per-cell arm overlay is drawn from
-//     puzzleData.solution[r][c] (the solved mask), with renderEmptyCells:true
-//     so zero-count cells still paint.
+// Integration points verified against the live dispatchers:
+//   drawPreviewCell(ctx, {v, taskVal, x, y, cellSize}) — preview.js
+//     (renderPreview) feeds v = grid[r][c] = a rotation COUNT and taskVal = the
+//     given arm mask. The drawn mask is taskVal stepped v times. renderEmptyCells
+//     is true so zero-count cells still paint.
 //   loopDoneCheck(ctx) — SINGLE ctx arg { boardState, solution, puzzleData }
-//     (widget.js runLoop). boardState is the rotation-count grid; task/rows/
+//     (widget.js runLoop). Both boardState and solution are count grids; rows/
 //     cols come from puzzleData (NOT a detectedGrid field — it isn't in ctx).
-//   hintDispatch(ctx) — SINGLE ctx arg { detectedGrid, grid, solution, rows,
-//     cols, firstMismatch, ... } (hint.js getHint). grid is the live
-//     rotation-count board.
+//   hintDispatch(ctx) — ctx { grid, solution, rows, cols, ... } (hint.js
+//     getHint). grid and solution are both count grids, compared directly.
 //
 // PIPE_PAGE_CW selects which per-increment bit transform a cellStatus step
 // applies. MEASURED live (/pipes/quest/4x4, task=8: cellStatus 1 → mask 1=E,

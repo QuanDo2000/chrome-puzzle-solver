@@ -1221,9 +1221,9 @@ function readPipesState(rows, cols) {
 }
 
 function applyPipesState(rotations) {
-  // Raw-count writer: cellStatus[r][c] = rotation count (0..3), per recon.
-  // Task 9's live probe verifies this is the value the page actually reads;
-  // if not, this writer will be adjusted then.
+  // Raw-count writer: cellStatus[r][c] = rotation count (0..3). Verified live —
+  // this is the value the page reads; the save + render ladder below makes the
+  // mutation register and repaint (same contract as the other apply*State fns).
   try {
     var g = window.Game;
     if (!g || !g.currentState || !g.currentState.cellStatus) return false;

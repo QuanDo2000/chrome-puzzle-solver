@@ -3,9 +3,9 @@
 // Pipes (Net) rotation-puzzle solver. task[r][c] is a 4-bit arm mask in the
 // page's given orientation; solving picks a rotation per cell so every arm meets
 // a neighbour's arm, nothing points off-board (unless wrap), and all armed cells
-// form one connected network. Internal convention: N=1, E=2, S=4, W=8. The
-// solver is mapping-agnostic — it only matches "my arm on side X meets the
-// neighbour's arm on the opposite side" — so it need not know the page's labels.
+// form one connected network. The bit→side map is NOT free to choose: it MUST
+// be the page's map (see the `const N/E/S/W` line below and its comment) — an
+// earlier "mapping-agnostic" belief was THE solve bug.
 
 const { timeUp } = require('./shared.js');
 
@@ -17,6 +17,10 @@ const { timeUp } = require('./shared.js');
 // horizontal — the wrong adjacencies — so it produced grids that were
 // "connected" in an imaginary geometry but had off-board arms on the real board.
 const N = 2, E = 1, S = 8, W = 4;
+// Opposite side and side-iteration order, shared by solve/_acyclic/
+// _connectedAssignment. Module-level so they aren't rebuilt per call.
+const OPP = { [N]: S, [S]: N, [E]: W, [W]: E };
+const SIDES = [N, E, S, W];
 
 class PipesSolver {
   // One page rotation step advances the bits via (m<<1)|(m>>3) — the page's
@@ -68,9 +72,6 @@ class PipesSolver {
     const cand = new Array(total);
     for (let i = 0; i < total; i++) cand[i] = PipesSolver.candidates(this.task[(i/cols)|0][i%cols]);
 
-    const opp = { [N]: S, [S]: N, [E]: W, [W]: E };
-    const sides = [N, E, S, W];
-
     const propagate = (queue) => {
       while (queue.length) {
         const i = queue.pop();
@@ -83,7 +84,7 @@ class PipesSolver {
           if (filtered.length !== masks.length) { cand[i] = masks = filtered; }
         }
         if (masks.length === 0) return false;
-        for (const s of sides) {
+        for (const s of SIDES) {
           const j = this._nb(r, c, s);
           if (j < 0) continue;
           const iHasArm = masks.some(m => m & s);
@@ -91,7 +92,7 @@ class PipesSolver {
           let want;
           if (iAllArm) want = true; else if (!iHasArm) want = false; else continue;
           const before = cand[j].length;
-          cand[j] = cand[j].filter(m => (!!(m & opp[s])) === want);
+          cand[j] = cand[j].filter(m => (!!(m & OPP[s])) === want);
           if (cand[j].length === 0) return false;
           if (cand[j].length !== before) queue.push(j);
         }
@@ -154,7 +155,6 @@ class PipesSolver {
   _acyclic(cand) {
     const { rows, cols } = this;
     const total = rows * cols;
-    const opp = { [N]: S, [S]: N, [E]: W, [W]: E };
     const par = new Int32Array(total);
     for (let i = 0; i < total; i++) par[i] = i;
     const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
@@ -166,7 +166,7 @@ class PipesSolver {
         if (!(m & s)) continue;
         const j = this._nb(r, c, s);
         if (j < 0) continue;
-        if (cand[j].length !== 1 || !(cand[j][0] & opp[s])) continue;
+        if (cand[j].length !== 1 || !(cand[j][0] & OPP[s])) continue;
         const a = find(i), b = find(j);
         if (a === b) return false;
         par[a] = b;
@@ -185,15 +185,13 @@ class PipesSolver {
     seen[armed[0]] = 1;
     const st = [armed[0]];
     let cnt = 1;
-    const sides = [N, E, S, W];
-    const opp = { [N]: S, [S]: N, [E]: W, [W]: E };
     while (st.length) {
       const i = st.pop(), r = (i/cols)|0, c = i%cols, m = assign[i];
-      for (const s of sides) {
+      for (const s of SIDES) {
         if (!(m & s)) continue;
         const j = this._nb(r, c, s);
         if (j < 0) continue;
-        if (!(assign[j] & opp[s])) continue;
+        if (!(assign[j] & OPP[s])) continue;
         if (!seen[j]) { seen[j] = 1; cnt++; st.push(j); }
       }
     }
