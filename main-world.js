@@ -1184,6 +1184,72 @@ function applyHitoriState(grid) {
   }
 }
 
+function readPipesData() {
+  try {
+    var g = window.Game;
+    if (!g || !g.task || !g.puzzleWidth || !g.puzzleHeight) return null;
+    var rows = g.puzzleHeight, cols = g.puzzleWidth;
+    var task = [];
+    for (var r = 0; r < rows; r++) {
+      var srcRow = g.task[r] || [];
+      var arr = new Array(cols);
+      for (var c = 0; c < cols; c++) arr[c] = srcRow[c] | 0;
+      task.push(arr);
+    }
+    return { rows: rows, cols: cols, task: task };
+  } catch (e) {
+    return null;
+  }
+}
+
+function readPipesState(rows, cols) {
+  try {
+    var g = window.Game;
+    if (!g || !g.currentState || !g.currentState.cellStatus) return null;
+    var cs = g.currentState.cellStatus;
+    var grid = [];
+    for (var r = 0; r < rows; r++) {
+      var row = cs[r] || [];
+      var arr = new Array(cols);
+      for (var c = 0; c < cols; c++) arr[c] = row[c] | 0;
+      grid.push(arr);
+    }
+    return grid;
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyPipesState(rotations) {
+  // Raw-count writer: cellStatus[r][c] = rotation count (0..3), per recon.
+  // Task 9's live probe verifies this is the value the page actually reads;
+  // if not, this writer will be adjusted then.
+  try {
+    var g = window.Game;
+    if (!g || !g.currentState || !g.currentState.cellStatus) return false;
+    if (typeof g.saveState === 'function') g.saveState(true);
+    var cs = g.currentState.cellStatus;
+    for (var r = 0; r < rotations.length && r < cs.length; r++) {
+      var src = rotations[r] || [];
+      var dst = cs[r];
+      if (!Array.isArray(dst)) continue;
+      for (var c = 0; c < src.length && c < dst.length; c++) {
+        dst[c] = src[c] | 0;
+      }
+    }
+    if (typeof g.drawCurrentState === 'function') { g.drawCurrentState(); }
+    else if (typeof g.render === 'function') { g.render(); }
+    else if (typeof g.redraw === 'function') { g.redraw(); }
+    else if (typeof g.redrawGrid === 'function') { g.redrawGrid(); }
+    else if (typeof g.draw === 'function') { g.draw(); }
+    else if (g.getSaved && g.loadGame) { var saved = g.getSaved(); if (saved) g.loadGame(saved); }
+    return true;
+  } catch (e) {
+    console.warn('Pipes apply failed:', e);
+    return false;
+  }
+}
+
 function readKakurasuData() {
   try {
     var G = window.Game;
@@ -1972,6 +2038,20 @@ function dumpPuzzleForBench() {
         areaTask: g.areaTask,
         path: path
       };
+    }
+
+    if (path.indexOf('/pipes/') !== -1) {
+      if (!Array.isArray(g.task)) {
+        return { error: 'pipes: g.task is not a 2D array', diagnostic: diagnostic(g), path: path };
+      }
+      var ptask = [];
+      for (var pr = 0; pr < height; pr++) {
+        var prow = g.task[pr] || [];
+        var parr = [];
+        for (var pc = 0; pc < width; pc++) parr.push(prow[pc] | 0);
+        ptask.push(parr);
+      }
+      return { type: 'pipes', rows: height, cols: width, task: ptask, path: path };
     }
 
     if (path.indexOf('/nurikabe/') !== -1 || g.slug === 'nurikabe') {

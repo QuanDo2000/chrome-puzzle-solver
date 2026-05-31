@@ -80,6 +80,9 @@ type MainWorldFn =
   | 'readNurikabeData'
   | 'readNurikabeState'
   | 'applyNurikabeState'
+  | 'readPipesData'
+  | 'readPipesState'
+  | 'applyPipesState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
