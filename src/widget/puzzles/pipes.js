@@ -65,24 +65,29 @@ const pipes = {
     return out;
   },
 
-  // preview.js passes v = grid[r][c] = the board's rotation count, so we ignore
-  // it and draw the SOLVED arm mask from puzzleData.solution[r][c]. Before a
-  // solve lands there is no solution; render nothing for that cell.
-  drawPreviewCell(ctx, { r, c, x, y, cellSize, puzzleData }) {
-    const sol = puzzleData && puzzleData.solution;
-    const v = (sol && sol[r] && sol[r][c]) | 0;
-    if (!v) return;
+  // Draw each cell in its CURRENT page orientation so the preview mirrors the
+  // board. preview.js passes v = grid[r][c] = the cell's rotation COUNT and
+  // taskVal = the given arm mask. The displayed mask is the task mask stepped
+  // `v` times. Page convention (verified live on /pipes/quest/4x4, task=8 at
+  // count 0/1/2 points S/E/N): bit→side map is 1=East, 2=North, 4=West,
+  // 8=South, and one cellStatus step advances bits via (m<<1)|(m>>3).
+  drawPreviewCell(ctx, { v, taskVal, x, y, cellSize }) {
+    const E = 1, N = 2, W = 4, S = 8;
+    const step = (m) => ((m << 1) | (m >> 3)) & 0xF;
+    let mask = (taskVal | 0) & 0xF;
+    for (let k = 0; k < (((v | 0) % 4) + 4) % 4; k++) mask = step(mask);
+    if (!mask) return;
     const cx = x + cellSize / 2, cy = y + cellSize / 2;
     ctx.strokeStyle = '#2563eb';
     ctx.lineWidth = Math.max(2, Math.floor(cellSize / 8));
     ctx.lineCap = 'round';
     ctx.beginPath();
-    if (v & 1) { ctx.moveTo(cx, cy); ctx.lineTo(cx, y); }
-    if (v & 2) { ctx.moveTo(cx, cy); ctx.lineTo(x + cellSize, cy); }
-    if (v & 4) { ctx.moveTo(cx, cy); ctx.lineTo(cx, y + cellSize); }
-    if (v & 8) { ctx.moveTo(cx, cy); ctx.lineTo(x, cy); }
+    if (mask & N) { ctx.moveTo(cx, cy); ctx.lineTo(cx, y); }
+    if (mask & E) { ctx.moveTo(cx, cy); ctx.lineTo(x + cellSize, cy); }
+    if (mask & S) { ctx.moveTo(cx, cy); ctx.lineTo(cx, y + cellSize); }
+    if (mask & W) { ctx.moveTo(cx, cy); ctx.lineTo(x, cy); }
     ctx.stroke();
-    const arms = (v & 1 ? 1 : 0) + (v & 2 ? 1 : 0) + (v & 4 ? 1 : 0) + (v & 8 ? 1 : 0);
+    const arms = (mask & N ? 1 : 0) + (mask & E ? 1 : 0) + (mask & S ? 1 : 0) + (mask & W ? 1 : 0);
     ctx.fillStyle = '#2563eb';
     ctx.beginPath();
     ctx.arc(cx, cy, Math.max(2, Math.floor(cellSize / (arms === 1 ? 6 : 10))), 0, Math.PI * 2);
