@@ -183,6 +183,12 @@ function computePuzzleDiff(type, grid, solution, stars) {
     }
     return out;
   }
+  // Pipes board holds rotation COUNTS (0..3) while the solution holds arm
+  // MASKS (N=1,E=2,S=4,W=8) — different value spaces, so a per-cell compare
+  // would flag every cell. The solved-arm preview already shows the target
+  // orientation, so no mistake overlay is needed.
+  if (type === 'pipes') return out;
+
   // Nonogram, Aquarium, Binairo, Yin-Yang: a cell is a mistake when the
   // player has placed something there (its value is not 0 = "not yet
   // placed") and that value differs from the solution.
