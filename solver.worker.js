@@ -148,8 +148,12 @@ self.onmessage = function (e) {
       });
       result = s.solve();
     } else if (type === 'pipes' && extraData) {
+      // Cap each attempt so an unsolvable/too-large board fails gracefully
+      // instead of hanging the worker forever (matches the 30 s cap every other
+      // puzzle uses). The auto path runs this twice (non-wrap then wrap), each
+      // bounded independently.
       const mk = (wrap) => new PipesSolver({
-        rows: extraData.rows, cols: extraData.cols, task: extraData.task, wrap, maxMs: extraData.maxMs || 0,
+        rows: extraData.rows, cols: extraData.cols, task: extraData.task, wrap, maxMs: extraData.maxMs || 30000,
       }).solve();
       if (extraData.wrap === 'auto') {
         result = mk(false);

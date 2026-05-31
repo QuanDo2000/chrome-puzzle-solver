@@ -71,3 +71,14 @@ test('PipesSolver constructive non-wrap 4x4 (40 trials)', () => { for (let s=1;s
 test('PipesSolver constructive non-wrap 6x6 (30 trials)', () => { for (let s=100;s<=129;s++) runConstructive(s, 6, 6, false); });
 test('PipesSolver constructive non-wrap 4x7 (20 trials)', () => { for (let s=200;s<=219;s++) runConstructive(s, 4, 7, false); });
 test('PipesSolver constructive WRAP 5x5 (30 trials)', () => { for (let s=300;s<=329;s++) runConstructive(s, 5, 5, true); });
+// Large WRAP boards are the hard case: the border rule never fires, so without
+// loop-pruning the solver would explode (a real 60x40 monthly-wrap puzzle did
+// not solve in 70 s before the fix; ~70 ms after). These big constructive
+// trials lock in the loop-prune speedup AND correctness (runConstructive
+// asserts solved + edge-consistent + every cell a rotation of its task).
+test('PipesSolver constructive WRAP 30x30 (8 trials)', () => { for (let s=400;s<=407;s++) runConstructive(s, 30, 30, true); });
+test('PipesSolver constructive WRAP 60x40 (4 trials)', () => {
+  const t0 = Date.now();
+  for (let s=500;s<=503;s++) runConstructive(s, 60, 40, true);
+  assert.ok(Date.now() - t0 < 20000, 'four 60x40 wrap solves must finish well under 20s (loop-prune)');
+});

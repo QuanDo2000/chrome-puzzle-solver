@@ -124,7 +124,7 @@ class PipesSolver {
         const snapshot = cand.map(a => a.slice());
         const savedAssign = assign.slice();
         cand[best] = [m];
-        if (propagate([best])) {
+        if (propagate([best]) && this._acyclic(cand)) {
           const got = solveFrom();
           if (got) return got;
         }
@@ -138,6 +138,41 @@ class PipesSolver {
       return { solved: false, grid: null, error: this.maxMs > 0 && timeUp(this.maxMs, this._startedAt) ? 'time limit exceeded' : 'no solution' };
     }
     return { solved: true, grid };
+  }
+
+  // Loop-prune for tree-structured Net puzzles. Build a union-find over edges
+  // that are DETERMINED present — both endpoints are singletons whose arms
+  // point at each other. If such an edge joins two cells already in the same
+  // component, the determined edges contain a cycle, so this partial assignment
+  // can never extend to an acyclic (valid) solution: return false to prune.
+  // Each undirected edge is considered once (E and S sides only); wrap edges
+  // are covered because every horizontal edge is some cell's E side and every
+  // vertical edge some cell's S side. O(total) per call; only runs after a
+  // successful propagate, so the collapsed search keeps it cheap. Sound for
+  // tree puzzles — a hypothetical loop-containing variant would safely report
+  // no-solution rather than returning a wrong board.
+  _acyclic(cand) {
+    const { rows, cols } = this;
+    const total = rows * cols;
+    const opp = { [N]: S, [S]: N, [E]: W, [W]: E };
+    const par = new Int32Array(total);
+    for (let i = 0; i < total; i++) par[i] = i;
+    const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+    for (let i = 0; i < total; i++) {
+      if (cand[i].length !== 1) continue;
+      const m = cand[i][0];
+      const r = (i / cols) | 0, c = i % cols;
+      for (const s of [E, S]) {
+        if (!(m & s)) continue;
+        const j = this._nb(r, c, s);
+        if (j < 0) continue;
+        if (cand[j].length !== 1 || !(cand[j][0] & opp[s])) continue;
+        const a = find(i), b = find(j);
+        if (a === b) return false;
+        par[a] = b;
+      }
+    }
+    return true;
   }
 
   _connectedAssignment(assign) {
