@@ -639,7 +639,7 @@ const pipesHandler = {
   async detect() {
     const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
     const data = await callMainWorld('readPipesData', []);
-    if (!data || !data.found) return { ...result, error: 'No Pipes task data found' };
+    if (!data) return { ...result, error: 'No Pipes task data found' };
     const stageEl = document.getElementById('stage') ||
                     document.getElementById('game') ||
                     document.querySelector('[class*="game"], [class*="puzzle"]');
@@ -657,10 +657,9 @@ const pipesHandler = {
   },
 
   async readState(ctx) {
-    // readPipesState returns { success, grid } (rotation counts); the handler
-    // contract is a BARE grid (or null), matching readGridState consumers.
+    // readPipesState returns a BARE grid of rotation counts (or null).
     const state = await callMainWorld('readPipesState', [ctx.rows, ctx.cols]);
-    if (state && state.success && state.grid) return state.grid;
+    if (state) return state;
     return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
   },
 
