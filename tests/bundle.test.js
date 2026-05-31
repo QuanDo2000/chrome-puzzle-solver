@@ -17,7 +17,7 @@ function loadBundledSolvers() {
 
 test('solver bundle evaluates and exports every solver class', () => {
   const bundled = loadBundledSolvers();
-  for (const name of ['NonogramSolver', 'AquariumSolver', 'MosaicSolver', 'computePuzzleDiff']) {
+  for (const name of ['NonogramSolver', 'AquariumSolver', 'MosaicSolver', 'PipesSolver', 'computePuzzleDiff']) {
     assert.equal(typeof bundled[name], 'function', `${name} missing from bundle`);
   }
 });
@@ -36,6 +36,13 @@ test('bundled MosaicSolver solves a fixture (exercises a grid solver in-bundle)'
   const p = fixtures.mosaic5x5Easy;
   bundled.MosaicSolver.clearSolutionCache();
   const res = new bundled.MosaicSolver({ rows: p.rows, cols: p.cols, task: p.task }).solve();
+  assert.equal(res.solved, true);
+});
+
+test('bundled PipesSolver solves the captured 4x4', () => {
+  const bundled = loadBundledSolvers();
+  const task = [[8,3,2,6],[8,7,1,10],[10,13,13,11],[6,3,1,8]];
+  const res = new bundled.PipesSolver({ rows: 4, cols: 4, task, wrap: false }).solve();
   assert.equal(res.solved, true);
 });
 

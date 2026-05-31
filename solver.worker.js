@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, PipesSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -147,6 +147,18 @@ self.onmessage = function (e) {
         maxMs: 30000,
       });
       result = s.solve();
+    } else if (type === 'pipes' && extraData) {
+      const mk = (wrap) => new PipesSolver({
+        rows: extraData.rows, cols: extraData.cols, task: extraData.task, wrap, maxMs: extraData.maxMs || 0,
+      }).solve();
+      if (extraData.wrap === 'auto') {
+        result = mk(false);
+        if (result.solved) { result.wrap = false; }
+        else { result = mk(true); result.wrap = true; }
+      } else {
+        result = mk(!!extraData.wrap);
+        if (result && typeof result === 'object') result.wrap = !!extraData.wrap;
+      }
     } else {
       const s = new NonogramSolver(rowClues, colClues);
       result = s.solve(initialGrid || null);

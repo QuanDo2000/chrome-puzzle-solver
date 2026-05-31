@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { PipesSolver } = require('../src/solvers/pipes.js');
+const { PipesSolver } = require('../solver.js');
 
 // N=1,E=2,S=4,W=8. CW quarter turn: N->E->S->W->N.
 test('PipesSolver.rotateCW moves each arm one quarter clockwise', () => {
