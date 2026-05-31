@@ -719,7 +719,9 @@ test('galaxies: hintStatusNodes wraps galaxiesHintLineDesc', () => {
 // --- pipes module ---
 test('pipes: solutionToRotations maps solved masks to rotation counts', () => {
   const rot = pipes.solutionToRotations([[1, 5]], [[2, 10]], 1, 2);
-  assert.deepEqual(rot, [[1, 1]]); // N->E =1 step; N|S->E|W =1 step
+  // cellStatus counts COUNTER-CLOCKWISE steps (live-probe verified): N->E is 3
+  // CCW steps; the symmetric straight N|S->E|W is 1.
+  assert.deepEqual(rot, [[3, 1]]);
 });
 test('pipes: cacheKey is type-gated and stable', () => {
   const d = { type: 'pipes', rows: 1, cols: 2, task: [[1, 5]] };
@@ -735,17 +737,18 @@ test('pipes: hintDispatch flags cells whose rotation differs from target', () =>
   const ctx = {
     detectedGrid: { task: [[1, 5]] },
     grid: [[0, 1]], // current rotation counts
-    solution: [[2, 10]], // solved masks -> targets [[1,1]]
+    solution: [[2, 10]], // solved masks -> CCW targets [[3,1]]
     rows: 1, cols: 2, firstMismatch: () => null,
   };
   const r = pipes.hintDispatch(ctx);
   assert.equal(r.success, true);
-  assert.deepEqual(r.hint.extraCells, [{ row: 0, col: 0, value: 1 }]);
+  // cell(0,0): current 0 != target 3 -> flagged; cell(0,1): current 1 == target 1 -> ok.
+  assert.deepEqual(r.hint.extraCells, [{ row: 0, col: 0, value: 3 }]);
 });
 test('pipes: loopDoneCheck true only when board matches target rotations', () => {
   const pd = { task: [[1, 5]], rows: 1, cols: 2 };
-  const solution = [[2, 10]]; // targets [[1,1]]
-  assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution, puzzleData: pd }), true);
+  const solution = [[2, 10]]; // CCW targets [[3,1]]
+  assert.equal(pipes.loopDoneCheck({ boardState: [[3, 1]], solution, puzzleData: pd }), true);
   assert.equal(pipes.loopDoneCheck({ boardState: [[0, 1]], solution, puzzleData: pd }), false);
-  assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution: null, puzzleData: pd }), false);
+  assert.equal(pipes.loopDoneCheck({ boardState: [[3, 1]], solution: null, puzzleData: pd }), false);
 });

@@ -601,15 +601,17 @@ registerHandler(hitoriHandler);
 // ── Pipes handler (puzzles-mobile.com/pipes/) ────────────────
 //
 // The solver returns solved arm MASKS (N=1,E=2,S=4,W=8); the page applies
-// rotation COUNTS. applyPipesState rotates each cell n quarter-turns CLOCKWISE
-// (N->E->S->W on the boolean flags), so convert masks->counts with the CW step
-// here. The rotation logic is INLINED (not require()d from
-// src/widget/pipes-rotation.js) because handler.js loads under Node `require`
-// for the parseGalaxiesTask test tail and carries no widget-module imports.
-// Mirrors rotationCount() with pageCW=true.
+// rotation COUNTS. Verified live (Task-9 probe): the page's getNextStatus is
+// `e ? t++ : t--, (t+4)%4` and a CLOCKWISE turn takes the `t--` branch (one CW
+// click moved cellStatus 0 -> 3), so cellStatus = the number of
+// COUNTER-CLOCKWISE quarter-turns from the given orientation. Convert
+// masks->counts with the CCW step. The rotation logic is INLINED (not
+// require()d from src/widget/pipes-rotation.js) because handler.js loads under
+// Node `require` for the parseGalaxiesTask test tail and carries no
+// widget-module imports. Mirrors rotationCount() with pageCW=false.
 
 function pipesMasksToRotations(task, solution, rows, cols) {
-  const stepCW = (m) => ((m << 1) | (m >> 3)) & 0xF; // N->E->S->W
+  const stepCCW = (m) => ((m >> 1) | (m << 3)) & 0xF; // N->W->S->E
   const out = [];
   for (let r = 0; r < rows; r++) {
     const row = new Array(cols);
@@ -617,7 +619,7 @@ function pipesMasksToRotations(task, solution, rows, cols) {
       let m = task[r][c] & 0xF;
       const target = solution[r][c] & 0xF;
       let k = 0;
-      for (; k < 4; k++) { if (m === target) break; m = stepCW(m); }
+      for (; k < 4; k++) { if (m === target) break; m = stepCCW(m); }
       row[c] = k < 4 ? k : 0;
     }
     out.push(row);

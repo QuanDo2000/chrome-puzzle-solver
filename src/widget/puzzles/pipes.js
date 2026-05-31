@@ -22,11 +22,13 @@ const { rotationCount } = require('../pipes-rotation.js');
 //     cols, firstMismatch, ... } (hint.js getHint). grid is the live
 //     rotation-count board.
 //
-// PIPE_PAGE_CW (page rotation direction): applyPipesState applies n CLOCKWISE
-// quarter-turns per cell (N->E->S->W on the boolean flags), so the page is
-// clockwise. Pinned true; the Task-9 live probe confirms.
+// PIPE_PAGE_CW selects which direction one cellStatus step represents. Verified
+// live (Task-9 probe): the page's getNextStatus DECREMENTS the count for a
+// clockwise turn (one CW click moved cellStatus 0 -> 3), so cellStatus counts
+// COUNTER-CLOCKWISE steps from the given orientation — hence false.
+// rotationCount(task, solved, false) yields the count the page needs.
 
-const PIPE_PAGE_CW = true;
+const PIPE_PAGE_CW = false;
 
 const pipes = {
   type: 'pipes',
