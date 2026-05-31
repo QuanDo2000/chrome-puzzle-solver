@@ -42,6 +42,7 @@ const WIDGET_FILES = [
   'puzzles/hashi.js',
   'puzzles/slitherlink.js',
   'puzzles/galaxies.js',
+  'puzzles/pipes.js',
   // Aggregates the per-puzzle const declarations into the PUZZLES map.
   // Must come after all puzzles/<type>.js files.
   'puzzles/index.js',
@@ -62,11 +63,12 @@ const WIDGET_FILES = [
 const EXPORT_RE =
   /\n\s*if\s*\(\s*typeof\s+module[\s\S]*?module\.exports\s*=\s*(?:\{[\s\S]*?\}|[A-Za-z_$][\w$]*)\s*;?\s*\}\s*$/;
 
-// Strip `const { ... } = require('./shared.js')` (or `../shared.js`) from
-// consumer files — in the bundle shared.js is concatenated first, so its
-// helpers are already in scope.
+// Strip `const { ... } = require('./shared.js')` / `require('../pipes-rotation.js')`
+// etc. from consumer files — the leaf helpers (shared.js, pipes-rotation.js) are
+// concatenated FIRST, so their exports are already bundle-scope globals; a
+// surviving const-require would redeclare them and throw at parse time.
 const SHARED_REQUIRE_RE =
-  /^\s*const\s*\{[^}]*\}\s*=\s*require\(['"]\.{1,2}\/(?:[\w.-]+\/)*shared\.js['"]\);?\s*$/mg;
+  /^\s*const\s*\{[^}]*\}\s*=\s*require\(['"]\.{1,2}\/(?:[\w.-]+\/)*(?:shared|pipes-rotation)\.js['"]\);?\s*$/mg;
 
 const root = path.join(__dirname, '..');
 const widgetDir = path.join(root, 'src', 'widget');
@@ -105,8 +107,8 @@ function buildContentBundle() {
   parts.push(contentBody.trim());
   parts.push('');
   const bundle = parts.join('\n');
-  if (/require\(['"][^'"]*shared\.js['"]\)/.test(bundle)) {
-    throw new Error('a shared.js require survived stripping — content bundle would break');
+  if (/require\(['"][^'"]*(?:shared|pipes-rotation)\.js['"]\)/.test(bundle)) {
+    throw new Error('a leaf-helper require survived stripping — content bundle would break');
   }
   return bundle;
 }
