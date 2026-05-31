@@ -20,7 +20,7 @@ function hashFNV1a(feed, mask = true) {
 // Grey diagonal × for a confirmed-empty cell — the shared "v===2" glyph used by
 // the cell-state puzzle previews (kurodoko, mosaic, norinori, nurikabe,
 // kakurasu, heyawake). Hitori intentionally does NOT use this (its v=2 is a
-// light fill).
+// dark fill, not the × glyph).
 function drawCrossCell(ctx, x, y, cellSize) {
   const pad = Math.max(3, Math.floor(cellSize * 0.25));
   ctx.strokeStyle = '#9ca3af';
