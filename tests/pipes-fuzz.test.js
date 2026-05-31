@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const { PipesSolver } = require('../src/solvers/pipes.js');
 
 function rng(seed) { let s = seed >>> 0; return () => { s = (s*1664525 + 1013904223) >>> 0; return s / 0x100000000; }; }
-const N=1,E=2,S=4,W=8, OPP={[N]:S,[S]:N,[E]:W,[W]:E};
+// Page bit→side map (must match PipesSolver): E=1, N=2, W=4, S=8.
+const N=2,E=1,S=8,W=4, OPP={[N]:S,[S]:N,[E]:W,[W]:E};
 
 // Build a random spanning tree over the grid; its edges define each cell's
 // solved mask. Guaranteed connected + edge-consistent => guaranteed solvable.

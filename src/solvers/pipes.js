@@ -9,10 +9,19 @@
 
 const { timeUp } = require('./shared.js');
 
-const N = 1, E = 2, S = 4, W = 8;
+// Direction→bit map MUST match the page's encoding, because the solver matches
+// arms across geometric neighbours (N↔S vertical, E↔W horizontal) and rejects
+// arms pointing off-board. Verified live on /pipes/quest/4x4 (task=8 single arm
+// at cellStatus 0/1/2 points S/E/N): the page uses E=1, N=2, W=4, S=8. Earlier
+// the solver used N=1,E=2,S=4,W=8, which made (1,4) the vertical pair and (2,8)
+// horizontal — the wrong adjacencies — so it produced grids that were
+// "connected" in an imaginary geometry but had off-board arms on the real board.
+const N = 2, E = 1, S = 8, W = 4;
 
 class PipesSolver {
-  // One clockwise quarter-turn moves each set bit N->E->S->W->N.
+  // One page rotation step advances the bits via (m<<1)|(m>>3) — the page's
+  // measured per-cellStatus-increment transform. (Named rotateCW for history;
+  // it is exactly the page's increment, independent of the bit→side labels.)
   static rotateCW(mask, k) {
     let m = mask & 0xF;
     const turns = ((k % 4) + 4) % 4;
