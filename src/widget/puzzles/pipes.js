@@ -180,6 +180,24 @@ const pipes = {
     return true;
   },
 
+  // Hint Apply MUST use the pipes raw-count writer, not the generic
+  // applyHintCells MAIN-world fn. applyHintCells clamps every value to binary
+  // cell-state (v===1?1 : v===2||v===-1?2 : 0), so a hint cell whose target
+  // rotation COUNT is 3 would be written as 0 — silently wrong. Mirror
+  // slitherlink's applyHint: read the live board, overlay the hint's raw
+  // counts, and apply through applyPipesState (the same path Loop uses), so
+  // Hint Apply and Loop behave identically.
+  async applyHint(hint, { callMainWorld, puzzleData, hintAbsoluteCells }) {
+    const rows = puzzleData.rows, cols = puzzleData.cols;
+    const cur = await callMainWorld('readPipesState', [rows, cols]);
+    const grid = (cur || Array.from({ length: rows }, () => new Array(cols).fill(0)))
+      .map(row => row.slice());
+    for (const cell of hintAbsoluteCells(hint)) {
+      if (grid[cell.row]) grid[cell.row][cell.col] = cell.value | 0;
+    }
+    return !!(await callMainWorld('applyPipesState', [grid]));
+  },
+
   partialResultArm(result, { applyGridPartialResult }) {
     applyGridPartialResult(result);
   },

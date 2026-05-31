@@ -801,3 +801,30 @@ test('pipes: Loop hint drips an incremental batch per step until solved', () => 
   assert.ok(steps > 1, `expected multiple Loop steps (incremental), got ${steps}`);
   assert.ok(maxBatch <= 4, `batch must respect the cap (4), saw ${maxBatch}`);
 });
+test('pipes: applyHint writes raw rotation counts via applyPipesState (no binary clamp)', async () => {
+  // Regression: the generic applyHintCells clamps value to 0/1/2, turning a
+  // target count of 3 into 0. pipes.applyHint must instead overlay raw counts
+  // onto the live board and route through applyPipesState (Loop's writer).
+  const calls = [];
+  const hintAbsoluteCells = (h) => h.extraCells || [];
+  const callMainWorld = async (fn, args) => {
+    calls.push({ fn, args });
+    if (fn === 'readPipesState') return [[0, 0], [0, 0]]; // live board: all unrotated
+    if (fn === 'applyPipesState') return true;
+    return null;
+  };
+  const hint = { type: 'pipes', extraCells: [
+    { row: 0, col: 1, value: 3 },   // the value the generic writer would corrupt to 0
+    { row: 1, col: 0, value: 2 },
+  ] };
+  const ok = await pipes.applyHint(hint, {
+    callMainWorld, hintAbsoluteCells,
+    puzzleData: { type: 'pipes', rows: 2, cols: 2 },
+  });
+  assert.equal(ok, true);
+  // It must call applyPipesState (not applyHintCells) with the overlaid grid.
+  const applied = calls.find(c => c.fn === 'applyPipesState');
+  assert.ok(applied, 'expected applyPipesState to be called');
+  assert.ok(!calls.some(c => c.fn === 'applyHintCells'), 'must not use the binary applyHintCells');
+  assert.deepEqual(applied.args[0], [[0, 3], [2, 0]]); // count 3 preserved, not clamped
+});
