@@ -45,10 +45,10 @@ const pipes = {
   cacheKey(data) {
     if (!data || data.type !== 'pipes' || !data.task) return null;
     const h = hashFNV1a((mix) => {
-      // Nameplate bumped 0x50 ('P') -> 0x51 to invalidate solution-cache
-      // entries written by pre-geometry-fix builds (which cached wrong masks).
-      // Bump again if the solved-mask encoding ever changes.
-      mix(0x51);
+      // Nameplate version. 0x50 ('P') = original; 0x51 = post-geometry-fix;
+      // 0x52 = solution now cached as rotation COUNTS (not masks). Bump on any
+      // change to the cached solution's encoding so stale entries are ignored.
+      mix(0x52);
       mix(data.rows | 0); mix(data.cols | 0);
       for (const row of data.task) for (const v of row) mix((v | 0) + 1);
     });
@@ -68,6 +68,19 @@ const pipes = {
       out.push(row);
     }
     return out;
+  },
+
+  // THE conversion boundary. The solver returns solved arm MASKS, but the page
+  // (and readState/cellStatus, the board grid drawPreview renders) speak rotation
+  // COUNTS. Per the widget contract (recordSolveSuccess: "keep puzzleData.solution
+  // in the same shape readState returns"), convert masks→counts ONCE here so every
+  // downstream consumer — preview, apply, hint, loopDoneCheck, cache — uniformly
+  // sees counts and needs no per-site conversion. Falls back to the raw grid if
+  // puzzleData/task isn't available (keeps the hook null-safe).
+  solutionFromResult(result, puzzleData) {
+    const grid = result && result.grid;
+    if (!grid || !puzzleData || !puzzleData.task) return grid;
+    return pipes.solutionToRotations(puzzleData.task, grid, puzzleData.rows, puzzleData.cols);
   },
 
   // Draw each cell in its CURRENT page orientation so the preview mirrors the
@@ -118,35 +131,34 @@ const pipes = {
     return ['Rotate ', bold(String(cells.length)), ' cells to their correct orientation'];
   },
 
-  // hintDispatch(ctx): ctx = { detectedGrid, grid, solution, rows, cols, ... }.
-  // grid is the live rotation-count board; targets are the solved rotation
-  // counts. extraCells are the cells whose current rotation != target.
+  // hintDispatch(ctx): ctx = { grid, solution, rows, cols, ... }. Both grid (live
+  // board) and solution are rotation-COUNT grids (solution was converted by
+  // solutionFromResult), so compare them directly — no mask→count conversion.
   hintDispatch(ctx) {
-    const { detectedGrid, grid, solution, rows, cols } = ctx;
+    const { grid, solution, rows, cols } = ctx;
     if (!solution) return { success: false, error: 'No solution available yet. Click Solve first.' };
-    const targets = pipes.solutionToRotations(detectedGrid.task, solution, rows, cols);
     const cells = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const cur = (grid && grid[r] && grid[r][c]) | 0;
-      if (cur !== targets[r][c]) cells.push({ row: r, col: c, value: targets[r][c] });
+      const target = (solution[r] && solution[r][c]) | 0;
+      if (cur !== target) cells.push({ row: r, col: c, value: target });
     }
     if (cells.length === 0) return { success: false, error: 'Already solved. Nothing to rotate.' };
     return { success: true, hint: { type: 'pipes', extraCells: cells, count: cells.length }, grid, solution };
   },
 
   // loopDoneCheck(ctx): SINGLE ctx arg { boardState, solution, puzzleData }.
-  // boardState is the live rotation-count grid; task/rows/cols come from
-  // puzzleData (detectedGrid is NOT threaded into this ctx).
+  // boardState and solution are both rotation-COUNT grids — compare directly.
   loopDoneCheck(ctx) {
     const boardState = ctx && ctx.boardState;
     const solution = ctx && ctx.solution;
     const pd = ctx && ctx.puzzleData;
-    if (!solution || !pd || !pd.task) return false;
+    if (!solution || !pd) return false;
     const rows = pd.rows, cols = pd.cols;
-    const targets = pipes.solutionToRotations(pd.task, solution, rows, cols);
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const cur = (boardState && boardState[r] && boardState[r][c]) | 0;
-      if (cur !== targets[r][c]) return false;
+      const target = (solution[r] && solution[r][c]) | 0;
+      if (cur !== target) return false;
     }
     return true;
   },

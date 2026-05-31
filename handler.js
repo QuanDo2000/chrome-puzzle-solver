@@ -600,31 +600,11 @@ registerHandler(hitoriHandler);
 
 // ── Pipes handler (puzzles-mobile.com/pipes/) ────────────────
 //
-// The solver returns solved arm MASKS; the page applies rotation COUNTS.
-// MEASURED live (/pipes/quest/4x4, task=8: cellStatus 1 → mask 1, 2 → mask 2):
-// each +1 cellStatus increment advances the mask bits via (m<<1)|(m>>3). So we
-// count how many such increments turn the given task mask into the solved mask.
-// (Proven by applying the counts through this transform and recovering the
-// solved grid.) Inlined (not require()d from src/widget/pipes-rotation.js)
-// because handler.js loads under Node `require` for the parseGalaxiesTask test
-// tail and carries no widget-module imports. Mirrors rotationCount(pageCW=true).
-
-function pipesMasksToRotations(task, solution, rows, cols) {
-  const pageStep = (m) => ((m << 1) | (m >> 3)) & 0xF; // page's per-increment transform
-  const out = [];
-  for (let r = 0; r < rows; r++) {
-    const row = new Array(cols);
-    for (let c = 0; c < cols; c++) {
-      let m = task[r][c] & 0xF;
-      const target = solution[r][c] & 0xF;
-      let k = 0;
-      for (; k < 4; k++) { if (m === target) break; m = pageStep(m); }
-      row[c] = k < 4 ? k : 0;
-    }
-    out.push(row);
-  }
-  return out;
-}
+// `solution` here is already a rotation-COUNT grid: the widget's
+// pipes.solutionFromResult converts the solver's masks → counts at the
+// solver→widget boundary (see src/widget/puzzles/pipes.js), so the handler just
+// writes the counts to the page via applyPipesState. No mask→count conversion
+// lives here anymore.
 
 const pipesHandler = {
   name: 'puzzles-mobile-pipes',
@@ -662,11 +642,10 @@ const pipesHandler = {
     return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
   },
 
-  async applySolution(solution, ctx) {
-    // solution is the solved arm-MASK grid; convert vs the detected task into
-    // per-cell rotation counts the page can apply.
-    const rotations = pipesMasksToRotations(ctx.task, solution, ctx.rows, ctx.cols);
-    const ok = await callMainWorld('applyPipesState', [rotations]);
+  async applySolution(solution, _ctx) {
+    // `solution` is already a rotation-COUNT grid (converted by the widget's
+    // pipes.solutionFromResult), so write it straight to the page.
+    const ok = await callMainWorld('applyPipesState', [solution]);
     return ok
       ? { success: true }
       : { success: false, error: 'Pipes apply failed (no window.Game or MAIN-world timeout)' };

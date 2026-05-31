@@ -592,7 +592,7 @@ function makeWidget() {
     // directly without re-checking. The puzzle module's solutionFromResult
     // hook (slitherlink, hashi) re-shapes; default is result.grid.
     const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
-    puzzleData.solution = reg?.solutionFromResult ? reg.solutionFromResult(result) : result.grid;
+    puzzleData.solution = reg?.solutionFromResult ? reg.solutionFromResult(result, puzzleData) : result.grid;
     cacheGalaxiesSolution(puzzleData, result.grid);
     cacheGridSolution(puzzleData, puzzleData.solution);
     clearPartial(puzzleData);
@@ -620,7 +620,7 @@ function makeWidget() {
   // default is result.grid.
   function previewGridFromResult(result) {
     const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
-    if (reg?.solutionFromResult) return reg.solutionFromResult(result);
+    if (reg?.solutionFromResult) return reg.solutionFromResult(result, puzzleData);
     return result?.grid;
   }
 

@@ -752,21 +752,30 @@ test('pipes: hintStatusNodes phrasing', () => {
   assert.deepEqual(pipes.hintStatusNodes({ extraCells: [{ row: 0, col: 0, value: 1 }] }, { bold }),
     ['Rotate ', { b: '(row 1, col 1)' }, ' to its correct orientation']);
 });
-test('pipes: hintDispatch flags cells whose rotation differs from target', () => {
+test('pipes: solutionFromResult converts solver masks to rotation counts', () => {
+  // The boundary that makes puzzleData.solution a COUNT grid (readState shape).
+  // task [[1,5]], solver masks [[2,10]] -> counts [[1,1]] (1->2 is 1 step;
+  // symmetric 5->10 is 1 step).
+  const counts = pipes.solutionFromResult({ grid: [[2, 10]] }, { task: [[1, 5]], rows: 1, cols: 2 });
+  assert.deepEqual(counts, [[1, 1]]);
+  // null-safe fallback: no puzzleData → raw grid passthrough.
+  assert.deepEqual(pipes.solutionFromResult({ grid: [[2, 10]] }), [[2, 10]]);
+});
+test('pipes: hintDispatch flags cells whose count differs from the solution', () => {
+  // solution is now a COUNT grid (post solutionFromResult); compared directly.
   const ctx = {
-    detectedGrid: { task: [[1, 5]] },
-    grid: [[0, 1]], // current rotation counts
-    solution: [[2, 10]], // solved masks -> targets [[1,1]]
+    grid: [[0, 1]],       // current rotation counts
+    solution: [[1, 1]],   // target rotation counts
     rows: 1, cols: 2, firstMismatch: () => null,
   };
   const r = pipes.hintDispatch(ctx);
   assert.equal(r.success, true);
-  // cell(0,0): current 0 != target 1 -> flagged; cell(0,1): current 1 == target 1 -> ok.
+  // cell(0,0): 0 != 1 -> flagged; cell(0,1): 1 == 1 -> ok.
   assert.deepEqual(r.hint.extraCells, [{ row: 0, col: 0, value: 1 }]);
 });
-test('pipes: loopDoneCheck true only when board matches target rotations', () => {
+test('pipes: loopDoneCheck true only when board matches the solution counts', () => {
   const pd = { task: [[1, 5]], rows: 1, cols: 2 };
-  const solution = [[2, 10]]; // targets [[1,1]]
+  const solution = [[1, 1]]; // target rotation counts
   assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution, puzzleData: pd }), true);
   assert.equal(pipes.loopDoneCheck({ boardState: [[0, 1]], solution, puzzleData: pd }), false);
   assert.equal(pipes.loopDoneCheck({ boardState: [[1, 1]], solution: null, puzzleData: pd }), false);
