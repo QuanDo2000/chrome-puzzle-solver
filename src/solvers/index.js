@@ -31,11 +31,12 @@ const { KurodokoSolver } = require('./kurodoko.js');
 const { MosaicSolver } = require('./mosaic.js');
 const { NorinoriSolver } = require('./norinori.js');
 const { NurikabeSolver } = require('./nurikabe.js');
+const { PipesSolver } = require('./pipes.js');
 const { computePuzzleDiff } = require('./diff.js');
 
 module.exports = {
   NonogramSolver, AquariumSolver, GalaxiesSolver, BinairoSolver,
   ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver,
   HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver,
-  MosaicSolver, NorinoriSolver, NurikabeSolver, computePuzzleDiff,
+  MosaicSolver, NorinoriSolver, NurikabeSolver, PipesSolver, computePuzzleDiff,
 };

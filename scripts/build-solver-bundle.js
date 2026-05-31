@@ -17,13 +17,14 @@ const FILES = [
   'heyawake.js', 'hitori.js', 'kakurasu.js', 'kurodoko.js',
   'mosaic.js', 'nonogram.js', 'norinori.js', 'nurikabe.js',
   'shikaku.js', 'slitherlink.js', 'yinyang.js',
+  'pipes.js',
   'diff.js',
 ];
 const EXPORTS = [
   'NonogramSolver', 'AquariumSolver', 'GalaxiesSolver', 'BinairoSolver',
   'ShikakuSolver', 'YinYangSolver', 'SlitherlinkSolver', 'HashiSolver',
   'HeyawakeSolver', 'HitoriSolver', 'KakurasuSolver', 'KurodokoSolver',
-  'MosaicSolver', 'NorinoriSolver', 'NurikabeSolver', 'computePuzzleDiff',
+  'MosaicSolver', 'NorinoriSolver', 'NurikabeSolver', 'PipesSolver', 'computePuzzleDiff',
 ];
 
 // Strip the trailing CommonJS export block from a per-puzzle source. The
