@@ -1,0 +1,11 @@
+45:// loopDoneCheck hook can reference it directly. The function is pure
+830:      if (regLoop?.loopDoneCheck) {
+831:        const ctx = { boardState: gs.grid, solution: puzzleData.solution ?? null, puzzleData };
+832:        assertCtxHas(ctx, ['boardState', 'solution', 'puzzleData'], 'loopDoneCheck');
+833:        gsComplete = await regLoop.loopDoneCheck(ctx);
+896:        if (regEnd?.loopDoneCheck) {
+897:          const ctx = { boardState: end.grid, solution: puzzleData.solution ?? null, puzzleData };
+898:          assertCtxHas(ctx, ['boardState', 'solution', 'puzzleData'], 'loopDoneCheck');
+899:          endComplete = await regEnd.loopDoneCheck(ctx);
+903:          // declare a loopDoneCheck hook and dispatch above; the in-loop
+1122:    const el = detectedGrid?._element;

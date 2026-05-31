@@ -12,6 +12,8 @@ const WIDGET_FILES = [
   // Shared helpers (hashFNV1a etc.) — no dependencies; must be FIRST so its
   // helpers are bundle-scope globals by the time any consumer file is evaluated.
   'shared.js',
+  // Leaf helpers — no dependencies on anything above.
+  'pipes-rotation.js',
   // State (detectedGrid, undo/redo, widget prefs) — no dependencies.
   'state.js',
   // Solver Worker proxy + the per-puzzle modules (which reference
