@@ -332,6 +332,7 @@ class HashiSolver {
       solved: result.solved,
       edges: result.edges.map(e => ({ ...e })),
       ...(result.error !== undefined ? { error: result.error } : {}),
+      ...(result.partial !== undefined ? { partial: result.partial } : {}),
     };
   }
 
