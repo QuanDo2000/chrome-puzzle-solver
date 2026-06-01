@@ -172,6 +172,117 @@ class ShingokiSolver {
     }
     return true;
   }
+
+  solve() {
+    this._startedAt = Date.now();
+    this._initState();
+    if (!this._propagate()) return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
+
+    const allEdges = this._allEdgeRefs();
+    const backtrack = () => {
+      if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) return null;
+      // find an unknown edge; prefer one incident to a vertex that already has a line.
+      let pick = null, fallback = null;
+      for (const e of allEdges) {
+        if (this.getEdge(e) !== 0) continue;
+        if (!fallback) fallback = e;
+        const eps = this._endpoints(e);
+        if (eps.some(v => this.incidentEdges(v.r, v.c).some(x => this.getEdge(x) === 1))) { pick = e; break; }
+      }
+      const edge = pick || fallback;
+      if (!edge) {
+        return this._isValidComplete() ? this._snapshotGrid() : null;
+      }
+      for (const val of [1, 2]) {
+        const snapH = this.H.map(row => row.slice());
+        const snapV = this.V.map(row => row.slice());
+        if (this.setEdge(edge, val) && this._propagate() && !this._hasPrematureLoop()) {
+          const got = backtrack();
+          if (got) return got;
+        }
+        this.H = snapH; this.V = snapV;
+      }
+      return null;
+    };
+
+    const grid = backtrack();
+    if (!grid) {
+      return { solved: false, horizontal: null, vertical: null,
+        error: this.maxMs > 0 && timeUp(this.maxMs, this._startedAt) ? 'time limit exceeded' : 'no solution' };
+    }
+    return { solved: true, horizontal: grid.horizontal, vertical: grid.vertical };
+  }
+
+  _allEdgeRefs() {
+    const { rows, cols } = this;
+    const out = [];
+    for (let r = 0; r <= rows; r++) for (let c = 0; c < cols; c++) out.push({ kind: 'H', r, c });
+    for (let r = 0; r < rows; r++) for (let c = 0; c <= cols; c++) out.push({ kind: 'V', r, c });
+    return out;
+  }
+
+  _snapshotGrid() {
+    return { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
+  }
+
+  _loopVertices() {
+    const { rows, cols } = this;
+    const verts = [];
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      if (this.incidentEdges(r, c).some(e => this.getEdge(e) === 1)) verts.push([r, c]);
+    }
+    return verts;
+  }
+
+  // True if two or more disjoint closed sub-loops exist (can never merge into one).
+  // Open chains (a degree-1 vertex exists) are not yet closed, so not premature.
+  _hasPrematureLoop() {
+    const { rows, cols } = this;
+    // any open endpoint (degree-1 vertex) => not closed yet => not premature.
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      const deg = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1).length;
+      if (deg === 1) return false;
+    }
+    // All line-vertices have degree 0 or 2: if 2+ closed components exist, prune.
+    return !this._oneClosedComponentOrOpen();
+  }
+
+  // True if at most one connected line-component exists.
+  _oneClosedComponentOrOpen() {
+    const verts = this._loopVertices();
+    if (verts.length === 0) return true;
+    const { cols } = this;
+    const key = (r, c) => r * (cols + 1) + c;
+    const seen = new Set();
+    const start = verts[0];
+    const st = [start]; seen.add(key(start[0], start[1]));
+    while (st.length) {
+      const [r, c] = st.pop();
+      for (const e of this.incidentEdges(r, c)) {
+        if (this.getEdge(e) !== 1) continue;
+        const [a, b] = this._endpoints(e);
+        const nv = (a.r === r && a.c === c) ? b : a;
+        if (!seen.has(key(nv.r, nv.c))) { seen.add(key(nv.r, nv.c)); st.push([nv.r, nv.c]); }
+      }
+    }
+    return seen.size === verts.length;
+  }
+
+  _isValidComplete() {
+    const { rows, cols } = this;
+    let lineVerts = 0;
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      const deg = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1).length;
+      const clue = ShingokiSolver.decodeClue(this.task[r][c]);
+      if (deg !== 0 && deg !== 2) return false;
+      if (clue && deg !== 2) return false;
+      if (deg === 2) lineVerts++;
+    }
+    if (lineVerts === 0) return false;
+    if (!this._oneClosedComponentOrOpen()) return false;
+    if (!this.numbersSatisfied()) return false;
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
