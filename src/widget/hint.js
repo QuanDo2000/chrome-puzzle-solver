@@ -111,8 +111,11 @@ function applyHintToGrid(grid, hint) {
     grid.galaxies = hint.lines;
     return;
   }
-  if (hint?.type === 'slitherlink') {
-    // grid is { horizontal, vertical } from slitherlinkHandler.readState.
+  if (hint?.type === 'slitherlink' || hint?.type === 'shingoki') {
+    // Edge-loop puzzles: grid is { horizontal, vertical } from the handler's
+    // readState, hint is { edges: [{orientation:'h'|'v', r, c}] }. Merge each
+    // hint edge as a LINE so the loop step actually advances the board (without
+    // this, Loop re-applies the unchanged grid and stalls after one step).
     for (const e of (hint.edges || [])) {
       if (e.orientation === 'h' && grid.horizontal?.[e.r]) grid.horizontal[e.r][e.c] = 1;
       else if (e.orientation === 'v' && grid.vertical?.[e.r]) grid.vertical[e.r][e.c] = 1;
