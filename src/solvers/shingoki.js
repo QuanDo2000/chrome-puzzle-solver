@@ -189,11 +189,28 @@ class ShingokiSolver {
         const eps = this._endpoints(e);
         if (eps.some(v => this.incidentEdges(v.r, v.c).some(x => this.getEdge(x) === 1))) { pick = e; break; }
       }
+      // Loop-closure short-circuit: if the partial assignment already forms a
+      // single closed loop through every clued vertex with no dangling
+      // (degree-1) endpoint, the loop is complete. Any remaining unknown edge
+      // must be a cross (a line would make a degree-3 vertex or a 2nd loop).
+      if (this._loopComplete()) {
+        const snapH = this.H.map(row => row.slice());
+        const snapV = this.V.map(row => row.slice());
+        for (const e of allEdges) if (this.getEdge(e) === 0) this.setEdge(e, 2);
+        if (this._isValidComplete()) return this._snapshotGrid();
+        this.H = snapH; this.V = snapV;
+        return null;
+      }
       const edge = pick || fallback;
       if (!edge) {
         return this._isValidComplete() ? this._snapshotGrid() : null;
       }
-      for (const val of [1, 2]) {
+      // Cross before line: an under-constrained Shingoki board is mostly crosses
+      // (the loop covers only a fraction of vertices), so trying cross first
+      // collapses the empty field immediately and lets the loop-closure
+      // short-circuit fire, instead of greedily extending spurious line chains
+      // across the empty field before ever closing the loop.
+      for (const val of [2, 1]) {
         const snapH = this.H.map(row => row.slice());
         const snapV = this.V.map(row => row.slice());
         if (this.setEdge(edge, val) && this._propagate() && !this._hasPrematureLoop()) {
@@ -272,6 +289,29 @@ class ShingokiSolver {
       }
     }
     return seen.size === verts.length;
+  }
+
+  // True iff the current partial assignment is already a single closed loop
+  // covering every clued vertex: at least one line edge exists, no vertex is
+  // degree 1, every clued vertex is degree 2, and all line edges form one
+  // connected component. When true, all remaining unknown edges must be crosses.
+  _loopComplete() {
+    const { rows, cols } = this;
+    let lineEdges = 0;
+    for (let r = 0; r <= rows; r++) {
+      for (let c = 0; c < cols; c++) if (this.H[r][c] === 1) lineEdges++;
+    }
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c <= cols; c++) if (this.V[r][c] === 1) lineEdges++;
+    }
+    if (lineEdges === 0) return false;
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      const deg = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1).length;
+      if (deg === 1) return false;
+      const clue = ShingokiSolver.decodeClue(this.task[r][c]);
+      if (clue && deg !== 2) return false;
+    }
+    return this._oneClosedComponentOrOpen();
   }
 
   _isValidComplete() {
