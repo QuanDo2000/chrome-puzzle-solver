@@ -91,8 +91,12 @@ test('ShingokiSolver: numbersSatisfied rejects wrong clue total', () => {
 });
 
 test('ShingokiSolver: solves the smallest loop (1x1 cell = 2x2 vertices)', () => {
-  // 1x1 board: the only loop is the unit square. White clue forces it onto the loop.
-  const s = new ShingokiSolver({ rows: 1, cols: 1, task: [[2,0],[0,0]] });
+  // 1x1 board: the only loop is the unit square. Every corner of that square is
+  // a TURN with two length-1 arms, so a clue there must be BLACK with number 2
+  // (turn; the two perpendicular runs sum to 2). A white clue here would be
+  // unsolvable — white requires a straight pass, which a unit-square corner
+  // can never be.
+  const s = new ShingokiSolver({ rows: 1, cols: 1, task: [[-2,0],[0,0]] });
   const res = s.solve();
   assert.equal(res.solved, true);
   assert.equal(res.horizontal[0][0], 1);
@@ -156,4 +160,39 @@ test('ShingokiSolver: solves a loop that leaves vertices off the loop (premature
     if (deg === 0) offLoop++;
   }
   assert.ok(offLoop > 0, 'expected some vertices off the loop');
+});
+
+test('ShingokiSolver: a white clue must sit on a STRAIGHT pass, never a turn', () => {
+  // Regression: degree-2 + numbersSatisfied does NOT imply correct shape. A
+  // white clue (straight-through) placed where the only degree-2 geometry is a
+  // turn must NOT be accepted. White-2 at the bottom-left corner vertex of a
+  // 1x2 board can only be a corner turn -> there is NO valid solution, and the
+  // solver must report that rather than returning a turn under a white clue.
+  const res = new ShingokiSolver({ rows: 1, cols: 2, task: [[0, 0, 0], [2, 0, 0]] }).solve();
+  if (res.solved) {
+    // If (somehow) solved, the white clue vertex MUST be straight, not a turn.
+    const chk = new ShingokiSolver({ rows: 1, cols: 2, task: [[0, 0, 0], [2, 0, 0]] });
+    chk.H = res.horizontal; chk.V = res.vertical;
+    const lines = chk.incidentEdges(1, 0).filter(e => chk.getEdge(e) === 1);
+    const isTurn = lines.some(e => e.kind === 'H') && lines.some(e => e.kind === 'V');
+    assert.equal(isTurn, false, 'white clue accepted on a turn — shape check missing');
+  } else {
+    assert.equal(res.solved, false); // expected: no valid straight-through loop exists
+  }
+});
+
+test('ShingokiSolver: a black clue must sit on a TURN, never a straight pass', () => {
+  // Symmetric guard: a black clue where the only degree-2 geometry is a straight
+  // line must not be accepted. Black-2 mid-edge of a 1x2 board (vertex (0,1) or
+  // (1,1)) along the only horizontal run would be straight -> invalid.
+  const res = new ShingokiSolver({ rows: 1, cols: 2, task: [[0, -2, 0], [0, 0, 0]] }).solve();
+  if (res.solved) {
+    const chk = new ShingokiSolver({ rows: 1, cols: 2, task: [[0, -2, 0], [0, 0, 0]] });
+    chk.H = res.horizontal; chk.V = res.vertical;
+    const lines = chk.incidentEdges(0, 1).filter(e => chk.getEdge(e) === 1);
+    const isTurn = lines.some(e => e.kind === 'H') && lines.some(e => e.kind === 'V');
+    assert.equal(isTurn, true, 'black clue accepted on a straight pass — shape check missing');
+  } else {
+    assert.equal(res.solved, false);
+  }
 });

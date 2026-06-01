@@ -314,6 +314,25 @@ class ShingokiSolver {
     return this._oneClosedComponentOrOpen();
   }
 
+  // A clued vertex's loop SHAPE must match its colour: white = straight
+  // (the two line edges collinear), black = turn (one H + one V). Degree-2 and
+  // numbersSatisfied do NOT imply this (a white clue can sit on a turn whose two
+  // perpendicular runs happen to sum to its number), so the acceptance gate must
+  // check it explicitly. Assumes the vertex is degree 2 (callers ensure it).
+  _shapesSatisfied() {
+    const { rows, cols } = this;
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      const clue = ShingokiSolver.decodeClue(this.task[r][c]);
+      if (!clue) continue;
+      const lines = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1);
+      if (lines.length !== 2) return false;
+      const isTurn = lines.some(e => e.kind === 'H') && lines.some(e => e.kind === 'V');
+      if (clue.color === 'white' && isTurn) return false;   // white must go straight
+      if (clue.color === 'black' && !isTurn) return false;  // black must turn
+    }
+    return true;
+  }
+
   _isValidComplete() {
     const { rows, cols } = this;
     let lineVerts = 0;
@@ -326,6 +345,7 @@ class ShingokiSolver {
     }
     if (lineVerts === 0) return false;
     if (!this._oneClosedComponentOrOpen()) return false;
+    if (!this._shapesSatisfied()) return false;
     if (!this.numbersSatisfied()) return false;
     return true;
   }

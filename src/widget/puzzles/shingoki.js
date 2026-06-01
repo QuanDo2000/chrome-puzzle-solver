@@ -161,13 +161,17 @@ const shingoki = {
     return ['Revealing ', bold(String(n)), n === 1 ? ' edge' : ' edges'];
   },
 
+  // ctx from hint.js getHint: { detectedGrid, grid, solution, rows, cols,
+  // callMainWorld, ... } — rows/cols are top-level, NOT under a puzzleData
+  // field (which getHint's ctx doesn't supply). The live board edge state is
+  // re-read via callMainWorld (the `grid` from handler.readState is the same
+  // {horizontal,vertical}, but re-reading keeps this resilient to shape drift,
+  // mirroring slitherlink's hintDispatch).
   async hintDispatch(ctx) {
-    const { puzzleData, callMainWorld, solution } = ctx;
+    const { callMainWorld, solution, rows, cols } = ctx;
     if (!solution || !solution.horizontal || !solution.vertical) {
       return { success: false, error: 'No solution available' };
     }
-    const rows = puzzleData.rows;
-    const cols = puzzleData.cols;
     const board = await callMainWorld('readShingokiState', [rows, cols]);
     if (!board) return { success: false, error: 'Could not read board' };
 
@@ -197,13 +201,14 @@ const shingoki = {
     };
   },
 
-  async loopDoneCheck(ctx) {
-    const { puzzleData, callMainWorld, solution } = ctx;
-    if (!solution) return false;
-    const rows = puzzleData.rows;
-    const cols = puzzleData.cols;
-    const board = await callMainWorld('readShingokiState', [rows, cols]);
-    if (!board) return false;
+  // ctx from widget.js runLoop: { boardState, solution, puzzleData }. boardState
+  // IS the live {horizontal,vertical} edge state (no callMainWorld in this ctx —
+  // do NOT destructure it, or it shadows the bundle global as undefined and
+  // throws). Mirrors slitherlink's loopDoneCheck contract.
+  loopDoneCheck(ctx) {
+    const { boardState, solution } = ctx;
+    if (!solution || !boardState) return false;
+    const board = boardState;
     const { horizontal, vertical } = solution;
     for (let r = 0; r < horizontal.length; r++) {
       for (let c = 0; c < horizontal[r].length; c++) {

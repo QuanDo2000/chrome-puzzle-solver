@@ -849,16 +849,29 @@ test('shingoki: solutionToCacheJson + solutionFromCacheJson roundtrip', () => {
 });
 
 test('shingoki: hintDispatch reveals next batch of missing line edges', async () => {
-  // current board all-zero; solution has 2 line edges. callMainWorld stub returns the board.
+  // ctx matches hint.js getHint: rows/cols are TOP-LEVEL, no puzzleData field.
+  // (Passing puzzleData here would mask the real contract.)
   const callMainWorld = async (fn) => {
     if (fn === 'readShingokiState') return { horizontal: [[0, 0], [0, 0]], vertical: [[0], [0]] };
     return null;
   };
   const solution = { horizontal: [[1, 0], [0, 0]], vertical: [[1], [0]] };
-  const r = await shingoki.hintDispatch({ solution, rows: 1, cols: 1, callMainWorld, puzzleData: { rows: 1, cols: 1 } });
+  const r = await shingoki.hintDispatch({ solution, rows: 1, cols: 1, callMainWorld });
   assert.equal(r.success, true);
   assert.ok(r.hint.edges.length >= 1);
   assert.ok(r.hint.edges.every((e) => e.orientation === 'h' || e.orientation === 'v'));
+});
+
+test('shingoki: loopDoneCheck uses ctx.boardState (no callMainWorld in loop ctx)', () => {
+  // ctx matches widget.js runLoop: { boardState, solution, puzzleData }. There is
+  // NO callMainWorld here — boardState IS the live edge state. loopDoneCheck must
+  // be true iff every solution LINE edge is present on the board.
+  const solution = { horizontal: [[1, 0], [0, 0]], vertical: [[1], [0]] };
+  const done = { horizontal: [[1, 0], [0, 0]], vertical: [[1], [0]] };
+  const notDone = { horizontal: [[0, 0], [0, 0]], vertical: [[1], [0]] };
+  assert.equal(shingoki.loopDoneCheck({ boardState: done, solution, puzzleData: { rows: 1, cols: 1 } }), true);
+  assert.equal(shingoki.loopDoneCheck({ boardState: notDone, solution, puzzleData: { rows: 1, cols: 1 } }), false);
+  assert.equal(shingoki.loopDoneCheck({ boardState: null, solution, puzzleData: {} }), false);
 });
 
 test('shingoki: applyHint overlays edges and writes via applyShingokiState (not applyHintCells)', async () => {
