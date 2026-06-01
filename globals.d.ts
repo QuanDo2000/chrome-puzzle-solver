@@ -26,6 +26,7 @@ declare const MosaicSolver: any;
 declare const NorinoriSolver: any;
 declare const NurikabeSolver: any;
 declare const PipesSolver: any;
+declare const ShingokiSolver: any;
 
 // JSDoc typedefs referenced by per-puzzle solver files in src/solvers/.
 // The originals lived as JSDoc @typedef in the old monolithic solver.js
