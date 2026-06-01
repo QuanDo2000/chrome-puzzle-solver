@@ -89,3 +89,34 @@ test('ShingokiSolver: numbersSatisfied rejects wrong clue total', () => {
   s.H[0][0] = 1; s.H[0][1] = 1; s.H[0][2] = 1; // run = 3, clue says 5
   assert.equal(s.numbersSatisfied(), false);
 });
+
+test('ShingokiSolver: solves the smallest loop (1x1 cell = 2x2 vertices)', () => {
+  // 1x1 board: the only loop is the unit square. White clue forces it onto the loop.
+  const s = new ShingokiSolver({ rows: 1, cols: 1, task: [[2,0],[0,0]] });
+  const res = s.solve();
+  assert.equal(res.solved, true);
+  assert.equal(res.horizontal[0][0], 1);
+  assert.equal(res.horizontal[1][0], 1);
+  assert.equal(res.vertical[0][0], 1);
+  assert.equal(res.vertical[0][1], 1);
+});
+
+test('ShingokiSolver: solves the captured real 5x5-easy task (single loop)', () => {
+  const task = [
+    [0,-5,0,0,0,0],
+    [0,0,0,-4,0,0],
+    [0,0,2,0,0,0],
+    [-3,2,0,0,2,-4],
+    [-3,0,0,-2,0,0],
+    [0,0,0,-2,0,0],
+  ];
+  const res = new ShingokiSolver({ rows: 5, cols: 5, task, maxMs: 10000 }).solve();
+  assert.equal(res.solved, true);
+  assert.equal(res.horizontal.length, 6);
+  assert.equal(res.horizontal[0].length, 5);
+  assert.equal(res.vertical.length, 5);
+  assert.equal(res.vertical[0].length, 6);
+  const check = new ShingokiSolver({ rows: 5, cols: 5, task });
+  check.H = res.horizontal; check.V = res.vertical;
+  assert.equal(check.numbersSatisfied(), true);
+});

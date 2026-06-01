@@ -126,6 +126,52 @@ class ShingokiSolver {
     }
     return true;
   }
+
+  // Length (in line-edges) of the maximal straight runs through vertex (r,c),
+  // summed over its two loop directions. Assumes the vertex is on the loop with
+  // a definite shape (used at a complete assignment / when edges are set).
+  runLengthAt(r, c) {
+    const { rows, cols } = this;
+    // walk in a direction following collinear line edges
+    const walk = (dr, dc) => {
+      let len = 0, cr = r, cc = c;
+      for (;;) {
+        const nr = cr + dr, nc = cc + dc; let edgeVal;
+        if (dr === 0) { // horizontal: edge between (cr,cc) and (cr,nc)
+          const ec = Math.min(cc, nc);
+          if (ec < 0 || ec >= cols || cr < 0 || cr > rows) break;
+          edgeVal = this.H[cr][ec];
+        } else { // vertical
+          const er = Math.min(cr, nr);
+          if (er < 0 || er >= rows || cc < 0 || cc > cols) break;
+          edgeVal = this.V[er][cc];
+        }
+        if (edgeVal !== 1) break;
+        len++; cr = nr; cc = nc;
+      }
+      return len;
+    };
+    // The two straight directions are the line-edge axis through the vertex.
+    // Determine axis from incident line edges.
+    const inc = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1);
+    if (inc.length === 0) return 0;
+    const horiz = inc.some(e => e.kind === 'H');
+    const vert = inc.some(e => e.kind === 'V');
+    let total = 0;
+    if (horiz) total += walk(0, -1) + walk(0, 1);
+    if (vert) total += walk(-1, 0) + walk(1, 0);
+    return total;
+  }
+
+  numbersSatisfied() {
+    const { rows, cols } = this;
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      const clue = ShingokiSolver.decodeClue(this.task[r][c]);
+      if (!clue) continue;
+      if (this.runLengthAt(r, c) !== clue.n) return false;
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
