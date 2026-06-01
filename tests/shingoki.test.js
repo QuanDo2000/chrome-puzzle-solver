@@ -120,3 +120,40 @@ test('ShingokiSolver: solves the captured real 5x5-easy task (single loop)', () 
   check.H = res.horizontal; check.V = res.vertical;
   assert.equal(check.numbersSatisfied(), true);
 });
+
+test('ShingokiSolver: solves a loop that leaves vertices off the loop (premature-prune regression)', () => {
+  // 4x4-cell board (5x5 vertices). Loop = perimeter of the rectangle of
+  // vertices (1,1)..(3,3) -> a 2x2-cell square in the middle. Many vertices
+  // (the entire border ring of the 5x5 lattice) are OFF the loop. Derive the
+  // clues from this loop, then confirm the solver reproduces a valid solution.
+  const rows = 4, cols = 4;
+  const H = Array.from({ length: rows + 1 }, () => new Array(cols).fill(0));
+  const V = Array.from({ length: rows }, () => new Array(cols + 1).fill(0));
+  const r0 = 1, r1 = 3, c0 = 1, c1 = 3;
+  for (let c = c0; c < c1; c++) { H[r0][c] = 1; H[r1][c] = 1; }
+  for (let r = r0; r < r1; r++) { V[r][c0] = 1; V[r][c1] = 1; }
+  // Derive clues from the loop shape: at each loop vertex, white if straight,
+  // black if it turns; number = sum of both straight runs (runLengthAt).
+  const probe = new ShingokiSolver({ rows, cols, task: Array.from({ length: rows + 1 }, () => new Array(cols + 1).fill(0)) });
+  probe.H = H; probe.V = V;
+  const task = Array.from({ length: rows + 1 }, () => new Array(cols + 1).fill(0));
+  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+    const inc = probe.incidentEdges(r, c).filter(e => probe.getEdge(e) === 1);
+    if (inc.length !== 2) continue; // off-loop
+    const isTurn = inc.filter(e => e.kind === 'H').length === 1;
+    const n = probe.runLengthAt(r, c);
+    task[r][c] = isTurn ? -n : n;
+  }
+  const res = new ShingokiSolver({ rows, cols, task, maxMs: 10000 }).solve();
+  assert.equal(res.solved, true);
+  const chk = new ShingokiSolver({ rows, cols, task });
+  chk.H = res.horizontal; chk.V = res.vertical;
+  assert.equal(chk.numbersSatisfied(), true);
+  // Confirm at least one vertex is genuinely off the returned loop.
+  let offLoop = 0;
+  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+    const deg = chk.incidentEdges(r, c).filter(e => chk.getEdge(e) === 1).length;
+    if (deg === 0) offLoop++;
+  }
+  assert.ok(offLoop > 0, 'expected some vertices off the loop');
+});

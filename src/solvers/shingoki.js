@@ -234,16 +234,22 @@ class ShingokiSolver {
     return verts;
   }
 
-  // True if two or more disjoint closed sub-loops exist (can never merge into one).
-  // Open chains (a degree-1 vertex exists) are not yet closed, so not premature.
+  // A closed subloop is premature iff line edges form 2+ separate components
+  // (a closed loop that can never merge with the rest). Unknown edges are NOT
+  // evidence of prematurity — they may resolve to crosses, and a valid solution
+  // may legitimately leave vertices off the loop. Pruning on unknown edges would
+  // discard correct solutions whose loop doesn't cover every vertex.
   _hasPrematureLoop() {
     const { rows, cols } = this;
-    // any open endpoint (degree-1 vertex) => not closed yet => not premature.
+    // Any degree-1 vertex means the line graph is still an open chain — not a
+    // closed loop yet, so nothing to prune.
     for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
       const deg = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1).length;
       if (deg === 1) return false;
     }
-    // All line-vertices have degree 0 or 2: if 2+ closed components exist, prune.
+    // No degree-1 vertices: every line-vertex is degree 2. If the line edges
+    // span more than one connected component, a closed subloop exists that can
+    // never merge into a single loop => prune.
     return !this._oneClosedComponentOrOpen();
   }
 

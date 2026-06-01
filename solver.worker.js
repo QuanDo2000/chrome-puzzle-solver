@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, PipesSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, PipesSolver, ShingokiSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -163,6 +163,11 @@ self.onmessage = function (e) {
         result = mk(!!extraData.wrap);
         if (result && typeof result === 'object') result.wrap = !!extraData.wrap;
       }
+    } else if (type === 'shingoki' && extraData) {
+      const s = new ShingokiSolver({
+        rows: extraData.rows, cols: extraData.cols, task: extraData.task, maxMs: 30000,
+      });
+      result = s.solve();
     } else {
       const s = new NonogramSolver(rowClues, colClues);
       result = s.solve(initialGrid || null);

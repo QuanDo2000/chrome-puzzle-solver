@@ -17,7 +17,7 @@ function loadBundledSolvers() {
 
 test('solver bundle evaluates and exports every solver class', () => {
   const bundled = loadBundledSolvers();
-  for (const name of ['NonogramSolver', 'AquariumSolver', 'MosaicSolver', 'PipesSolver', 'computePuzzleDiff']) {
+  for (const name of ['NonogramSolver', 'AquariumSolver', 'MosaicSolver', 'PipesSolver', 'ShingokiSolver', 'computePuzzleDiff']) {
     assert.equal(typeof bundled[name], 'function', `${name} missing from bundle`);
   }
 });
