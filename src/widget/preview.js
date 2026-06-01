@@ -85,11 +85,17 @@ function gridDataSig(grid) {
   }, false) | 0;
 }
 
-function buildLatticeLayer(rows, cols, cellSize, w, h, pd) {
+function buildLatticeLayer(rows, cols, cellSize, w, h, pd, margin = 0) {
   const c = document.createElement('canvas');
+  // Full-size bitmap (w/h already include 2*margin); shift content in by margin
+  // so anything centred on the border lattice points (shingoki clue circles)
+  // fits INSIDE this bitmap rather than being clipped at its edge. The caller
+  // composites this layer offset by -margin to keep it aligned. margin=0 →
+  // unchanged.
   c.width = w;
   c.height = h;
   const ctx = c.getContext('2d');
+  if (margin) ctx.translate(margin, margin);
   ctx.strokeStyle = '#d1d5db';
   ctx.lineWidth = 0.5;
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
@@ -110,11 +116,12 @@ function buildLatticeLayer(rows, cols, cellSize, w, h, pd) {
   return c;
 }
 
-function buildStaticLayer(rows, cols, cellSize, w, h, pd) {
+function buildStaticLayer(rows, cols, cellSize, w, h, pd, margin = 0) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
   const ctx = c.getContext('2d');
+  if (margin) ctx.translate(margin, margin);
   drawRegionBordersOn(ctx, rows, cols, cellSize, pd?.regionMap);
   const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
   if (reg?.drawStaticLayer) {
@@ -272,8 +279,10 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const cellSize = Math.min(Math.floor((bodyWidth - 4) / cellSizeDenC), Math.floor(350 / cellSizeDenR), 24);
   const margin = Math.round(marginCells * cellSize);
   const w = cols * cellSize, h = rows * cellSize;
-  // wContent/hContent: the padded board WITHOUT the gutter (what the cached
-  // layers draw into). wFull/hFull: the full bitmap, gutter included.
+  // wContent/hContent: the padded board WITHOUT the gutter. wFull/hFull: the
+  // full bitmap, gutter included — used for BOTH the main canvas and the cached
+  // layers (the layers shift their content in by `margin` internally so border
+  // clue circles fit inside the bitmap).
   const wContent = (cols + padRight) * cellSize;
   const hContent = (rows + padBottom) * cellSize;
   const wFull = wContent + 2 * margin;
@@ -317,11 +326,12 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                 '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '');
   }
   if (staticSig !== staticLayerSig) {
-    // Cached layers are sized to the CONTENT (no gutter) and drawn at (0,0);
-    // the single main-ctx translate below positions them — and all dynamic
-    // content — inside the gutter, so the two always align.
-    latticeLayer = buildLatticeLayer(rows, cols, cellSize, wContent, hContent, pd);
-    staticLayer = buildStaticLayer(rows, cols, cellSize, wContent, hContent, pd);
+    // Cached layers are FULL-size (gutter included) with their content shifted
+    // in by `margin`, so border-vertex clue circles fit inside the bitmap
+    // instead of clipping at its edge. They're composited at (-margin) below to
+    // cancel the main translate and land aligned with the dynamic content.
+    latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull, pd, margin);
+    staticLayer = buildStaticLayer(rows, cols, cellSize, wFull, hFull, pd, margin);
     staticLayerSig = staticSig;
   }
 
@@ -338,7 +348,11 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   // Lattice goes UNDER dynamic fills so filled cells hide the grey
   // cell-border lines inside them. Region borders + galaxy stars come
   // from the second static layer below, painted on top.
-  if (latticeLayer) ctx.drawImage(latticeLayer, 0, 0);
+  // Layers are full-size with content shifted in by margin; composite at
+  // (-margin) so that, under the main translate(margin), the layer's already-
+  // shifted content lands at the same place as the dynamic content. margin=0
+  // → (0,0), unchanged.
+  if (latticeLayer) ctx.drawImage(latticeLayer, -margin, -margin);
 
   // Empty-cell X marks are batched into one stroke pass so their shared
   // strokeStyle/lineWidth set up only once.
@@ -641,7 +655,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   // Region borders + nonogram-5 guides + galaxies stars sit ON TOP of fills
   // and hints (the lattice layer painted at the start of this function
   // already covers the under-fill case).
-  if (staticLayer) ctx.drawImage(staticLayer, 0, 0);
+  if (staticLayer) ctx.drawImage(staticLayer, -margin, -margin);
 
   // Mistake overlay: when the auto-solved solution is known, ring every
   // cell the player has placed wrong. Recomputed each redraw, so it tracks
