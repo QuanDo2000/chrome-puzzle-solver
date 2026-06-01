@@ -270,7 +270,11 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const hFull = (rows + padBottom) * cellSize;
   // Type-discriminator consts still consumed at other sites in renderPreview
   // (cell-loop gates, dynamic-render arms, mistake-overlay branches).
-  const isSlitherlink = puzzleData?.type === 'slitherlink';
+  // Edge-loop puzzles (slitherlink + shingoki) share the {horizontal,
+  // vertical} edge shape and the proven slitherlink LINE/×/hint/mistake
+  // rendering. Shingoki additionally paints vertex clue circles via its
+  // drawStaticLayer hook (slitherlink draws per-cell digits instead).
+  const isEdgeLoop = puzzleData?.type === 'slitherlink' || puzzleData?.type === 'shingoki';
   const isHashi = puzzleData?.type === 'hashi';
 
   // Idempotent: ensure the preview is visible whether or not we redraw.
@@ -330,7 +334,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const renderEmpty = !!(typeof PUZZLES !== 'undefined'
     && PUZZLES?.[puzzleData?.type]?.renderEmptyCells);
   const discR = puzzleData?.type === 'binairo' ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
-  if (isSlitherlink) {
+  if (isEdgeLoop) {
     ctx.save();
     ctx.strokeStyle = '#1f2937';
     ctx.lineWidth = Math.max(2, Math.floor(cellSize / 6));
@@ -533,7 +537,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     ctx.restore();
   }
 
-  if (isSlitherlink && hint && Array.isArray(hint.edges)) {
+  if (isEdgeLoop && hint && Array.isArray(hint.edges)) {
     ctx.save();
     ctx.strokeStyle = '#2e86de';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
@@ -631,7 +635,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
       ctx.save();
       ctx.strokeStyle = '#e63946';
       ctx.lineWidth = Math.max(2, Math.floor(cellSize / 8));
-      if (puzzleData.type === 'slitherlink') {
+      if (puzzleData.type === 'slitherlink' || puzzleData.type === 'shingoki') {
         ctx.lineCap = 'round';
         ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
         for (const em of /** @type {any[]} */ (mistakes)) {

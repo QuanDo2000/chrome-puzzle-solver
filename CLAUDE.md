@@ -2,7 +2,7 @@
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
 Binairo Plus, Shikaku, Yin-Yang, Slitherlink, Hashi, Heyawake, Hitori,
-Kakurasu, Kurodoko, Mosaic, Norinori, Nurikabe, and Pipes puzzles on
+Kakurasu, Kurodoko, Mosaic, Norinori, Nurikabe, Pipes, and Shingoki puzzles on
 puzzles-mobile.com. Sixteen solver classes in `src/solvers/`, a content-script
 widget in `content.js`, and a small service worker in `background.js`.
 
@@ -250,3 +250,4 @@ Modules with detailed design notes in their headers:
 - Pipes — `src/widget/puzzles/pipes.js`, `src/solvers/pipes.js`
 - Galaxies (shared statics) — `src/widget/galaxies-hint.js`,
   `src/solvers/galaxies.js`
+- Shingoki — `src/widget/puzzles/shingoki.js`, `src/solvers/shingoki.js`

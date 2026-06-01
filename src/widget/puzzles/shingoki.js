@@ -73,6 +73,68 @@ const shingoki = {
     return 'shingoki-solution:' + h.toString(16);
   },
 
+  // rows/cols come from puzzleData when present, else inferred from the
+  // {horizontal, vertical} edge arrays (horizontal has rows+1 rows of cols
+  // entries). Mirrors slitherlink's canvasDims so renderPreview's geometry
+  // block sizes the edge-loop board correctly.
+  canvasDims(pd, { grid }) {
+    return {
+      rows: pd?.rows || (grid.horizontal ? grid.horizontal.length - 1 : 0),
+      cols: pd?.cols || (grid.horizontal ? (grid.horizontal[0] || []).length : 0),
+    };
+  },
+
+  // Vertex clue circles live on the cached static layer (puzzle-shape only,
+  // never changes as the board fills). Invalidate it when the clue set
+  // changes via this signature.
+  staticSig(data) {
+    return 'sg=' + _shingokiCluesSig(data?.type === 'shingoki' ? data?.task : null);
+  },
+
+  // Vertex clue circles at the (rows+1)×(cols+1) lattice points. task[r][c]
+  // is a signed integer: >0 = white (corner) circle, <0 = black (straight)
+  // circle, abs() is the path-length number, 0 = no clue. Circle centered at
+  // canvas (c*cellSize, r*cellSize) — the same origin the slitherlink edge
+  // arm uses for its corner dots.
+  drawStaticLayer(ctx, { rows, cols, cellSize, pd }) {
+    const task = (pd && pd.task) || [];
+    const radius = Math.max(3, Math.floor(cellSize / 4));
+    const fontPx = Math.max(7, Math.floor(cellSize * 0.4));
+    ctx.save();
+    ctx.font = `bold ${fontPx}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = Math.max(1.5, cellSize / 14);
+    for (let r = 0; r <= rows; r++) {
+      const row = task[r] || [];
+      for (let c = 0; c <= cols; c++) {
+        const v = row[c] | 0;
+        if (v === 0) continue;
+        const cx = c * cellSize;
+        const cy = r * cellSize;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        if (v < 0) {
+          // Black (straight) circle: filled dark disc, white number.
+          ctx.fillStyle = '#1f2937';
+          ctx.fill();
+          ctx.strokeStyle = '#1f2937';
+          ctx.stroke();
+          ctx.fillStyle = '#fff';
+        } else {
+          // White (corner) circle: open ring, black number.
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.strokeStyle = '#1f2937';
+          ctx.stroke();
+          ctx.fillStyle = '#1f2937';
+        }
+        ctx.fillText(String(Math.abs(v)), cx, cy);
+      }
+    }
+    ctx.restore();
+  },
+
   solveExtraData(data) {
     return { rows: data.rows, cols: data.cols, task: data.task };
   },
@@ -174,5 +236,21 @@ const shingoki = {
     return ok === true;
   },
 };
+
+// Clue-set signature for the static-layer cache. The task is the
+// (rows+1)×(cols+1) signed vertex-clue array; +64 keeps signed values
+// non-negative for the hash (matching cacheKey's offset).
+function _shingokiCluesSig(task) {
+  if (!Array.isArray(task)) return '';
+  const h = hashFNV1a((mix) => {
+    for (let r = 0; r < task.length; r++) {
+      const row = task[r] || [];
+      for (let c = 0; c < row.length; c++) {
+        mix((row[c] | 0) + 64);
+      }
+    }
+  }, false);
+  return h.toString(16);
+}
 
 module.exports = shingoki;

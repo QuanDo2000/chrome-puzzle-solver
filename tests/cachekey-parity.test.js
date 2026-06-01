@@ -61,6 +61,7 @@ const norinoriW   = require('../src/widget/puzzles/norinori.js');
 const nurikabeW   = require('../src/widget/puzzles/nurikabe.js');
 const shikakuW    = require('../src/widget/puzzles/shikaku.js');
 const slitherlinkW = require('../src/widget/puzzles/slitherlink.js');
+const shingokiW   = require('../src/widget/puzzles/shingoki.js');
 const yinyangW    = require('../src/widget/puzzles/yinyang.js');
 
 // ── helpers for building solver instances from fixtures ─────────────────────
@@ -132,7 +133,8 @@ const GOLDEN = {
   "widget:slitherlink:cacheKey": "slitherlink-solution:c8bbacac",
   "widget:slitherlink:staticSig": "sl=25daffc4",
   "widget:yinyang:cacheKey": "yinyang-solution:2a47b033",
-  "widget:pipes:cacheKey": "pipes-solution:48fbd459"
+  "widget:pipes:cacheKey": "pipes-solution:48fbd459",
+  "widget:shingoki:cacheKey": "shingoki-solution:821fe207"
 };
 
 // ── key collection ──────────────────────────────────────────────────────────
@@ -359,6 +361,15 @@ function currentKeys() {
     out['widget:pipes:cacheKey'] = pipesW.cacheKey({
       type: 'pipes', rows: 4, cols: 4,
       task: [[8,3,2,6],[8,7,1,10],[10,13,13,11],[6,3,1,8]],
+    });
+  }
+
+  // shingoki widget: cacheKey only. task is the (rows+1)×(cols+1) signed
+  // vertex-clue array (>0 white circle, <0 black circle, 0 no clue).
+  {
+    out['widget:shingoki:cacheKey'] = shingokiW.cacheKey({
+      type: 'shingoki', rows: 5, cols: 5,
+      task: [[0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],[-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0]],
     });
   }
 

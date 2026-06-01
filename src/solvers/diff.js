@@ -93,9 +93,10 @@ function _galaxiesDiff(grid, solution, stars) {
   return out;
 }
 
-// Slitherlink diff: edge-based, not cell-based. A mistake is a committed
-// LINE edge (board value === 1) where the solution disagrees. UNKNOWN/empty
-// edges on the board are never flagged.
+// Slitherlink / Shingoki diff: edge-based, not cell-based. A mistake is a
+// committed LINE edge (board value === 1) where the solution disagrees.
+// UNKNOWN/empty edges on the board are never flagged. Both puzzle types use
+// the {horizontal, vertical} edge shape so this routine serves both.
 function _slitherlinkDiff(board, solution) {
   const out = [];
   if (!board || !solution) return out;
@@ -126,7 +127,10 @@ function _slitherlinkDiff(board, solution) {
 
 function computePuzzleDiff(type, grid, solution, stars) {
   const out = [];
-  if (type === 'slitherlink') return _slitherlinkDiff(grid, solution);
+  // Shingoki shares slitherlink's {horizontal, vertical} edge shape, so the
+  // edge-based diff applies verbatim (committed LINE edge disagreeing with
+  // the solution; UNKNOWN edges never flagged).
+  if (type === 'slitherlink' || type === 'shingoki') return _slitherlinkDiff(grid, solution);
   if (type === 'hashi') {
     // Hashi grids are {islands, edges}, not the 2D / H+V shapes the public
     // signature advertises for the other puzzle types. Cast locally so the
