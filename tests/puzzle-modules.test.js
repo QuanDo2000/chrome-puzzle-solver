@@ -66,6 +66,7 @@ const norinori    = require('../src/widget/puzzles/norinori.js');
 const nurikabe    = require('../src/widget/puzzles/nurikabe.js');
 const pipes       = require('../src/widget/puzzles/pipes.js');
 const shikaku     = require('../src/widget/puzzles/shikaku.js');
+const shingoki    = require('../src/widget/puzzles/shingoki.js');
 const slitherlink = require('../src/widget/puzzles/slitherlink.js');
 const yinyang     = require('../src/widget/puzzles/yinyang.js');
 

@@ -319,6 +319,9 @@ module.exports = [
         // src/widget/puzzles/pipes.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         pipes: 'readonly',
+        // src/widget/puzzles/shingoki.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        shingoki: 'readonly',
         // src/widget/state.js — widget storage prefs.
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
