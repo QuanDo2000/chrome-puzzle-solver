@@ -65,6 +65,7 @@ const solverClasses = {
   MosaicSolver: 'readonly',
   NorinoriSolver: 'readonly',
   NurikabeSolver: 'readonly',
+  ShingokiSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js

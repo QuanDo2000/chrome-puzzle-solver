@@ -176,37 +176,47 @@ const shingoki = {
   // {horizontal,vertical}, but re-reading keeps this resilient to shape drift,
   // mirroring slitherlink's hintDispatch).
   async hintDispatch(ctx) {
-    const { callMainWorld, solution, rows, cols } = ctx;
-    if (!solution || !solution.horizontal || !solution.vertical) {
-      return { success: false, error: 'No solution available' };
-    }
+    const { callMainWorld, solution, rows, cols, detectedGrid } = ctx;
     const board = await callMainWorld('readShingokiState', [rows, cols]);
     if (!board) return { success: false, error: 'Could not read board' };
 
+    // 1) Deductive hint: forced edges from the live board via the solver.
+    //    `ShingokiSolver` is a content-script global (solver.js loads first);
+    //    require()'d under Node for tests. Guarded so a solver throw can't break
+    //    Hint — fall through to the solution diff.
+    const task = detectedGrid && detectedGrid.task;
+    if (task) {
+      try {
+        const Solver = (typeof ShingokiSolver !== 'undefined')
+          ? ShingokiSolver
+          : require('../../solvers/shingoki.js').ShingokiSolver;
+        const solver = new Solver({ rows, cols, task, maxMs: 5000 });
+        const deduced = solver.getStepwiseHint(board.horizontal, board.vertical);
+        if (deduced && deduced.edges.length) {
+          return { success: true, hint: { type: 'shingoki', edges: deduced.edges }, grid: board, solution };
+        }
+      } catch { /* fall through to solution diff */ }
+    }
+
+    // 2) Fallback: reveal the next correct LINE edges from the cached solution.
+    if (!solution || !solution.horizontal || !solution.vertical) {
+      return { success: false, error: 'No solution available' };
+    }
     const cap = hintBatchCap(rows, cols);
     const edges = [];
     const { horizontal, vertical } = solution;
     for (let r = 0; r < horizontal.length && edges.length < cap; r++) {
       for (let c = 0; c < horizontal[r].length && edges.length < cap; c++) {
-        if (horizontal[r][c] === 1 && board.horizontal[r][c] !== 1) {
-          edges.push({ orientation: 'h', r, c });
-        }
+        if (horizontal[r][c] === 1 && board.horizontal[r][c] !== 1) edges.push({ orientation: 'h', r, c });
       }
     }
     for (let r = 0; r < vertical.length && edges.length < cap; r++) {
       for (let c = 0; c < vertical[r].length && edges.length < cap; c++) {
-        if (vertical[r][c] === 1 && board.vertical[r][c] !== 1) {
-          edges.push({ orientation: 'v', r, c });
-        }
+        if (vertical[r][c] === 1 && board.vertical[r][c] !== 1) edges.push({ orientation: 'v', r, c });
       }
     }
     if (!edges.length) return { success: false, error: 'No hint available' };
-    return {
-      success: true,
-      hint: { type: 'shingoki', edges },
-      grid: board,
-      solution,
-    };
+    return { success: true, hint: { type: 'shingoki', edges }, grid: board, solution };
   },
 
   // ctx from widget.js runLoop: { boardState, solution, puzzleData }. boardState

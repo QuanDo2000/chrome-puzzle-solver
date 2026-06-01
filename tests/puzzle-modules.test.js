@@ -890,3 +890,40 @@ test('shingoki: applyHint overlays edges and writes via applyShingokiState (not 
   assert.equal(applied.args[0].horizontal[0][1], 1);
   assert.ok(!calls.some((c) => c.fn === 'applyHintCells'));
 });
+
+test('shingoki: hintDispatch returns deductive edges when logic forces a move', async () => {
+  const TASK_5x5 = [
+    [0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],
+    [-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0],
+  ];
+  const callMainWorld = async (fn) => {
+    if (fn === 'readShingokiState') {
+      return { horizontal: Array.from({ length: 6 }, () => new Array(5).fill(0)),
+               vertical: Array.from({ length: 5 }, () => new Array(6).fill(0)) };
+    }
+    return null;
+  };
+  const ctx = {
+    solution: null, rows: 5, cols: 5, callMainWorld,
+    detectedGrid: { type: 'shingoki', rows: 5, cols: 5, task: TASK_5x5 },
+  };
+  const r = await shingoki.hintDispatch(ctx);
+  assert.equal(r.success, true);
+  assert.ok(r.hint.edges.length >= 1);
+  assert.ok(r.hint.edges.every(e => e.orientation === 'h' || e.orientation === 'v'));
+});
+
+test('shingoki: hintDispatch falls back to solution-diff when deduction yields nothing', async () => {
+  // No task in detectedGrid -> deductive path can't run -> fall back to solution diff.
+  const callMainWorld = async (fn) => {
+    if (fn === 'readShingokiState') return { horizontal: [[0,0],[0,0]], vertical: [[0],[0]] };
+    return null;
+  };
+  const ctx = {
+    solution: { horizontal: [[1,0],[0,0]], vertical: [[0],[0]] },
+    rows: 1, cols: 1, callMainWorld, detectedGrid: { type: 'shingoki', rows: 1, cols: 1 },
+  };
+  const r = await shingoki.hintDispatch(ctx);
+  assert.equal(r.success, true);
+  assert.deepEqual(r.hint.edges, [{ orientation: 'h', r: 0, c: 0 }]);
+});
