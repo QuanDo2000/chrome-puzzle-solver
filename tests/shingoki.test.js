@@ -310,3 +310,31 @@ test('Shingoki getStepwiseHint: does not mutate the caller arrays', () => {
   assert.ok(curH.every(row => row.every(v => v === 0)));
   assert.ok(curV.every(row => row.every(v => v === 0)));
 });
+
+test('Shingoki deductive reach: iterating getStepwiseHint from empty makes monotonic, correct progress', () => {
+  const TASK_5x5 = [
+    [0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],
+    [-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0],
+  ];
+  const solved = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5, maxMs: 10000 }).solve();
+  assert.equal(solved.solved, true);
+  const H = Array.from({ length: 6 }, () => new Array(5).fill(0));
+  const V = Array.from({ length: 5 }, () => new Array(6).fill(0));
+  let steps = 0, applied = 0;
+  for (; steps < 100; steps++) {
+    const s = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5, maxMs: 5000 });
+    const hint = s.getStepwiseHint(H, V);
+    if (!hint) break;
+    for (const e of hint.edges) {
+      const v = e.orientation === 'h' ? solved.horizontal[e.r][e.c] : solved.vertical[e.r][e.c];
+      assert.equal(v, 1, `deduced edge ${JSON.stringify(e)} must match solution`);
+      if (e.orientation === 'h') H[e.r][e.c] = 1; else V[e.r][e.c] = 1;
+      applied++;
+    }
+  }
+  assert.ok(steps < 100, 'must terminate (getStepwiseHint returns null when stuck)');
+  assert.ok(applied >= 1, 'pure logic should deduce at least one edge on this board');
+  const totalLines = solved.horizontal.flat().filter(v => v === 1).length
+                   + solved.vertical.flat().filter(v => v === 1).length;
+  console.log(`[shingoki deductive reach] logic placed ${applied}/${totalLines} solution lines in ${steps} hint rounds`);
+});

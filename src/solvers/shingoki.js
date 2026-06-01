@@ -8,6 +8,8 @@
 //   V[r][c] connects vertex (r,c)-(r+1,c), dims rows x (cols+1)
 // Edge tri-state: 0 unknown, 1 line, 2 cross. Output mirrors Slitherlink's
 // { horizontal, vertical } so the widget reuses edge conventions.
+// Deductive hint entry point: getStepwiseHint(curH, curV) — propagation +
+// 1-step lookahead; returns forced LINE edges or null (see the deductive-hint spec).
 const { timeUp } = require('./shared.js');
 
 class ShingokiSolver {
