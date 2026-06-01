@@ -338,3 +338,16 @@ test('Shingoki deductive reach: iterating getStepwiseHint from empty makes monot
                    + solved.vertical.flat().filter(v => v === 1).length;
   console.log(`[shingoki deductive reach] logic placed ${applied}/${totalLines} solution lines in ${steps} hint rounds`);
 });
+
+test('ShingokiSolver: trail records and rolls back edge writes', () => {
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
+  s._initState();
+  const mark = s._trailMark();
+  s.setEdge({ kind: 'H', r: 0, c: 0 }, 1);
+  s.setEdge({ kind: 'V', r: 1, c: 1 }, 2);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 0 }), 1);
+  assert.equal(s.getEdge({ kind: 'V', r: 1, c: 1 }), 2);
+  s._rollbackTo(mark);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 0 }), 0);
+  assert.equal(s.getEdge({ kind: 'V', r: 1, c: 1 }), 0);
+});

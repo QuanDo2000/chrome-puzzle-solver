@@ -57,6 +57,7 @@ class ShingokiSolver {
     const { rows, cols } = this;
     this.H = Array.from({ length: rows + 1 }, () => new Array(cols).fill(0));
     this.V = Array.from({ length: rows }, () => new Array(cols + 1).fill(0));
+    this._trail = [];
   }
 
   getEdge(ref) {
@@ -68,8 +69,20 @@ class ShingokiSolver {
     const cur = this.getEdge(ref);
     if (cur === val) return true;
     if (cur !== 0) return false;
+    if (this._trail) this._trail.push(ref.kind, ref.r, ref.c, cur);
     if (ref.kind === 'H') this.H[ref.r][ref.c] = val; else this.V[ref.r][ref.c] = val;
     return true;
+  }
+
+  _trailMark() { return this._trail ? this._trail.length : 0; }
+
+  _rollbackTo(mark) {
+    const t = this._trail;
+    if (!t) return;
+    while (t.length > mark) {
+      const prev = t.pop(), c = t.pop(), r = t.pop(), kind = t.pop();
+      if (kind === 'H') this.H[r][c] = prev; else this.V[r][c] = prev;
+    }
   }
 
   // Endpoints (vertices) of an edge, for worklist enqueue.
@@ -287,11 +300,10 @@ class ShingokiSolver {
       // (degree-1) endpoint, the loop is complete. Any remaining unknown edge
       // must be a cross (a line would make a degree-3 vertex or a 2nd loop).
       if (this._loopComplete()) {
-        const snapH = this.H.map(row => row.slice());
-        const snapV = this.V.map(row => row.slice());
+        const mark = this._trailMark();
         for (const e of allEdges) if (this.getEdge(e) === 0) this.setEdge(e, 2);
         if (this._isValidComplete()) return this._snapshotGrid();
-        this.H = snapH; this.V = snapV;
+        this._rollbackTo(mark);
         return null;
       }
       const edge = pick || fallback;
@@ -304,13 +316,12 @@ class ShingokiSolver {
       // short-circuit fire, instead of greedily extending spurious line chains
       // across the empty field before ever closing the loop.
       for (const val of [2, 1]) {
-        const snapH = this.H.map(row => row.slice());
-        const snapV = this.V.map(row => row.slice());
+        const mark = this._trailMark();
         if (this.setEdge(edge, val) && this._propagate() && !this._hasPrematureLoop()) {
           const got = backtrack();
           if (got) return got;
         }
-        this.H = snapH; this.V = snapV;
+        this._rollbackTo(mark);
       }
       return null;
     };
