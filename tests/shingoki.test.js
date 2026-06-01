@@ -196,3 +196,44 @@ test('ShingokiSolver: a black clue must sit on a TURN, never a straight pass', (
     assert.equal(res.solved, false);
   }
 });
+
+test('Shingoki deduction: white clue on the top row is forced horizontal', () => {
+  // White at top-row vertex (0,1): vertical axis needs North V[-1][1] (off-board),
+  // so it's impossible -> must be horizontal. West H[0][0] + East H[0][1] forced LINE.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,2,0],[0,0,0],[0,0,0]] });
+  s._initState();
+  assert.equal(s._propagate(), true);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 0 }), 1); // West forced line
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 1 }), 1); // East forced line
+  assert.equal(s.getEdge({ kind: 'V', r: 0, c: 1 }), 2); // South forced cross
+});
+
+test('Shingoki deduction: black clue in a corner forces both available arms', () => {
+  // Black at corner vertex (0,0): only East H[0][0] + South V[0][0] exist; black
+  // must turn -> both are the arms -> forced LINE.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[-2,0,0],[0,0,0],[0,0,0]] });
+  s._initState();
+  assert.equal(s._propagate(), true);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 0 }), 1);
+  assert.equal(s.getEdge({ kind: 'V', r: 0, c: 0 }), 1);
+});
+
+test('Shingoki deduction: white axis-forcing does NOT fire when both axes viable', () => {
+  // White at interior vertex (1,1) on a 2x2 board: both H and V axes are in-range
+  // and unconstrained -> ambiguous -> nothing forced (soundness).
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,2,0],[0,0,0]] });
+  s._initState();
+  assert.equal(s._propagate(), true);
+  for (const e of s.incidentEdges(1, 1)) assert.equal(s.getEdge(e), 0);
+});
+
+test('Shingoki deduction: white with both axes blocked is a contradiction', () => {
+  // White at (1,1); cross West and East (kills horizontal) and North (kills
+  // vertical, since vertical needs both N and S) -> no viable axis.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,2,0],[0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 1, c: 0 }, 2);
+  s.setEdge({ kind: 'H', r: 1, c: 1 }, 2);
+  s.setEdge({ kind: 'V', r: 0, c: 1 }, 2);
+  assert.equal(s._propagate(), false);
+});

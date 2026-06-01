@@ -35,6 +35,22 @@ class ShingokiSolver {
     return out;
   }
 
+  // The two edges of a given axis at vertex (r,c): 'H' => [West, East],
+  // 'V' => [North, South]. Returns only in-range refs.
+  _axisEdges(r, c, axis) {
+    const { rows, cols } = this;
+    if (axis === 'H') {
+      const out = [];
+      if (c - 1 >= 0) out.push({ kind: 'H', r, c: c - 1 });
+      if (c < cols)   out.push({ kind: 'H', r, c });
+      return out;
+    }
+    const out = [];
+    if (r - 1 >= 0) out.push({ kind: 'V', r: r - 1, c });
+    if (r < rows)   out.push({ kind: 'V', r, c });
+    return out;
+  }
+
   _initState() {
     const { rows, cols } = this;
     this.H = Array.from({ length: rows + 1 }, () => new Array(cols).fill(0));
@@ -98,6 +114,35 @@ class ShingokiSolver {
       if (clue) {
         if (lines + unknown < 2) return false; // can't reach degree 2
         if (lines === 0 && unknown === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) return false; }
+      }
+
+      // Border/axis forcing (sound opening deductions).
+      if (clue) {
+        if (clue.color === 'white') {
+          // White needs two COLLINEAR lines. An axis is viable only if BOTH its
+          // edges are in-range and not crossed.
+          const hEdges = this._axisEdges(r, c, 'H');
+          const vEdges = this._axisEdges(r, c, 'V');
+          const hViable = hEdges.length === 2 && hEdges.every(e => this.getEdge(e) !== 2);
+          const vViable = vEdges.length === 2 && vEdges.every(e => this.getEdge(e) !== 2);
+          if (!hViable && !vViable) return false;
+          if (hViable && !vViable) {
+            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) return false;
+            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) return false;
+          } else if (vViable && !hViable) {
+            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) return false;
+            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) return false;
+          }
+        } else {
+          // Black needs one horizontal + one vertical line. If only one edge of
+          // an axis is available (in-range, not crossed), it must be that arm.
+          for (const axis of ['H', 'V']) {
+            const avail = this._axisEdges(r, c, axis).filter(e => this.getEdge(e) !== 2);
+            if (avail.length === 1 && this.getEdge(avail[0]) === 0) {
+              if (!trySet(avail[0], 1)) return false;
+            }
+          }
+        }
       }
 
       // Circle shape rules apply once we know the two line-edges OR can force them.
