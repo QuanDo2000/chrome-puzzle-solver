@@ -828,3 +828,51 @@ test('pipes: applyHint writes raw rotation counts via applyPipesState (no binary
   assert.ok(!calls.some(c => c.fn === 'applyHintCells'), 'must not use the binary applyHintCells');
   assert.deepEqual(applied.args[0], [[0, 3], [2, 0]]); // count 3 preserved, not clamped
 });
+
+test('shingoki: cacheKey is type-gated and stable', () => {
+  const d = { type: 'shingoki', rows: 1, cols: 1, task: [[2, 0], [0, 0]] };
+  assert.equal(shingoki.cacheKey({ type: 'other' }), null);
+  assert.equal(shingoki.cacheKey(d), shingoki.cacheKey(d));
+});
+
+test('shingoki: solutionFromResult passes through {horizontal,vertical}', () => {
+  const r = { horizontal: [[1]], vertical: [[0]] };
+  assert.deepEqual(shingoki.solutionFromResult(r), { horizontal: [[1]], vertical: [[0]] });
+});
+
+test('shingoki: solutionToCacheJson + solutionFromCacheJson roundtrip', () => {
+  const sol = { horizontal: [[1, 0]], vertical: [[0], [1]] };
+  const json = shingoki.solutionToCacheJson(sol);
+  const back = shingoki.solutionFromCacheJson(json);
+  assert.deepEqual(back, sol);
+});
+
+test('shingoki: hintDispatch reveals next batch of missing line edges', async () => {
+  // current board all-zero; solution has 2 line edges. callMainWorld stub returns the board.
+  const callMainWorld = async (fn) => {
+    if (fn === 'readShingokiState') return { horizontal: [[0, 0], [0, 0]], vertical: [[0], [0]] };
+    return null;
+  };
+  const solution = { horizontal: [[1, 0], [0, 0]], vertical: [[1], [0]] };
+  const r = await shingoki.hintDispatch({ solution, rows: 1, cols: 1, callMainWorld, puzzleData: { rows: 1, cols: 1 } });
+  assert.equal(r.success, true);
+  assert.ok(r.hint.edges.length >= 1);
+  assert.ok(r.hint.edges.every((e) => e.orientation === 'h' || e.orientation === 'v'));
+});
+
+test('shingoki: applyHint overlays edges and writes via applyShingokiState (not applyHintCells)', async () => {
+  const calls = [];
+  const callMainWorld = async (fn, args) => {
+    calls.push({ fn, args });
+    if (fn === 'readShingokiState') return { horizontal: [[0, 0], [0, 0]], vertical: [[0], [0]] };
+    if (fn === 'applyShingokiState') return true;
+    return null;
+  };
+  const hint = { type: 'shingoki', edges: [{ orientation: 'h', r: 0, c: 1 }] };
+  const ok = await shingoki.applyHint(hint, { callMainWorld, puzzleData: { rows: 1, cols: 1 } });
+  assert.equal(ok, true);
+  const applied = calls.find((c) => c.fn === 'applyShingokiState');
+  assert.ok(applied);
+  assert.equal(applied.args[0].horizontal[0][1], 1);
+  assert.ok(!calls.some((c) => c.fn === 'applyHintCells'));
+});
