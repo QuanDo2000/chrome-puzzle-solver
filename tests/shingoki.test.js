@@ -20,3 +20,72 @@ test('ShingokiSolver: incidentEdges lists in-range W/E/N/S edge refs', () => {
   assert.equal(s.incidentEdges(1, 1).length, 4);
   function byKey(a, b) { return (a.kind+a.r+a.c).localeCompare(b.kind+b.r+b.c); }
 });
+
+test('ShingokiSolver: a vertex with two lines crosses out its other edges', () => {
+  // 2x2 cells. Force two lines into center vertex (1,1): E and S.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 1, c: 1 }, 1); // East of (1,1)
+  s.setEdge({ kind: 'V', r: 1, c: 1 }, 1); // South of (1,1)
+  assert.equal(s._propagate(), true);
+  // West H[1][0] and North V[0][1] must be crossed (2).
+  assert.equal(s.getEdge({ kind: 'H', r: 1, c: 0 }), 2);
+  assert.equal(s.getEdge({ kind: 'V', r: 0, c: 1 }), 2);
+});
+
+test('ShingokiSolver: white clue forbids a turn (collinear edges only)', () => {
+  // White at center vertex (1,1): if East is a line, West must be a line too.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,3,0],[0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 1, c: 1 }, 1); // East line
+  assert.equal(s._propagate(), true);
+  assert.equal(s.getEdge({ kind: 'H', r: 1, c: 0 }), 1); // West forced line (straight)
+  assert.equal(s.getEdge({ kind: 'V', r: 0, c: 1 }), 2); // North crossed
+  assert.equal(s.getEdge({ kind: 'V', r: 1, c: 1 }), 2); // South crossed
+});
+
+test('ShingokiSolver: black clue forbids straight (perpendicular only)', () => {
+  // Black at center vertex (1,1): if East is a line, West must be crossed.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,-3,0],[0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 1, c: 1 }, 1); // East line
+  assert.equal(s._propagate(), true);
+  assert.equal(s.getEdge({ kind: 'H', r: 1, c: 0 }), 2); // West forced cross (must turn)
+});
+
+test('ShingokiSolver: circled vertex cannot be degree 0', () => {
+  // White clue at (1,1); cross 3 of its 4 edges -> contradiction (cannot reach degree 2).
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,3,0],[0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 1, c: 0 }, 2);
+  s.setEdge({ kind: 'H', r: 1, c: 1 }, 2);
+  s.setEdge({ kind: 'V', r: 0, c: 1 }, 2);
+  assert.equal(s._propagate(), false); // South alone can't make degree 2
+});
+
+test('ShingokiSolver: white clued vertex stuck at degree 1 is a contradiction', () => {
+  // White at (1,1). East line + West cross => the collinear partner is gone,
+  // so the white "straight" shape can never hold (would need both H edges).
+  // _propagate must report the contradiction, not return true.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,3,0],[0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 1, c: 1 }, 1); // East line
+  s.setEdge({ kind: 'H', r: 1, c: 0 }, 2); // West cross
+  assert.equal(s._propagate(), false);
+});
+
+test('ShingokiSolver: runLength sums both straight directions at a circle', () => {
+  const s = new ShingokiSolver({ rows: 1, cols: 3, task: [[0,0,0,0],[0,0,0,0]] });
+  s._initState();
+  // Lay a straight horizontal segment along vertex-row 0: H[0][0],H[0][1],H[0][2] lines.
+  s.H[0][0] = 1; s.H[0][1] = 1; s.H[0][2] = 1;
+  // White circle at vertex (0,1): West run (1 edge: H[0][0]) + East run (H[0][1],H[0][2] = 2 edges) = 3.
+  assert.equal(s.runLengthAt(0, 1), 3);
+});
+
+test('ShingokiSolver: numbersSatisfied rejects wrong clue total', () => {
+  const s = new ShingokiSolver({ rows: 1, cols: 3, task: [[0,5,0,0],[0,0,0,0]] }); // white 5 at (0,1)
+  s._initState();
+  s.H[0][0] = 1; s.H[0][1] = 1; s.H[0][2] = 1; // run = 3, clue says 5
+  assert.equal(s.numbersSatisfied(), false);
+});
