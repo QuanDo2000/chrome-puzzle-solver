@@ -111,6 +111,15 @@ function buildContentBundle() {
   if (/require\(['"][^'"]*(?:shared|pipes-rotation)\.js['"]\)/.test(bundle)) {
     throw new Error('a leaf-helper require survived stripping — content bundle would break');
   }
+  // A surviving `module.exports = ...` throws `module is not defined` in the
+  // page and kills the whole content script. EXPORT_RE only strips the GUARDED
+  // `if (typeof module …) { module.exports = … }` footer, so a bare
+  // `module.exports = x;` (no guard) slips past both EXPORT_RE and the
+  // per-file guard above. Catch any survivor here. (content.js's own
+  // `module.exports = require(...)` head is stripped separately above.)
+  if (/^\s*module\.exports\s*=/m.test(bundle)) {
+    throw new Error('a bare `module.exports =` survived into the content bundle — a puzzle module is missing its `if (typeof module …)` guard (would throw "module is not defined" in-page)');
+  }
   return bundle;
 }
 

@@ -258,4 +258,6 @@ function _shingokiCluesSig(task) {
   return h.toString(16);
 }
 
-module.exports = shingoki;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = shingoki;
+}
