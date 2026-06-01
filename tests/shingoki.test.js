@@ -339,6 +339,38 @@ test('Shingoki deductive reach: iterating getStepwiseHint from empty makes monot
   console.log(`[shingoki deductive reach] logic placed ${applied}/${totalLines} solution lines in ${steps} hint rounds`);
 });
 
+test('Shingoki connectivity: a closed subloop with clues still outside is pruned', () => {
+  // 3x3 board (4x4 verts). Close the unit square at top-left: H[0][0],H[1][0],
+  // V[0][0],V[0][1] form a closed 1x1 loop. A clue OUTSIDE it (vertex (3,3))
+  // must be on the loop -> this partial can never become one loop -> dead.
+  const s = new ShingokiSolver({ rows: 3, cols: 3, task: [
+    [0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,-2],
+  ] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 0, c: 0 }, 1);
+  s.setEdge({ kind: 'H', r: 1, c: 0 }, 1);
+  s.setEdge({ kind: 'V', r: 0, c: 0 }, 1);
+  s.setEdge({ kind: 'V', r: 0, c: 1 }, 1);
+  assert.equal(s._deadByConnectivity(), true);
+});
+
+test('Shingoki connectivity: a valid open partial chain is NOT pruned', () => {
+  const s = new ShingokiSolver({ rows: 3, cols: 3, task: [
+    [0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,-2],
+  ] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 0, c: 0 }, 1); // single open segment
+  assert.equal(s._deadByConnectivity(), false);
+});
+
+test('Shingoki connectivity: an empty board is NOT pruned', () => {
+  const s = new ShingokiSolver({ rows: 3, cols: 3, task: [
+    [0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,-2],
+  ] });
+  s._initState();
+  assert.equal(s._deadByConnectivity(), false);
+});
+
 test('ShingokiSolver: trail records and rolls back edge writes', () => {
   const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
   s._initState();

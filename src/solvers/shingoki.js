@@ -317,7 +317,7 @@ class ShingokiSolver {
       // across the empty field before ever closing the loop.
       for (const val of [2, 1]) {
         const mark = this._trailMark();
-        if (this.setEdge(edge, val) && this._propagate() && !this._hasPrematureLoop()) {
+        if (this.setEdge(edge, val) && this._propagate() && !this._hasPrematureLoop() && !this._deadByConnectivity()) {
           const got = backtrack();
           if (got) return got;
         }
@@ -424,6 +424,52 @@ class ShingokiSolver {
     // span more than one connected component, a closed subloop exists that can
     // never merge into a single loop => prune.
     return !this._oneClosedComponentOrOpen();
+  }
+
+  // True iff the committed LINE edges can never close into ONE loop through all
+  // clued vertices. Sound: only reports states with NO valid completion.
+  // Detects a premature closed subloop: a line-component that is already a closed
+  // cycle (every vertex in it degree exactly 2) while ANOTHER line-component
+  // exists OR a clued vertex lies outside it -> a 2nd component can never merge
+  // into the closed one -> dead.
+  _deadByConnectivity() {
+    const { rows, cols } = this;
+    const lineDeg = (r, c) => this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1).length;
+    const vid = (r, c) => r * (cols + 1) + c;
+    const seen = new Uint8Array((rows + 1) * (cols + 1));
+    const lineVerts = [];
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      if (lineDeg(r, c) > 0) lineVerts.push([r, c]);
+    }
+    if (lineVerts.length === 0) return false;
+    let components = 0;
+    let sawClosed = false;
+    for (const [sr, sc] of lineVerts) {
+      if (seen[vid(sr, sc)]) continue;
+      components++;
+      let closed = true;
+      const stack = [[sr, sc]]; seen[vid(sr, sc)] = 1;
+      while (stack.length) {
+        const [r, c] = stack.pop();
+        if (lineDeg(r, c) !== 2) closed = false;
+        for (const e of this.incidentEdges(r, c)) {
+          if (this.getEdge(e) !== 1) continue;
+          const [a, b] = this._endpoints(e);
+          const nv = (a.r === r && a.c === c) ? b : a;
+          if (!seen[vid(nv.r, nv.c)]) { seen[vid(nv.r, nv.c)] = 1; stack.push([nv.r, nv.c]); }
+        }
+      }
+      if (closed) sawClosed = true;
+    }
+    if (sawClosed) {
+      if (components > 1) return true; // a closed loop + something else can't merge
+      // single closed component: every clued vertex must be ON it
+      for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+        const clue = ShingokiSolver.decodeClue(this.task[r][c]);
+        if (clue && !seen[vid(r, c)]) return true; // clue outside the closed loop
+      }
+    }
+    return false;
   }
 
   // True if at most one connected line-component exists.
