@@ -795,6 +795,82 @@ function applySlitherlinkState(lines) {
   }
 }
 
+function readShingokiData() {
+  try {
+    var G = window.Game;
+    if (!G || !G.task || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth;
+    var task = [];
+    for (var r = 0; r <= rows; r++) {
+      var srcRow = G.task[r] || [];
+      var arr = new Array(cols + 1);
+      for (var c = 0; c <= cols; c++) {
+        var v = srcRow[c];
+        arr[c] = (typeof v === 'number') ? v : 0;
+      }
+      task.push(arr);
+    }
+    return { rows: rows, cols: cols, task: task };
+  } catch (e) {
+    return null;
+  }
+}
+
+function readShingokiState(rows, cols) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState) return null;
+    var H = G.currentState.cellHorizontalStatus;
+    var V = G.currentState.cellVerticalStatus;
+    if (!Array.isArray(H) || !Array.isArray(V)) return null;
+    var horizontal = [];
+    for (var hr = 0; hr < H.length; hr++) horizontal.push((H[hr] || []).slice());
+    var vertical = [];
+    for (var vr = 0; vr < V.length; vr++) vertical.push((V[vr] || []).slice());
+    return { horizontal: horizontal, vertical: vertical };
+  } catch (e) {
+    return null;
+  }
+}
+
+function applyShingokiState(state) {
+  try {
+    var G = window.Game;
+    if (!state || !state.horizontal || !state.vertical) return false;
+    if (!(G && G.currentState)) return false;
+    var H = G.currentState.cellHorizontalStatus;
+    var V = G.currentState.cellVerticalStatus;
+    if (!Array.isArray(H) || !Array.isArray(V)) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    for (var r = 0; r < H.length && r < state.horizontal.length; r++) {
+      var dst = H[r], src = state.horizontal[r] || [];
+      if (!Array.isArray(dst)) continue;
+      for (var c = 0; c < dst.length && c < src.length; c++) {
+        dst[c] = src[c] === 1 ? 1 : src[c] === 2 ? 2 : 0;
+      }
+    }
+    for (var r2 = 0; r2 < V.length && r2 < state.vertical.length; r2++) {
+      var dst2 = V[r2], src2 = state.vertical[r2] || [];
+      if (!Array.isArray(dst2)) continue;
+      for (var c2 = 0; c2 < dst2.length && c2 < src2.length; c2++) {
+        dst2[c2] = src2[c2] === 1 ? 1 : src2[c2] === 2 ? 2 : 0;
+      }
+    }
+    if (G.currentState) G.currentState.solved = false;
+    G.solved = false;
+    if (typeof G.drawCurrentState === 'function') { G.drawCurrentState(); }
+    else if (typeof G.render === 'function') { G.render(); }
+    else if (typeof G.redraw === 'function') { G.redraw(); }
+    else if (typeof G.redrawGrid === 'function') { G.redrawGrid(); }
+    else if (typeof G.draw === 'function') { G.draw(); }
+    else if (G.getSaved && G.loadGame) { var saved = G.getSaved(); if (saved) G.loadGame(saved); }
+    return true;
+  } catch (e) {
+    console.warn('Shingoki apply failed:', e);
+    return false;
+  }
+}
+
 function readShikakuData() {
   var maxAttempts = 20;
   var pollMs = 250;
@@ -2052,6 +2128,14 @@ function dumpPuzzleForBench() {
         ptask.push(parr);
       }
       return { type: 'pipes', rows: height, cols: width, task: ptask, path: path };
+    }
+
+    if (path.indexOf('/shingoki/') !== -1) {
+      var sgData = readShingokiData();
+      if (!sgData) {
+        return { error: 'shingoki: readShingokiData returned null', diagnostic: diagnostic(g), path: path };
+      }
+      return { type: 'shingoki', rows: sgData.rows, cols: sgData.cols, task: sgData.task, path: path };
     }
 
     if (path.indexOf('/nurikabe/') !== -1 || g.slug === 'nurikabe') {

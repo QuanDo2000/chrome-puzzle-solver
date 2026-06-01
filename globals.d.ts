@@ -84,6 +84,9 @@ type MainWorldFn =
   | 'readPipesData'
   | 'readPipesState'
   | 'applyPipesState'
+  | 'readShingokiData'
+  | 'readShingokiState'
+  | 'applyShingokiState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';

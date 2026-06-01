@@ -459,6 +459,56 @@ const slitherlinkHandler = {
 
 registerHandler(slitherlinkHandler);
 
+// ── Shingoki handler (puzzles-mobile.com/shingoki/) ───────────
+
+const shingokiHandler = {
+  name: 'puzzles-mobile-shingoki',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/shingoki/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readShingokiData', []);
+    if (!data) return { ...result, error: 'No Shingoki task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'shingoki',
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readShingokiState', [ctx.rows, ctx.cols]);
+    if (state) return state;
+    return { horizontal: [], vertical: [] };
+  },
+
+  async applySolution(solution, _ctx) {
+    if (!solution || !solution.horizontal || !solution.vertical) {
+      return { success: false, error: 'Shingoki applySolution: missing horizontal/vertical' };
+    }
+    const ok = await callMainWorld('applyShingokiState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Shingoki apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(shingokiHandler);
+
 // ── Hashi handler (puzzles-mobile.com/hashi/) ─────────────
 
 const hashiHandler = {
