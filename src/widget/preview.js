@@ -103,14 +103,20 @@ function buildLatticeLayer(rows, cols, cellSize, w, h, pd, margin = 0) {
     reg.drawLattice(ctx, { rows, cols, cellSize, w, h, pd });
     return c;
   }
+  // Span the lines to the padded-CONTENT extent (w/h minus the gutter) — under
+  // the margin translate, using w/h directly would overshoot the board by
+  // 2*margin and draw stray grid lines into the bottom/right gutter. Subtracting
+  // 2*margin keeps the kakurasu padRight/padBottom rim (margin=0) covered.
+  const contentW = w - 2 * margin;
+  const contentH = h - 2 * margin;
   ctx.beginPath();
   for (let r = 0; r <= rows; r++) {
     ctx.moveTo(0, r * cellSize);
-    ctx.lineTo(w, r * cellSize);
+    ctx.lineTo(contentW, r * cellSize);
   }
   for (let cc = 0; cc <= cols; cc++) {
     ctx.moveTo(cc * cellSize, 0);
-    ctx.lineTo(cc * cellSize, h);
+    ctx.lineTo(cc * cellSize, contentH);
   }
   ctx.stroke();
   return c;
