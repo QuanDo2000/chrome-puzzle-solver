@@ -2131,11 +2131,23 @@ function dumpPuzzleForBench() {
     }
 
     if (path.indexOf('/shingoki/') !== -1) {
-      var sgData = readShingokiData();
-      if (!sgData) {
-        return { error: 'shingoki: readShingokiData returned null', diagnostic: diagnostic(g), path: path };
+      // INLINE extraction: dumpPuzzleForBench is serialized via fn.toString() and
+      // run in MAIN world where it CANNOT call the sibling readShingokiData. Pull
+      // the (rows+1)x(cols+1) signed vertex-clue grid straight from window.Game.
+      if (!Array.isArray(g.task)) {
+        return { error: 'shingoki: g.task is not a 2D array', diagnostic: diagnostic(g), path: path };
       }
-      return { type: 'shingoki', rows: sgData.rows, cols: sgData.cols, task: sgData.task, path: path };
+      var sgTask = [];
+      for (var sgr = 0; sgr <= height; sgr++) {
+        var sgRow = g.task[sgr] || [];
+        var sgArr = new Array(width + 1);
+        for (var sgc = 0; sgc <= width; sgc++) {
+          var sgv = sgRow[sgc];
+          sgArr[sgc] = (typeof sgv === 'number') ? sgv : 0;
+        }
+        sgTask.push(sgArr);
+      }
+      return { type: 'shingoki', rows: height, cols: width, task: sgTask, path: path };
     }
 
     if (path.indexOf('/nurikabe/') !== -1 || g.slug === 'nurikabe') {
