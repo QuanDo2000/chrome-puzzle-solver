@@ -167,6 +167,7 @@ class ShingokiSolver {
             for (const e of inc) if (e.kind === sameKind && this.getEdge(e) === 0) if (!trySet(e, 2)) return false;
           }
         }
+        if (!this._applyRunCap(r, c, clue, trySet)) return false;
       }
     }
     return true;
@@ -206,6 +207,51 @@ class ShingokiSolver {
     if (horiz) total += walk(0, -1) + walk(0, 1);
     if (vert) total += walk(-1, 0) + walk(1, 0);
     return total;
+  }
+
+  // Run-cap: for a clued vertex with >=1 confirmed collinear line, if the
+  // confirmed straight run already equals the clue number, force a cross at each
+  // OPEN (unknown) end so the run can't grow; if it exceeds the number, signal a
+  // contradiction. Returns false on contradiction. Only acts on confirmed (=1)
+  // edges, so it's sound. `trySet` is passed in from _propagate to keep the
+  // worklist coherent.
+  _applyRunCap(r, c, clue, trySet) {
+    const inc = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1);
+    if (inc.length === 0) return true;
+    // Walk a direction counting CONFIRMED line edges; return {len, endRef} where
+    // endRef is the next edge beyond the run (or null if border).
+    const walk = (dr, dc) => {
+      let len = 0, cr = r, cc = c, endRef = null;
+      for (;;) {
+        const nr = cr + dr, nc = cc + dc;
+        let ref;
+        if (dr === 0) {
+          const ec = Math.min(cc, nc);
+          if (ec < 0 || ec >= this.cols || cr < 0 || cr > this.rows) { endRef = null; break; }
+          ref = { kind: 'H', r: cr, c: ec };
+        } else {
+          const er = Math.min(cr, nr);
+          if (er < 0 || er >= this.rows || cc < 0 || cc > this.cols) { endRef = null; break; }
+          ref = { kind: 'V', r: er, c: cc };
+        }
+        if (this.getEdge(ref) !== 1) { endRef = ref; break; }
+        len++; cr = nr; cc = nc;
+      }
+      return { len, endRef };
+    };
+    const horiz = inc.some(e => e.kind === 'H');
+    const vert = inc.some(e => e.kind === 'V');
+    let total = 0;
+    const ends = [];
+    if (horiz) { const a = walk(0, -1), b = walk(0, 1); total += a.len + b.len; ends.push(a.endRef, b.endRef); }
+    if (vert)  { const a = walk(-1, 0), b = walk(1, 0); total += a.len + b.len; ends.push(a.endRef, b.endRef); }
+    if (total > clue.n) return false;
+    if (total === clue.n) {
+      for (const ref of ends) {
+        if (ref && this.getEdge(ref) === 0 && !trySet(ref, 2)) return false;
+      }
+    }
+    return true;
   }
 
   numbersSatisfied() {

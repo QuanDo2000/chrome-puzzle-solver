@@ -237,3 +237,35 @@ test('Shingoki deduction: white with both axes blocked is a contradiction', () =
   s.setEdge({ kind: 'V', r: 0, c: 1 }, 2);
   assert.equal(s._propagate(), false);
 });
+
+test('Shingoki number: confirmed run equal to the clue forces a cross at the open end', () => {
+  // 1x3 board (2x4 vertices). White clue n=2 at vertex (0,1). Lay West+East as
+  // the start of a horizontal run: H[0][0]=1 (West of (0,1)), H[0][1]=1 (East).
+  // The run through (0,1) is already length 2 == n, so the next edge east,
+  // H[0][2], must be CROSS (the run can't extend).
+  const s = new ShingokiSolver({ rows: 1, cols: 3, task: [[0,2,0,0],[0,0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 0, c: 0 }, 1);
+  s.setEdge({ kind: 'H', r: 0, c: 1 }, 1);
+  assert.equal(s._propagate(), true);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 2 }), 2); // run-cap forces cross
+});
+
+test('Shingoki number: a run longer than the clue is a contradiction', () => {
+  // White n=2 at (0,1) but three collinear lines through it -> run 3 > 2.
+  const s = new ShingokiSolver({ rows: 1, cols: 3, task: [[0,2,0,0],[0,0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 0, c: 0 }, 1);
+  s.setEdge({ kind: 'H', r: 0, c: 1 }, 1);
+  s.setEdge({ kind: 'H', r: 0, c: 2 }, 1);
+  assert.equal(s._propagate(), false);
+});
+
+test('Shingoki number: run-cap does NOT fire before the run reaches the clue', () => {
+  // White n=3 at (0,1), only one confirmed line so far (run 1 < 3) -> no forcing.
+  const s = new ShingokiSolver({ rows: 1, cols: 3, task: [[0,3,0,0],[0,0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 0, c: 1 }, 1); // East only
+  assert.equal(s._propagate(), true);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 2 }), 0); // not yet capped
+});
