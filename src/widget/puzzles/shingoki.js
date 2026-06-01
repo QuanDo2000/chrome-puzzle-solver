@@ -81,6 +81,11 @@ const shingoki = {
     return {
       rows: pd?.rows || (grid.horizontal ? grid.horizontal.length - 1 : 0),
       cols: pd?.cols || (grid.horizontal ? (grid.horizontal[0] || []).length : 0),
+      // Clue circles are centred ON the lattice vertices, so the border row and
+      // column sit on the canvas edge. Reserve a half-cell gutter on all sides
+      // (preview.js translates everything in by it) so those circles and their
+      // numbers aren't clipped.
+      marginCells: 0.5,
     };
   },
 
@@ -98,13 +103,16 @@ const shingoki = {
   // arm uses for its corner dots.
   drawStaticLayer(ctx, { rows, cols, cellSize, pd }) {
     const task = (pd && pd.task) || [];
-    const radius = Math.max(3, Math.floor(cellSize / 4));
-    const fontPx = Math.max(7, Math.floor(cellSize * 0.4));
+    // ~⅓-cell radius: large enough to read the number, small enough that two
+    // clued vertices one cell apart still leave a visible gap. The half-cell
+    // gutter (canvasDims.marginCells) keeps border circles from clipping.
+    const radius = Math.max(5, Math.floor(cellSize / 3));
+    const fontPx = Math.max(8, Math.floor(cellSize * 0.46));
     ctx.save();
     ctx.font = `bold ${fontPx}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.lineWidth = Math.max(1.5, cellSize / 14);
+    ctx.lineWidth = Math.max(1.5, cellSize / 10);
     for (let r = 0; r <= rows; r++) {
       const row = task[r] || [];
       for (let c = 0; c <= cols; c++) {

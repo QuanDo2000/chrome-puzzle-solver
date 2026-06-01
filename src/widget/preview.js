@@ -262,12 +262,22 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const cols = dims.cols;
   const padRight = dims.padRight || 0;
   const padBottom = dims.padBottom || 0;
-  const cellSizeDenC = cols + padRight;
-  const cellSizeDenR = rows + padBottom;
+  // marginCells: a uniform gutter (in CELL units) added on ALL four sides,
+  // distinct from padRight/padBottom (which only grow bottom/right). Shingoki
+  // sets ~0.5 so vertex clue circles centred on the border lattice points have
+  // room and aren't clipped. 0 for every other puzzle → unchanged layout.
+  const marginCells = dims.marginCells || 0;
+  const cellSizeDenC = cols + padRight + 2 * marginCells;
+  const cellSizeDenR = rows + padBottom + 2 * marginCells;
   const cellSize = Math.min(Math.floor((bodyWidth - 4) / cellSizeDenC), Math.floor(350 / cellSizeDenR), 24);
+  const margin = Math.round(marginCells * cellSize);
   const w = cols * cellSize, h = rows * cellSize;
-  const wFull = (cols + padRight) * cellSize;
-  const hFull = (rows + padBottom) * cellSize;
+  // wContent/hContent: the padded board WITHOUT the gutter (what the cached
+  // layers draw into). wFull/hFull: the full bitmap, gutter included.
+  const wContent = (cols + padRight) * cellSize;
+  const hContent = (rows + padBottom) * cellSize;
+  const wFull = wContent + 2 * margin;
+  const hFull = hContent + 2 * margin;
   // Type-discriminator consts still consumed at other sites in renderPreview
   // (cell-loop gates, dynamic-render arms, mistake-overlay branches).
   // Edge-loop puzzles (slitherlink + shingoki) share the {horizontal,
@@ -307,8 +317,11 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
                 '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '');
   }
   if (staticSig !== staticLayerSig) {
-    latticeLayer = buildLatticeLayer(rows, cols, cellSize, wFull, hFull, pd);
-    staticLayer = buildStaticLayer(rows, cols, cellSize, wFull, hFull, pd);
+    // Cached layers are sized to the CONTENT (no gutter) and drawn at (0,0);
+    // the single main-ctx translate below positions them — and all dynamic
+    // content — inside the gutter, so the two always align.
+    latticeLayer = buildLatticeLayer(rows, cols, cellSize, wContent, hContent, pd);
+    staticLayer = buildStaticLayer(rows, cols, cellSize, wContent, hContent, pd);
     staticLayerSig = staticSig;
   }
 
@@ -317,6 +330,11 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
 
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, wFull, hFull);
+  // Shift EVERYTHING (cached layers via drawImage(...,0,0) + all directly-drawn
+  // edges/fills/hints/mistakes) in by the gutter. One translate covers every
+  // draw site below because they all use the same (0,0)-origin coordinates.
+  // margin=0 → no-op, so non-shingoki puzzles are pixel-identical.
+  if (margin) ctx.translate(margin, margin);
   // Lattice goes UNDER dynamic fills so filled cells hide the grey
   // cell-border lines inside them. Region borders + galaxy stars come
   // from the second static layer below, painted on top.
