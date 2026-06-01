@@ -269,3 +269,44 @@ test('Shingoki number: run-cap does NOT fire before the run reaches the clue', (
   assert.equal(s._propagate(), true);
   assert.equal(s.getEdge({ kind: 'H', r: 0, c: 2 }), 0); // not yet capped
 });
+
+test('Shingoki getStepwiseHint: returns forced LINE edges from an empty captured 5x5', () => {
+  const TASK_5x5 = [
+    [0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],
+    [-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0],
+  ];
+  const s = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5, maxMs: 5000 });
+  const curH = Array.from({ length: 6 }, () => new Array(5).fill(0));
+  const curV = Array.from({ length: 5 }, () => new Array(6).fill(0));
+  const hint = s.getStepwiseHint(curH, curV);
+  assert.ok(hint && hint.edges.length >= 1, 'expected at least one forced edge');
+  const solved = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5, maxMs: 10000 }).solve();
+  assert.equal(solved.solved, true);
+  for (const e of hint.edges) {
+    const v = e.orientation === 'h' ? solved.horizontal[e.r][e.c] : solved.vertical[e.r][e.c];
+    assert.equal(v, 1, `forced edge ${JSON.stringify(e)} must be a line in the solution`);
+  }
+});
+
+test('Shingoki getStepwiseHint: returns null on a completed board', () => {
+  const TASK_5x5 = [
+    [0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],
+    [-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0],
+  ];
+  const solved = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5, maxMs: 10000 }).solve();
+  const s = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5, maxMs: 5000 });
+  assert.equal(s.getStepwiseHint(solved.horizontal, solved.vertical), null);
+});
+
+test('Shingoki getStepwiseHint: does not mutate the caller arrays', () => {
+  const TASK_5x5 = [
+    [0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],
+    [-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0],
+  ];
+  const s = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5, maxMs: 5000 });
+  const curH = Array.from({ length: 6 }, () => new Array(5).fill(0));
+  const curV = Array.from({ length: 5 }, () => new Array(6).fill(0));
+  s.getStepwiseHint(curH, curV);
+  assert.ok(curH.every(row => row.every(v => v === 0)));
+  assert.ok(curV.every(row => row.every(v => v === 0)));
+});

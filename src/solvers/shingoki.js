@@ -321,6 +321,58 @@ class ShingokiSolver {
     return { solved: true, horizontal: grid.horizontal, vertical: grid.vertical };
   }
 
+  // One round of 1-step lookahead: for each unknown edge, tentatively set LINE
+  // then CROSS on a probe; if exactly one value survives propagation, force it.
+  // Returns false on contradiction, true otherwise. Bounded by maxMs.
+  _lookahead1() {
+    const refs = this._allEdgeRefs();
+    for (const e of refs) {
+      if (this.getEdge(e) !== 0) continue;
+      if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) return true;
+      const trial = (val) => {
+        const probe = new ShingokiSolver({ rows: this.rows, cols: this.cols, task: this.task });
+        probe.H = this.H.map(row => row.slice());
+        probe.V = this.V.map(row => row.slice());
+        return probe.setEdge(e, val) && probe._propagate();
+      };
+      const lineOk = trial(1);
+      const crossOk = trial(2);
+      if (!lineOk && !crossOk) return false;
+      if (lineOk && !crossOk) { if (!this.setEdge(e, 1) || !this._propagate()) return false; }
+      else if (crossOk && !lineOk) { if (!this.setEdge(e, 2) || !this._propagate()) return false; }
+    }
+    return true;
+  }
+
+  // Deductive next-move hint. Seeds from the live board edge state, propagates
+  // (+ one lookahead round if propagation alone forces nothing new), and returns
+  // the newly-forced LINE edges (board was 0, now 1) up to a batch cap. Returns
+  // null when logic forces no new line. Pure: never mutates curH/curV.
+  getStepwiseHint(curH, curV) {
+    this._startedAt = Date.now();
+    this.H = curH.map(row => row.slice());
+    this.V = curV.map(row => row.slice());
+    const collect = () => {
+      const out = [];
+      for (let r = 0; r < this.H.length; r++) for (let c = 0; c < this.H[r].length; c++) {
+        if (this.H[r][c] === 1 && (curH[r]?.[c] ?? 0) !== 1) out.push({ orientation: 'h', r, c });
+      }
+      for (let r = 0; r < this.V.length; r++) for (let c = 0; c < this.V[r].length; c++) {
+        if (this.V[r][c] === 1 && (curV[r]?.[c] ?? 0) !== 1) out.push({ orientation: 'v', r, c });
+      }
+      return out;
+    };
+    if (!this._propagate()) return null; // contradictory board state; let caller fall back
+    let edges = collect();
+    if (edges.length === 0) {
+      if (!this._lookahead1()) return null;
+      edges = collect();
+    }
+    if (edges.length === 0) return null;
+    const cap = Math.max(4, Math.ceil((this.rows * this.cols) / 30));
+    return { edges: edges.slice(0, cap) };
+  }
+
   _allEdgeRefs() {
     const { rows, cols } = this;
     const out = [];
