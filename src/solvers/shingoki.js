@@ -504,7 +504,14 @@ class ShingokiSolver {
   solve() {
     const res = this._solveCdcl();
     if (!res.solved && res.error === 'time limit exceeded') {
-      res.partial = this._rootSnapshot || { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
+      const snap = this._rootSnapshot || { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
+      // Flat slitherlink-shaped partial: a boolean `partial` flag plus
+      // top-level `horizontal`/`vertical` (the level-0 snapshot). This lets the
+      // widget's type-agnostic {horizontal,vertical} partial arm apply it
+      // exactly as it does for slitherlink — no shingoki-specific dispatch.
+      res.partial = true;
+      res.horizontal = snap.horizontal;
+      res.vertical = snap.vertical;
     }
     return res;
   }

@@ -634,13 +634,15 @@ test('Shingoki solve: returns a SOUND partial on timeout (40x40)', () => {
   const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, maxMs: 1500 }).solve();
   if (res.solved) return; // if it somehow solves fast, fine
   assert.equal(res.error, 'time limit exceeded');
-  assert.ok(res.partial && res.partial.horizontal && res.partial.vertical, 'timeout must carry a partial');
+  // Flat slitherlink-shaped partial: a boolean flag plus top-level edge arrays
+  // (so the widget's type-agnostic {horizontal,vertical} partial arm applies it).
+  assert.ok(res.partial === true && res.horizontal && res.vertical, 'timeout must carry a flat partial');
   // SOUNDNESS of the partial: every LINE edge in the partial must agree with a
   // full solve's... we can't get a full solve. Instead assert the partial is
   // INTERNALLY CONSISTENT: feed it as initialState and confirm propagation
   // doesn't contradict it. Minimal check: it has some deduced edges and they
   // don't violate the per-vertex degree (no vertex with 3+ lines).
-  const ph = res.partial.horizontal, pv = res.partial.vertical;
+  const ph = res.horizontal, pv = res.vertical;
   // (partial may legitimately have 0 lines if root propagation deduced only crosses;
   //  the real soundness guarantee is "level-0 only", checked structurally below)
   // No vertex may have >2 line edges (would be an unsound partial):

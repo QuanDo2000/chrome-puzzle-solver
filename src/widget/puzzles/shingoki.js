@@ -241,6 +241,46 @@ const shingoki = {
     return true;
   },
 
+  // Partial-Solve UI (mirrors slitherlink's edge-shape arm). On a too-hard
+  // board the solver times out and returns a flat partial: { partial:true,
+  // horizontal, vertical } where the edge arrays are the sound level-0 snapshot
+  // (every edge entailed by the clues). Show it as a preview + finish-manually
+  // status. Deliberately does NOT call recordSolveSuccess — a partial is a
+  // subset of the real solution, so caching it would mis-trigger Loop's
+  // done-check and the mistake overlay.
+  partialResultArm(result, {
+    clearPendingHint, setStatus, drawPreview,
+    setConfirming, setLoopConfirming, setSolveBtnText,
+  }) {
+    setLoopConfirming(false);
+    clearPendingHint();
+    setSolveBtnText('Confirm');
+    setConfirming(true);
+    let lines = 0;
+    let decided = 0;
+    let total = 0;
+    for (const row of result.horizontal) {
+      for (const v of row) {
+        total++;
+        if (v === 1) lines++;
+        if (v !== 0) decided++;
+      }
+    }
+    for (const row of result.vertical) {
+      for (const v of row) {
+        total++;
+        if (v === 1) lines++;
+        if (v !== 0) decided++;
+      }
+    }
+    const pct = total > 0 ? Math.round(100 * decided / total) : 0;
+    setStatus(
+      `Partial only: ${lines} edges deduced (${pct}% of board, too hard for full solve). Apply, then finish manually.`,
+      'info',
+    );
+    drawPreview({ horizontal: result.horizontal, vertical: result.vertical });
+  },
+
   async applyHint(hint, { callMainWorld, puzzleData }) {
     const rows = puzzleData.rows;
     const cols = puzzleData.cols;

@@ -927,3 +927,30 @@ test('shingoki: hintDispatch falls back to solution-diff when deduction yields n
   assert.equal(r.success, true);
   assert.deepEqual(r.hint.edges, [{ orientation: 'h', r: 0, c: 0 }]);
 });
+
+test('shingoki: partialResultArm draws preview + sets a "Partial" status, no recordSolveSuccess', () => {
+  // Flat partial shape from ShingokiSolver.solve() on timeout.
+  const result = { partial: true, horizontal: [[1, 0], [0, 0]], vertical: [[2], [0]] };
+  let drawnWith = null;
+  let statusText = null, statusKind = null;
+  let confirming = null, loopConfirming = null, btnText = null, clearedHint = false;
+  const ctx = {
+    clearPendingHint: () => { clearedHint = true; },
+    setStatus: (text, kind) => { statusText = text; statusKind = kind; },
+    drawPreview: (g) => { drawnWith = g; },
+    setConfirming: (v) => { confirming = v; },
+    setLoopConfirming: (v) => { loopConfirming = v; },
+    setSolveBtnText: (t) => { btnText = t; },
+  };
+  shingoki.partialResultArm(result, ctx);
+  assert.ok(drawnWith, 'drawPreview must be called');
+  assert.deepEqual(drawnWith, { horizontal: result.horizontal, vertical: result.vertical });
+  assert.ok(/Partial/.test(statusText), `status must mention "Partial": ${statusText}`);
+  assert.equal(statusKind, 'info');
+  // 1 line edge (H[0][0]) — count must reflect LINE edges only.
+  assert.ok(/\b1 edges deduced\b/.test(statusText), `status must count 1 line edge: ${statusText}`);
+  assert.equal(confirming, true);
+  assert.equal(loopConfirming, false);
+  assert.equal(btnText, 'Confirm');
+  assert.equal(clearedHint, true);
+});
