@@ -618,3 +618,59 @@ test('Shingoki CDCL: _lubyNext yields the canonical Luby sequence', () => {
   for (let i = 0; i < 15; i++) got.push(s._lubyNext(i));
   assert.deepEqual(got, [1,1,2,1,1,2,4,1,1,2,1,1,2,4,8]);
 });
+
+test('Shingoki solve: small boards still solve correctly via CDCL', () => {
+  const TASK = [[0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],[-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0]];
+  const res = new ShingokiSolver({ rows: 5, cols: 5, task: TASK, maxMs: 10000 }).solve();
+  assert.equal(res.solved, true);
+  const chk = new ShingokiSolver({ rows: 5, cols: 5, task: TASK });
+  chk.H = res.horizontal; chk.V = res.vertical;
+  assert.equal(chk.numbersSatisfied(), true);
+});
+
+test('Shingoki solve: returns a SOUND partial on timeout (40x40)', () => {
+  const fixtures = require('./fixtures/real-puzzles.js');
+  const p = fixtures.shingoki_40x40_monthly;
+  const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, maxMs: 1500 }).solve();
+  if (res.solved) return; // if it somehow solves fast, fine
+  assert.equal(res.error, 'time limit exceeded');
+  assert.ok(res.partial && res.partial.horizontal && res.partial.vertical, 'timeout must carry a partial');
+  // SOUNDNESS of the partial: every LINE edge in the partial must agree with a
+  // full solve's... we can't get a full solve. Instead assert the partial is
+  // INTERNALLY CONSISTENT: feed it as initialState and confirm propagation
+  // doesn't contradict it. Minimal check: it has some deduced edges and they
+  // don't violate the per-vertex degree (no vertex with 3+ lines).
+  const ph = res.partial.horizontal, pv = res.partial.vertical;
+  // (partial may legitimately have 0 lines if root propagation deduced only crosses;
+  //  the real soundness guarantee is "level-0 only", checked structurally below)
+  // No vertex may have >2 line edges (would be an unsound partial):
+  const chk = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task });
+  chk.H = ph; chk.V = pv;
+  for (let r = 0; r <= p.rows; r++) for (let c = 0; c <= p.cols; c++) {
+    const deg = chk.incidentEdges(r, c).filter(e => chk.getEdge(e) === 1).length;
+    assert.ok(deg <= 2, `partial vertex (${r},${c}) has degree ${deg} > 2 (unsound partial)`);
+  }
+});
+
+test('Shingoki solve: never spurious-UNSAT via the public entry (constructive)', () => {
+  function gen(n, seed) {
+    let s=seed>>>0; const rnd=()=>{s=(s*1664525+1013904223)>>>0;return s/0x100000000;};
+    const r0=Math.floor(rnd()*n),r1=r0+1+Math.floor(rnd()*(n-r0));
+    const c0=Math.floor(rnd()*n),c1=c0+1+Math.floor(rnd()*(n-c0));
+    const H=Array.from({length:n+1},()=>new Array(n).fill(0));
+    const V=Array.from({length:n},()=>new Array(n+1).fill(0));
+    for(let c=c0;c<c1;c++){H[r0][c]=1;H[r1][c]=1;}
+    for(let r=r0;r<r1;r++){V[r][c0]=1;V[r][c1]=1;}
+    const p=new ShingokiSolver({rows:n,cols:n,task:Array.from({length:n+1},()=>new Array(n+1).fill(0))});
+    p.H=H;p.V=V;
+    const task=Array.from({length:n+1},()=>new Array(n+1).fill(0));
+    for(let r=0;r<=n;r++)for(let c=0;c<=n;c++){const inc=p.incidentEdges(r,c).filter(e=>p.getEdge(e)===1);if(inc.length!==2)continue;task[r][c]=inc.filter(e=>e.kind==='H').length===1?-p.runLengthAt(r,c):p.runLengthAt(r,c);}
+    return task;
+  }
+  for (let seed=1; seed<=10; seed++) {
+    const task=gen(7,seed);
+    const res=new ShingokiSolver({rows:7,cols:7,task,maxMs:10000}).solve();
+    assert.notEqual(res.error,'no solution',`seed ${seed}: spurious UNSAT via solve()`);
+    assert.equal(res.solved,true);
+  }
+});

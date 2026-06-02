@@ -494,70 +494,37 @@ class ShingokiSolver {
     return true;
   }
 
+  // Public entry: delegates to the learning CDCL engine. On a time-limit
+  // timeout it attaches a SOUND partial — the decision-level-0 snapshot of
+  // edges deduced from the givens alone (no speculative branch), captured and
+  // refreshed by _solveCdcl/_cdclSearch. Every edge in the partial is entailed
+  // by the clues, so the widget can safely apply it and let the user finish a
+  // too-hard board manually. (The old DFS solver was superseded by CDCL —
+  // proven sound by the 385k-conflict harness — and removed.)
   solve() {
-    this._startedAt = Date.now();
-    this._initState();
-    if (!this._propagate()) return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
-
-    const allEdges = this._allEdgeRefs();
-    const backtrack = () => {
-      if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) return null;
-      // find an unknown edge; prefer one incident to a vertex that already has a line.
-      let pick = null, fallback = null;
-      for (const e of allEdges) {
-        if (this.getEdge(e) !== 0) continue;
-        if (!fallback) fallback = e;
-        const eps = this._endpoints(e);
-        if (eps.some(v => this.incidentEdges(v.r, v.c).some(x => this.getEdge(x) === 1))) { pick = e; break; }
-      }
-      // Loop-closure short-circuit: if the partial assignment already forms a
-      // single closed loop through every clued vertex with no dangling
-      // (degree-1) endpoint, the loop is complete. Any remaining unknown edge
-      // must be a cross (a line would make a degree-3 vertex or a 2nd loop).
-      if (this._loopComplete()) {
-        const mark = this._trailMark();
-        for (const e of allEdges) if (this.getEdge(e) === 0) this.setEdge(e, 2);
-        if (this._isValidComplete()) return this._snapshotGrid();
-        this._rollbackTo(mark);
-        return null;
-      }
-      const edge = pick || fallback;
-      if (!edge) {
-        return this._isValidComplete() ? this._snapshotGrid() : null;
-      }
-      // Cross before line: an under-constrained Shingoki board is mostly crosses
-      // (the loop covers only a fraction of vertices), so trying cross first
-      // collapses the empty field immediately and lets the loop-closure
-      // short-circuit fire, instead of greedily extending spurious line chains
-      // across the empty field before ever closing the loop.
-      for (const val of [2, 1]) {
-        const mark = this._trailMark();
-        if (this.setEdge(edge, val) && this._propagate() && !this._hasPrematureLoop() && !this._deadByConnectivity()) {
-          const got = backtrack();
-          if (got) return got;
-        }
-        this._rollbackTo(mark);
-      }
-      return null;
-    };
-
-    const grid = backtrack();
-    if (!grid) {
-      return { solved: false, horizontal: null, vertical: null,
-        error: this.maxMs > 0 && timeUp(this.maxMs, this._startedAt) ? 'time limit exceeded' : 'no solution' };
+    const res = this._solveCdcl();
+    if (!res.solved && res.error === 'time limit exceeded') {
+      res.partial = this._rootSnapshot || { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
     }
-    return { solved: true, horizontal: grid.horizontal, vertical: grid.vertical };
+    return res;
   }
 
-  // CDCL path entry (correct-but-slow skeleton, NO clause learning). Separate
-  // from solve(); proves the var/trail/reason/level machinery is SOUND before
-  // learning is added. A later task makes solve() delegate here.
+  // Learning CDCL engine. Returns { solved, horizontal, vertical, error? }:
+  // solved:true with the grid, or solved:false with error 'time limit
+  // exceeded' / 'no solution' / 'contradiction on initial propagation'.
   _solveCdcl() {
     this._startedAt = Date.now();
     this._cdclInit();
     if (!this._propagate()) {
       return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
     }
+    // Root (decision-level-0) snapshot: edges deduced from the givens alone,
+    // with no speculative branch decision. Every edge here is entailed by the
+    // clues, so it is a SOUND partial. Captured now (before the first decision)
+    // and refreshed by _cdclSearch whenever the search returns to level 0
+    // (after a backjump-to-0 or a restart), where the strongest set of level-0
+    // facts is known. On timeout solve() returns this as the partial.
+    this._rootSnapshot = { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
     const ok = this._cdclSearch();
     if (ok) {
       return { solved: true, horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
@@ -760,6 +727,13 @@ class ShingokiSolver {
         conflict = true;
         this._lastConflictReason = this._currentLevelDecisionReason();
       } else {
+        // At level 0, every set edge is a sound level-0 deduction (entailed by
+        // the givens). Refresh the root snapshot here so the partial returned on
+        // timeout reflects the strongest level-0 facts learned so far (a
+        // backjump-to-0 or restart may have derived more via learned clauses).
+        if (this._decisionLevel === 0) {
+          this._rootSnapshot = { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
+        }
         const vid = this._pickDecisionVar();
         if (vid === -1) {
           if (this._isValidComplete()) return true; // solved
@@ -898,10 +872,6 @@ class ShingokiSolver {
     return out;
   }
 
-  _snapshotGrid() {
-    return { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
-  }
-
   _loopVertices() {
     const { rows, cols } = this;
     const verts = [];
@@ -995,29 +965,6 @@ class ShingokiSolver {
       }
     }
     return seen.size === verts.length;
-  }
-
-  // True iff the current partial assignment is already a single closed loop
-  // covering every clued vertex: at least one line edge exists, no vertex is
-  // degree 1, every clued vertex is degree 2, and all line edges form one
-  // connected component. When true, all remaining unknown edges must be crosses.
-  _loopComplete() {
-    const { rows, cols } = this;
-    let lineEdges = 0;
-    for (let r = 0; r <= rows; r++) {
-      for (let c = 0; c < cols; c++) if (this.H[r][c] === 1) lineEdges++;
-    }
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c <= cols; c++) if (this.V[r][c] === 1) lineEdges++;
-    }
-    if (lineEdges === 0) return false;
-    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
-      const deg = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1).length;
-      if (deg === 1) return false;
-      const clue = ShingokiSolver.decodeClue(this.task[r][c]);
-      if (clue && deg !== 2) return false;
-    }
-    return this._oneClosedComponentOrOpen();
   }
 
   // A clued vertex's loop SHAPE must match its colour: white = straight
