@@ -1,19 +1,43 @@
 'use strict';
-// Standalone bench for ShingokiSolver on the real captured board.
-// Run: node tests/bench-shingoki.js   (NOT part of npm test)
+// Standalone bench for ShingokiSolver. Run: node tests/bench-shingoki.js
 const { ShingokiSolver } = require('../src/solvers/shingoki.js');
 const fixtures = require('./fixtures/real-puzzles.js');
 
-const p = fixtures.shingoki_40x40_monthly;
-const MAXMS = Number(process.env.MAXMS || 30000);
-const t0 = Date.now();
-const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, maxMs: MAXMS }).solve();
-const ms = Date.now() - t0;
-let ok = false;
-if (res.solved) {
-  const chk = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task });
-  chk.H = res.horizontal; chk.V = res.vertical;
-  ok = chk.numbersSatisfied();
+// Constructive board: random rectangle-perimeter loop, derive its clues.
+function genBoard(n, seed) {
+  let s = seed >>> 0; const rnd = () => { s = (s*1664525 + 1013904223) >>> 0; return s / 0x100000000; };
+  const r0 = Math.floor(rnd()*n), r1 = r0 + 1 + Math.floor(rnd()*(n-r0));
+  const c0 = Math.floor(rnd()*n), c1 = c0 + 1 + Math.floor(rnd()*(n-c0));
+  const H = Array.from({length:n+1},()=>new Array(n).fill(0));
+  const V = Array.from({length:n},()=>new Array(n+1).fill(0));
+  for (let c=c0;c<c1;c++){H[r0][c]=1;H[r1][c]=1;}
+  for (let r=r0;r<r1;r++){V[r][c0]=1;V[r][c1]=1;}
+  const probe = new ShingokiSolver({rows:n,cols:n,task:Array.from({length:n+1},()=>new Array(n+1).fill(0))});
+  probe.H = H; probe.V = V;
+  const task = Array.from({length:n+1},()=>new Array(n+1).fill(0));
+  for (let r=0;r<=n;r++) for (let c=0;c<=n;c++){
+    const inc = probe.incidentEdges(r,c).filter(e=>probe.getEdge(e)===1);
+    if (inc.length!==2) continue;
+    const isTurn = inc.filter(e=>e.kind==='H').length===1;
+    task[r][c] = isTurn ? -probe.runLengthAt(r,c) : probe.runLengthAt(r,c);
+  }
+  return task;
 }
-console.log(`shingoki 40x40: solved=${res.solved} valid=${ok} ms=${ms}${res.error ? ' err=' + res.error : ''}`);
-process.exit(res.solved && ok ? 0 : 1);
+
+function run(label, rows, cols, task, maxMs) {
+  const t0 = Date.now();
+  const res = new ShingokiSolver({ rows, cols, task, maxMs }).solve();
+  const ms = Date.now() - t0;
+  let valid = 'n/a';
+  if (res.solved) {
+    const chk = new ShingokiSolver({ rows, cols, task });
+    chk.H = res.horizontal; chk.V = res.vertical;
+    valid = chk.numbersSatisfied();
+  }
+  console.log(`${label}: solved=${res.solved} valid=${valid} ms=${ms}${res.error ? ' err=' + res.error : ''}`);
+}
+
+const MAXMS = Number(process.env.MAXMS || 15000);
+for (const n of [10, 15, 20, 25]) run(`constructive ${n}x${n}`, n, n, genBoard(n, n*97), MAXMS);
+const p = fixtures.shingoki_40x40_monthly;
+run('real 40x40 monthly', p.rows, p.cols, p.task, Number(process.env.MAXMS40 || 30000));
