@@ -611,3 +611,10 @@ test('Shingoki CDCL: VSIDS prefers the higher-activity unassigned var', () => {
   s._bumpVar(b); s._bumpVar(b); s._bumpVar(a);
   assert.equal(s._pickDecisionVar(), b); // b has higher activity
 });
+
+test('Shingoki CDCL: _lubyNext yields the canonical Luby sequence', () => {
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [] });
+  const got = [];
+  for (let i = 0; i < 15; i++) got.push(s._lubyNext(i));
+  assert.deepEqual(got, [1,1,2,1,1,2,4,1,1,2,1,1,2,4,8]);
+});

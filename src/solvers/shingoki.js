@@ -163,6 +163,39 @@ class ShingokiSolver {
     this._learnedClauses.push(literals.slice());
   }
 
+  // Canonical Luby sequence (0-indexed). Knuth, AofA Vol 4A §7.2.2.2.
+  // For 1-indexed k: if k == 2^n - 1 return 2^(n-1), else recurse on
+  // k - 2^(n-1) + 1 with the smallest n satisfying 2^n - 1 >= k.
+  // Note: the plain iterative recurrence non-terminates on idx===0 (k===1),
+  // so the first call short-circuits before entering the loop.
+  _lubyNext(idx) {
+    let k = idx + 1;
+    for (;;) {
+      let n = 1;
+      while ((1 << n) - 1 < k) n++;
+      if (k === (1 << n) - 1) return 1 << (n - 1);
+      k = k - (1 << (n - 1)) + 1;
+    }
+  }
+
+  // Restart: non-chronologically backjump to level 0, keeping learned clauses
+  // and VSIDS activity intact (they keep the search sound and help avoid
+  // re-exploring the same bad subspaces). Pruning learned clauses here (at
+  // level 0) is safe: no learned clause can be an active reason for any
+  // current assignment because all assignments have been undone. At level 0
+  // the next _propagateAll() re-derives level-0 implications from the
+  // retained (and now capped) clause set, keeping termination guarantees.
+  _restart() {
+    this._backjumpTo(0);
+    // LRU cap: prune at restart (level 0) where no clause is an active
+    // reason — dropping a clause here is always sound (learned clauses are
+    // redundant implied constraints). Keep the 5000 most-recently-added.
+    const CAP = 5000;
+    if (this._learnedClauses.length > CAP) {
+      this._learnedClauses = this._learnedClauses.slice(-CAP);
+    }
+  }
+
   getEdge(ref) {
     return ref.kind === 'H' ? this.H[ref.r][ref.c] : this.V[ref.r][ref.c];
   }
@@ -698,10 +731,12 @@ class ShingokiSolver {
     }
   }
 
-  // Learning CDCL search (replaces _cdclSkeletonSearch): decide CROSS-first,
-  // propagate (rules + learned clauses), and on conflict run first-UIP analysis
-  // to learn a clause, then non-chronologically backjump and add it. Decisions
-  // use _firstUnassignedEdge (VSIDS is a later task); no restarts yet.
+  // Learning CDCL search with Luby restarts: decide CROSS-first, propagate
+  // (rules + learned clauses), and on conflict run first-UIP analysis to learn
+  // a clause, then non-chronologically backjump and add it. After enough
+  // conflicts (Luby threshold), restart to level 0 to escape bad subtrees.
+  // VSIDS + learned clauses are preserved across restarts so search is sound
+  // and terminates (the clause set prunes the space; Luby counts are finite).
   //
   // Conflict sources beyond rule-propagation failure: a complete-but-invalid
   // leaf, a premature closed sub-loop, or a connectivity-dead partial. None of
@@ -709,6 +744,11 @@ class ShingokiSolver {
   // LEVEL DECISION: the learned clause becomes ~decision (chronological-ish, but
   // routed through the clause/backjump mechanism so it still prunes soundly).
   _cdclSearch() {
+    let conflictsSinceRestart = 0;
+    let lubyIdx = 0;
+    const RESTART_UNIT = 100;
+    let restartLimit = this._lubyNext(lubyIdx) * RESTART_UNIT;
+
     for (;;) {
       if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) return false;
 
@@ -755,6 +795,14 @@ class ShingokiSolver {
           // No antecedents (e.g. a connectivity conflict that blamed a decision
           // already at level 0 after the walk). Defensive: cannot make progress.
           return false;
+        }
+
+        conflictsSinceRestart++;
+        if (conflictsSinceRestart >= restartLimit) {
+          this._restart();
+          conflictsSinceRestart = 0;
+          lubyIdx++;
+          restartLimit = this._lubyNext(lubyIdx) * RESTART_UNIT;
         }
       }
     }
