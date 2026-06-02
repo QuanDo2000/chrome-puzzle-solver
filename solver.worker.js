@@ -165,7 +165,7 @@ self.onmessage = function (e) {
       }
     } else if (type === 'shingoki' && extraData) {
       const s = new ShingokiSolver({
-        rows: extraData.rows, cols: extraData.cols, task: extraData.task, maxMs: 30000,
+        rows: extraData.rows, cols: extraData.cols, task: extraData.task, maxMs: 10000,
       });
       result = s.solve();
     } else {

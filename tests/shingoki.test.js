@@ -724,3 +724,45 @@ test('Shingoki CDCL: mid-size constructive boards solve fast and valid', { timeo
     assert.equal(chk.numbersSatisfied(), true);
   }
 });
+
+test('Shingoki CDCL: stagnation early-exit returns the partial fast on the 40x40 (no 30s grind)', () => {
+  const fixtures = require('./fixtures/real-puzzles.js');
+  const p = fixtures.shingoki_40x40_monthly;
+  const t0 = Date.now();
+  const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, maxMs: 30000 }).solve();
+  const wall = Date.now() - t0;
+  // If it does not fully solve, it must early-exit well under the 30s cap.
+  if (!res.solved) {
+    assert.equal(res.partial, true);
+    assert.ok(res.horizontal && res.vertical);
+    assert.ok(wall < 20000, `stagnation exit should return well under 30s, took ${wall}ms`);
+    // partial sound: no vertex degree > 2
+    const chk = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task });
+    chk.H = res.horizontal; chk.V = res.vertical;
+    for (let r = 0; r <= p.rows; r++) for (let c = 0; c <= p.cols; c++) {
+      const deg = chk.incidentEdges(r, c).filter(e => chk.getEdge(e) === 1).length;
+      assert.ok(deg <= 2, `partial vertex (${r},${c}) degree ${deg} > 2`);
+    }
+  }
+});
+
+test('Shingoki CDCL: stagnation exit does not break solvable mid-size boards', () => {
+  function gen(n, seed) {
+    let s=seed>>>0; const rnd=()=>{s=(s*1664525+1013904223)>>>0;return s/0x100000000;};
+    const r0=Math.floor(rnd()*n),r1=r0+1+Math.floor(rnd()*(n-r0));
+    const c0=Math.floor(rnd()*n),c1=c0+1+Math.floor(rnd()*(n-c0));
+    const H=Array.from({length:n+1},()=>new Array(n).fill(0));
+    const V=Array.from({length:n},()=>new Array(n+1).fill(0));
+    for(let c=c0;c<c1;c++){H[r0][c]=1;H[r1][c]=1;}
+    for(let r=r0;r<r1;r++){V[r][c0]=1;V[r][c1]=1;}
+    const p=new ShingokiSolver({rows:n,cols:n,task:Array.from({length:n+1},()=>new Array(n+1).fill(0))});
+    p.H=H;p.V=V;
+    const task=Array.from({length:n+1},()=>new Array(n+1).fill(0));
+    for(let r=0;r<=n;r++)for(let c=0;c<=n;c++){const inc=p.incidentEdges(r,c).filter(e=>p.getEdge(e)===1);if(inc.length!==2)continue;task[r][c]=inc.filter(e=>e.kind==='H').length===1?-p.runLengthAt(r,c):p.runLengthAt(r,c);}
+    return task;
+  }
+  for (let seed=1; seed<=8; seed++) {
+    const res = new ShingokiSolver({ rows: 10, cols: 10, task: gen(10,seed), maxMs: 10000 }).solve();
+    assert.equal(res.solved, true, `seed ${seed} must still solve`);
+  }
+});

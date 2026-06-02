@@ -42,11 +42,18 @@ class ShingokiSolver {
     return v > 0 ? { color: 'white', n: v } : { color: 'black', n: -v };
   }
 
-  constructor({ rows, cols, task, maxMs = 0 }) {
+  constructor({ rows, cols, task, maxMs = 0, stagnationMs = 2000 }) {
     this.rows = rows;
     this.cols = cols;
     this.task = task;
     this.maxMs = maxMs;
+    // Stagnation early-exit budget: if the level-0 root snapshot stops growing
+    // for this many ms, return the (sound) partial instead of grinding the full
+    // maxMs budget. Default 2000 (always on); pass 0 to disable. A solvable
+    // board reaches a complete assignment before it can stagnate, so this only
+    // short-circuits the dead tail of a too-hard-for-budget board.
+    this._stagnationMs = stagnationMs;
+    this._stagnated = false;
     this._startedAt = 0;
   }
 
@@ -545,6 +552,7 @@ class ShingokiSolver {
   // exceeded' / 'no solution' / 'contradiction on initial propagation'.
   _solveCdcl() {
     this._startedAt = Date.now();
+    this._stagnated = false;
     this._cdclInit();
     if (!this._propagate()) {
       return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
@@ -560,7 +568,12 @@ class ShingokiSolver {
     if (ok) {
       return { solved: true, horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
     }
-    if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) {
+    // A stagnation bail is "best partial reached", not a real timeout and not
+    // UNSAT. Route it through the SAME shape as a timeout (error 'time limit
+    // exceeded') so solve() attaches the level-0 snapshot as a sound partial.
+    // A genuine UNSAT reaches a level-0 conflict and returns false WITHOUT
+    // setting _stagnated, so it still falls through to 'no solution'.
+    if (this._stagnated || (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt))) {
       return { solved: false, horizontal: null, vertical: null, error: 'time limit exceeded' };
     }
     return { solved: false, horizontal: null, vertical: null, error: 'no solution' };
@@ -741,14 +754,47 @@ class ShingokiSolver {
   // these produce a tight var-reason from _propagate, so they BLAME THE CURRENT-
   // LEVEL DECISION: the learned clause becomes ~decision (chronological-ish, but
   // routed through the clause/backjump mechanism so it still prunes soundly).
+  // LINE-edge count of a root snapshot (values === 1 in horizontal + vertical).
+  // Monotonic non-decreasing as the search accumulates level-0 facts, so it
+  // drives the stagnation early-exit.
+  _snapshotLineCount(snap) {
+    let n = 0;
+    const { horizontal, vertical } = snap;
+    for (let r = 0; r < horizontal.length; r++) {
+      const row = horizontal[r];
+      for (let c = 0; c < row.length; c++) if (row[c] === 1) n++;
+    }
+    for (let r = 0; r < vertical.length; r++) {
+      const row = vertical[r];
+      for (let c = 0; c < row.length; c++) if (row[c] === 1) n++;
+    }
+    return n;
+  }
+
   _cdclSearch() {
     let conflictsSinceRestart = 0;
     let lubyIdx = 0;
     const RESTART_UNIT = 100;
     let restartLimit = this._lubyNext(lubyIdx) * RESTART_UNIT;
 
+    // Stagnation tracking: wall-clock time the level-0 snapshot last GREW (its
+    // line count increased). Seed from the snapshot captured before the search
+    // by _solveCdcl so the first STAGNATION_MS window always allows progress.
+    let lastLines = this._rootSnapshot ? this._snapshotLineCount(this._rootSnapshot) : -1;
+    let lastGrowthAt = Date.now();
+
     for (;;) {
       if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) return false;
+
+      // Stagnation early-exit: the level-0 partial has stopped growing for
+      // _stagnationMs. Return the (sound) partial now instead of grinding the
+      // rest of the maxMs budget. Only fires once we actually have a snapshot
+      // to return; _stagnated flags _solveCdcl to take the partial path.
+      if (this._stagnationMs > 0 && this._rootSnapshot &&
+          Date.now() - lastGrowthAt > this._stagnationMs) {
+        this._stagnated = true;
+        return false;
+      }
 
       // Propagate (rules + learned clauses) and check the structural prunes.
       let conflict = false;
@@ -764,6 +810,13 @@ class ShingokiSolver {
         // backjump-to-0 or restart may have derived more via learned clauses).
         if (this._decisionLevel === 0) {
           this._rootSnapshot = { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
+          // Track stagnation: bump lastGrowthAt only when the snapshot's line
+          // count actually increased (the count is monotonic non-decreasing).
+          const lines = this._snapshotLineCount(this._rootSnapshot);
+          if (lines > lastLines) {
+            lastLines = lines;
+            lastGrowthAt = Date.now();
+          }
         }
         const vid = this._pickDecisionVar();
         if (vid === -1) {
