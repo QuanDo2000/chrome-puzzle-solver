@@ -602,3 +602,12 @@ test('Shingoki CDCL learning: never spurious-UNSAT on constructive boards (15 se
     assert.equal(res.solved,true,`seed ${seed} must solve`);
   }
 });
+
+test('Shingoki CDCL: VSIDS prefers the higher-activity unassigned var', () => {
+  const s = new ShingokiSolver({ rows: 3, cols: 3, task: [] });
+  s._cdclInit();
+  s._initVsids();
+  const a = s._varId('H', 1, 1), b = s._varId('V', 1, 1);
+  s._bumpVar(b); s._bumpVar(b); s._bumpVar(a);
+  assert.equal(s._pickDecisionVar(), b); // b has higher activity
+});

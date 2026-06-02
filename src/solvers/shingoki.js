@@ -87,6 +87,58 @@ class ShingokiSolver {
     this._learnedClauses = [];      // each: array of literals (~lit convention)
     this._totalConflicts = 0;
     this._cdcl = true;
+    this._initVsids();
+  }
+
+  // VSIDS (Variable State Independent Decaying Sum) activity heuristic.
+  // Float32Array scores per var; increment _vsidsInc decays every 256 conflicts
+  // (the MiniSAT trick: dividing the increment makes future bumps worth more,
+  // effectively decaying old scores without touching the whole array each time).
+  _initVsids() {
+    this._activity = new Float32Array(this._numVars()); // all zeros
+    this._vsidsInc = 1;
+    this._vsidsConflicts = 0;
+  }
+
+  // Bump the activity of a single variable. If any score overflows Float32 range,
+  // rescale all activities and the increment by 1e-30 to prevent NaN/Infinity.
+  _bumpVar(vid) {
+    this._activity[vid] += this._vsidsInc;
+    if (this._activity[vid] > 1e30) {
+      const n = this._numVars();
+      for (let i = 0; i < n; i++) this._activity[i] *= 1e-30;
+      this._vsidsInc *= 1e-30;
+    }
+  }
+
+  // Bump all vars in a learned clause, then decay if due.
+  _bumpVsids(clause) {
+    for (const lit of clause) {
+      const vid = lit >= 0 ? lit : ~lit;
+      this._bumpVar(vid);
+    }
+    this._decayVsidsIfDue();
+  }
+
+  // Increment the conflict counter; every 256 conflicts increase _vsidsInc by
+  // dividing by the decay factor (0.95), which is equivalent to decaying all
+  // existing scores — future bumps become proportionally larger.
+  _decayVsidsIfDue() {
+    this._vsidsConflicts++;
+    if (this._vsidsConflicts % 256 === 0) this._vsidsInc /= 0.95;
+  }
+
+  // Pick the highest-activity unassigned variable. Returns var id, or -1 if
+  // all vars are assigned. Ties broken by lowest var id (stable).
+  _pickDecisionVar() {
+    const n = this._numVars();
+    let best = -1, bestScore = -1;
+    for (let vid = 0; vid < n; vid++) {
+      if (this._varValue(vid) !== 0) continue; // already assigned
+      const sc = this._activity[vid];
+      if (best === -1 || sc > bestScore) { bestScore = sc; best = vid; }
+    }
+    return best; // -1 means all assigned
   }
 
   // Truth value of a variable under the current edge assignment:
@@ -668,14 +720,16 @@ class ShingokiSolver {
         conflict = true;
         this._lastConflictReason = this._currentLevelDecisionReason();
       } else {
-        const ref = this._firstUnassignedEdge();
-        if (ref === null) {
+        const vid = this._pickDecisionVar();
+        if (vid === -1) {
           if (this._isValidComplete()) return true; // solved
           // complete-but-invalid leaf: blame the current decision.
           conflict = true;
           this._lastConflictReason = this._currentLevelDecisionReason();
         } else {
           // decide: CROSS(2) first (matches solve()'s [2,1] order).
+          const d = this._decodeVar(vid);
+          const ref = { kind: d.kind, r: d.r, c: d.c };
           this._decisionLevel++;
           this._currentReason = null; // decision => null reason
           this.setEdge(ref, 2);
@@ -691,7 +745,10 @@ class ShingokiSolver {
         const learned = this._analyzeConflict(conflictReason);
         const backjumpLevel = this._computeBackjumpLevel(learned);
         this._backjumpTo(backjumpLevel);
-        if (learned.length > 0) this._addLearnedClause(learned);
+        if (learned.length > 0) {
+          this._addLearnedClause(learned);
+          this._bumpVsids(learned); // VSIDS: bump vars in the learned clause
+        }
         // After backjump the learned clause is unit (or empty -> level 0); the
         // next loop's _propagateAll picks it up and forces the asserting literal.
         if (learned.length === 0) {
