@@ -84,7 +84,31 @@ class ShingokiSolver {
     this._decisionLevel = 0;
     this._currentReason = null;     // set by rules before each forced setEdge
     this._lastConflictReason = null;
+    this._learnedClauses = [];      // each: array of literals (~lit convention)
+    this._totalConflicts = 0;
     this._cdcl = true;
+  }
+
+  // Truth value of a variable under the current edge assignment:
+  //  1 = LINE (positive), -1 = CROSS (negative), 0 = unassigned.
+  _varValue(vid) {
+    const d = this._decodeVar(vid);
+    const v = d.kind === 'H' ? this.H[d.r][d.c] : this.V[d.r][d.c];
+    return v === 0 ? 0 : v === 1 ? 1 : -1;
+  }
+
+  // Sets the edge corresponding to a literal under the ~lit convention:
+  //   lit >= 0 -> var is positive (LINE);  lit < 0 -> var is negative (CROSS).
+  //   varId = lit >= 0 ? lit : ~lit.  NEVER Math.abs/-lit (var 0 is real).
+  // Returns false on contradiction (same contract as setEdge).
+  _forceLiteral(lit) {
+    const vid = lit >= 0 ? lit : ~lit;
+    const d = this._decodeVar(vid);
+    return this.setEdge({ kind: d.kind, r: d.r, c: d.c }, lit >= 0 ? 1 : 2);
+  }
+
+  _addLearnedClause(literals) {
+    this._learnedClauses.push(literals.slice());
   }
 
   getEdge(ref) {
@@ -449,7 +473,7 @@ class ShingokiSolver {
     if (!this._propagate()) {
       return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
     }
-    const ok = this._cdclSkeletonSearch();
+    const ok = this._cdclSearch();
     if (ok) {
       return { solved: true, horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
     }
@@ -459,72 +483,254 @@ class ShingokiSolver {
     return { solved: false, horizontal: null, vertical: null, error: 'no solution' };
   }
 
-  // Chronological CDCL skeleton (no learning): decide CROSS-first, propagate, on
-  // conflict pop to the prior decision and flip it. Mirrors solve()'s branching
-  // semantics (CROSS(2) before LINE(1)) and prune guards (!_hasPrematureLoop &&
-  // !_deadByConnectivity). Termination: each decision level tries both values at
-  // most once (triedFlip), so the level either advances or pops; the trail is
-  // strictly monotone between pops -> finite search.
-  _cdclSkeletonSearch() {
-    const triedFlip = [];      // per level: has the decision's opposite been tried?
-    const levelMark = [];      // per level: trail mark at the decision
-    const decisionEdge = [];   // per level: the edge decided at that level
+  // Decision level at which `vid` was assigned (0 if unassigned/root).
+  _decisionLevelOf(vid) {
+    const lv = this._level[vid];
+    return lv < 0 ? 0 : lv;
+  }
+
+  // First-UIP conflict analysis (CDCL §4), ported from SlitherlinkSolver and
+  // adapted to Shingoki's var-keyed reason/level bookkeeping (edge-only vars).
+  //
+  // Slitherlink keys `_reasons[]`/`_decisionLevels[]` by TRAIL INDEX and stores
+  // literals; Shingoki keys `_reason[vid]`/`_level[vid]` by VAR ID and stores
+  // antecedent VAR IDs (Task 3). So here:
+  //   - `_decisionLevelOf(vid)` reads `_level[vid]` directly (no _trailIndexOf).
+  //   - the reason of a seen var is `_reason[vid]` directly.
+  //   - the trail walk iterates `_assignTrail` (var ids in assignment order).
+  // The learned clause is an array of literals; each literal NEGATES the seen
+  // var's current assignment: LINE (value 1) -> `~v`, CROSS (value -1) -> `v`,
+  // so the clause excludes the current (bad) assignment but is implied true.
+  //
+  // Textbook first-UIP (no subsumption pre-pass). Shingoki's CDCL search does
+  // NOT run lookahead, so every reason (`_reason[vid]`) is a well-formed,
+  // SUFFICIENT antecedent set for its forced var (sound local reason from
+  // _propagate; the non-local run-cap rule records its full run as the reason).
+  // Slitherlink's subsumption pre-pass + rescue path exist to cope with
+  // lookahead "ghost" vars in its conflict reasons; importing them here is
+  // unsound because subsumption can drop a needed current-level antecedent
+  // (e.g. a var X that is BOTH in another conflict var's reason and the sole
+  // bridge to a separate current-level fact), yielding a too-short unit clause
+  // that wrongly asserts a decision's negation -> spurious UNSAT. Plain first-
+  // UIP resolves every current-level var down to ONE asserting literal and
+  // keeps all earlier-level literals, which is exactly what we need.
+  _analyzeConflict(conflictReason) {
+    const n = this._numVars();
+    const learned = [];
+    const seen = new Uint8Array(n);
+    let pathCount = 0;
+    const curLevel = this._decisionLevel;
+
+    // Seed pathCount (current-level vars) + earlier-level literals.
+    for (const vid of conflictReason) {
+      if (vid < 0 || vid >= n || seen[vid]) continue;
+      const value = this._varValue(vid);
+      if (value === 0) continue;
+      seen[vid] = 1;
+      const lvl = this._decisionLevelOf(vid);
+      if (lvl === 0) continue;
+      if (lvl < curLevel) learned.push(value > 0 ? ~vid : vid);
+      else pathCount++;
+    }
+
+    // Walk the assignment trail backward, resolving current-level vars by their
+    // antecedents until exactly one current-level var remains (the first UIP).
+    for (let i = this._assignTrail.length - 1; pathCount > 0 && i >= 0; i--) {
+      const vid = this._assignTrail[i];
+      if (!seen[vid] || this._level[vid] !== curLevel) continue;
+
+      pathCount--;
+      const reason = this._reason[vid];
+
+      if (pathCount === 0 || reason === null) {
+        // vid is the first UIP — assert its negation.
+        const value = this._varValue(vid);
+        learned.push(value > 0 ? ~vid : vid);
+        break;
+      }
+
+      // Resolve vid: replace it with its antecedents.
+      for (const av of reason) {
+        if (av < 0 || av >= n || seen[av]) continue;
+        seen[av] = 1;
+        const aLvl = this._decisionLevelOf(av);
+        if (aLvl === 0) continue;
+        const aVal = this._varValue(av);
+        if (aVal === 0) continue;
+        if (aLvl < curLevel) learned.push(aVal > 0 ? ~av : av);
+        else pathCount++;
+      }
+    }
+
+    return learned;
+  }
+
+  // Second-highest decision level among the learned clause's literals — the
+  // level the clause becomes unit at after rollback. 0 if only one level.
+  _computeBackjumpLevel(learned) {
+    let max = 0, second = 0;
+    for (const lit of learned) {
+      const vid = lit >= 0 ? lit : ~lit;
+      const lvl = this._decisionLevelOf(vid);
+      if (lvl > max) { second = max; max = lvl; }
+      else if (lvl > second && lvl < max) second = lvl;
+    }
+    return second;
+  }
+
+  // Rolls the assignment trail back to `level` (all surviving entries have
+  // _level <= level), then sets _decisionLevel = level. Uses the edge trail's
+  // existing rollback by computing the trail mark of the first edge-write whose
+  // var sits above `level`. The edge trail and _assignTrail advance in lockstep
+  // (setEdge pushes both), so the count of above-level _assignTrail vars equals
+  // the count of edge-writes to undo from the trail tail.
+  _backjumpTo(level) {
+    let above = 0;
+    for (let i = this._assignTrail.length - 1; i >= 0; i--) {
+      if (this._level[this._assignTrail[i]] > level) above++; else break;
+    }
+    // Each setEdge that changed an edge pushed 4 ints onto _trail. Undo `above`
+    // of those by rolling back to the matching mark.
+    const mark = this._trail.length - above * 4;
+    this._rollbackTo(mark < 0 ? 0 : mark);
+    this._decisionLevel = level;
+  }
+
+  // Learned-clause unit propagation. A learned clause is a valid implied
+  // constraint, so unit-forcing from it is sound. Scans every learned clause:
+  //   - satisfied (some literal true)            -> skip
+  //   - all literals false                       -> conflict, return false
+  //   - exactly one literal unassigned (unit)    -> force it (reason = the other
+  //                                                 literals' vars), record change
+  // `onChange()` is called for each force so the caller re-runs the rule
+  // fixpoint. Sets _lastConflictReason on conflict (the clause's vars).
+  _propagateLearned(onChange) {
+    for (const clause of this._learnedClauses) {
+      let unassignedCount = 0, unassignedLit = 0, satisfied = false;
+      for (const lit of clause) {
+        const vid = lit >= 0 ? lit : ~lit;
+        const v = this._varValue(vid);
+        if (v === 0) { unassignedCount++; unassignedLit = lit; }
+        else if ((v > 0) === (lit >= 0)) { satisfied = true; break; }
+      }
+      if (satisfied) continue;
+      if (unassignedCount === 0) {
+        this._lastConflictReason = clause.map(l => (l >= 0 ? l : ~l));
+        return false;
+      }
+      if (unassignedCount === 1) {
+        this._currentReason = clause
+          .filter(l => l !== unassignedLit)
+          .map(l => (l >= 0 ? l : ~l));
+        if (!this._forceLiteral(unassignedLit)) {
+          this._lastConflictReason = clause.map(l => (l >= 0 ? l : ~l));
+          return false;
+        }
+        onChange();
+      }
+    }
+    return true;
+  }
+
+  // Full propagation to a joint fixpoint of the deduction rules (_propagate)
+  // AND learned-clause unit propagation. Alternates the two until neither
+  // changes (or one signals a conflict). Returns false on contradiction.
+  _propagateAll() {
+    for (;;) {
+      if (!this._propagate()) return false;
+      if (this._learnedClauses.length === 0) return true;
+      let changed = false;
+      if (!this._propagateLearned(() => { changed = true; })) return false;
+      if (!changed) return true;
+      // a learned clause forced an edge -> re-run the rules.
+    }
+  }
+
+  // Learning CDCL search (replaces _cdclSkeletonSearch): decide CROSS-first,
+  // propagate (rules + learned clauses), and on conflict run first-UIP analysis
+  // to learn a clause, then non-chronologically backjump and add it. Decisions
+  // use _firstUnassignedEdge (VSIDS is a later task); no restarts yet.
+  //
+  // Conflict sources beyond rule-propagation failure: a complete-but-invalid
+  // leaf, a premature closed sub-loop, or a connectivity-dead partial. None of
+  // these produce a tight var-reason from _propagate, so they BLAME THE CURRENT-
+  // LEVEL DECISION: the learned clause becomes ~decision (chronological-ish, but
+  // routed through the clause/backjump mechanism so it still prunes soundly).
+  _cdclSearch() {
     for (;;) {
       if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) return false;
-      // A conflict is: propagation failed OR the partial loop is dead OR every
-      // edge is assigned but the complete assignment is not a valid solution.
-      // The last case matters because propagation + the prune guards do NOT
-      // catch all invalidity (shape, full numbers, single-component closure are
-      // only verified by _isValidComplete). A complete-but-invalid leaf must be
-      // BACKTRACKED like any other conflict, NOT returned as terminal UNSAT —
-      // returning _isValidComplete() directly here was a spurious-UNSAT bug:
-      // the first leaf reached can be invalid while a sibling branch holds the
-      // real solution (mirrors solve()'s backtrack(), which returns falsy on an
-      // invalid leaf and lets the caller keep searching).
-      const ref = this._propagate() && !this._hasPrematureLoop() && !this._deadByConnectivity()
-        ? this._firstUnassignedEdge()
-        : undefined; // undefined => conflict; null => complete; ref => decide
-      if (ref === null && this._isValidComplete()) return true; // solved
-      if (ref === undefined || ref === null) {
-        if (this._decisionLevel === 0) return false; // UNSAT at root
-        if (!this._chronoBacktrackAndFlip(triedFlip, levelMark, decisionEdge)) return false;
-        continue;
+
+      // Propagate (rules + learned clauses) and check the structural prunes.
+      let conflict = false;
+      if (!this._propagateAll()) {
+        conflict = true; // _lastConflictReason already set by the failing pass
+      } else if (this._hasPrematureLoop() || this._deadByConnectivity()) {
+        conflict = true;
+        this._lastConflictReason = this._currentLevelDecisionReason();
+      } else {
+        const ref = this._firstUnassignedEdge();
+        if (ref === null) {
+          if (this._isValidComplete()) return true; // solved
+          // complete-but-invalid leaf: blame the current decision.
+          conflict = true;
+          this._lastConflictReason = this._currentLevelDecisionReason();
+        } else {
+          // decide: CROSS(2) first (matches solve()'s [2,1] order).
+          this._decisionLevel++;
+          this._currentReason = null; // decision => null reason
+          this.setEdge(ref, 2);
+          continue;
+        }
       }
-      // decide: CROSS first (matches solve()'s [2,1] order).
-      this._decisionLevel++;
-      triedFlip[this._decisionLevel] = false;
-      levelMark[this._decisionLevel] = this._trailMark();
-      decisionEdge[this._decisionLevel] = ref;
-      this._currentReason = null; // decision => null reason
-      this.setEdge(ref, 2);
+
+      if (conflict) {
+        this._totalConflicts++;
+        if (this._decisionLevel === 0) return false; // UNSAT at root
+
+        const conflictReason = this._lastConflictReason || [];
+        const learned = this._analyzeConflict(conflictReason);
+        const backjumpLevel = this._computeBackjumpLevel(learned);
+        this._backjumpTo(backjumpLevel);
+        if (learned.length > 0) this._addLearnedClause(learned);
+        // After backjump the learned clause is unit (or empty -> level 0); the
+        // next loop's _propagateAll picks it up and forces the asserting literal.
+        if (learned.length === 0) {
+          // No antecedents (e.g. a connectivity conflict that blamed a decision
+          // already at level 0 after the walk). Defensive: cannot make progress.
+          return false;
+        }
+      }
     }
+  }
+
+  // Conflict reason for a STRUCTURAL conflict (connectivity-dead / premature
+  // loop / complete-but-invalid leaf). Unlike a rule conflict, these have no
+  // tight var-antecedent — the invalidity depends on the WHOLE decision path,
+  // not a single edge. So the reason is the conjunction of ALL current decisions
+  // (the decision var at each level 1.._decisionLevel). _analyzeConflict then
+  // learns ~d1 v ~d2 v ... v ~dk; its second-highest level is k-1, so the
+  // backjump pops one level and the clause forces ~d_k — i.e. it flips the
+  // deepest decision (chronological-backtrack semantics) but routed through the
+  // sound learned-clause/backjump mechanism. Using only the deepest decision
+  // here would be UNSOUND: asserting ~d_k at root discards d1..d_{k-1}, which
+  // were not refuted, and can prune the real solution -> spurious UNSAT.
+  _currentLevelDecisionReason() {
+    const out = [];
+    const seenLevel = new Set();
+    for (let i = this._assignTrail.length - 1; i >= 0; i--) {
+      const v = this._assignTrail[i];
+      const lv = this._level[v];
+      if (lv >= 1 && this._reason[v] === null && !seenLevel.has(lv)) {
+        seenLevel.add(lv);
+        out.push(v);
+      }
+    }
+    return out;
   }
 
   _firstUnassignedEdge() {
     for (const e of this._allEdgeRefs()) if (this.getEdge(e) === 0) return e;
     return null;
-  }
-
-  // Pop to the previous decision level; if that level's decision hasn't had its
-  // opposite tried, set the opposite (LINE) and mark tried; else recurse upward.
-  // After _rollbackTo, the decision edge is back to UNKNOWN (0), so setEdge with
-  // the flipped value succeeds (setEdge only writes when cur===0).
-  _chronoBacktrackAndFlip(triedFlip, levelMark, decisionEdge) {
-    while (this._decisionLevel > 0) {
-      const lvl = this._decisionLevel;
-      this._rollbackTo(levelMark[lvl]);
-      this._decisionLevel = lvl - 1;
-      if (!triedFlip[lvl]) {
-        triedFlip[lvl] = true;
-        this._decisionLevel = lvl;
-        levelMark[lvl] = this._trailMark();
-        this._currentReason = null;
-        // first branch was CROSS(2); flip to LINE(1).
-        this.setEdge(decisionEdge[lvl], 1);
-        return true;
-      }
-    }
-    return false;
   }
 
   // One round of 1-step lookahead: for each unknown edge, tentatively set LINE

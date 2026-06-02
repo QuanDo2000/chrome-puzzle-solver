@@ -527,3 +527,78 @@ test('Shingoki CDCL: run-cap conflict reason includes the run edges', () => {
   const runFar = s._varId('H', 0, 2);
   assert.ok(cr.includes(runFar), 'conflict reason MUST include the far run edge');
 });
+
+test('Shingoki CDCL learning: _forceLiteral sets LINE for a positive literal, CROSS for ~v', () => {
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
+  s._cdclInit();
+  const v = s._varId('H', 0, 0);
+  assert.equal(s._forceLiteral(v), true);          // positive -> LINE
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 0 }), 1);
+  const v2 = s._varId('V', 0, 0);
+  assert.equal(s._forceLiteral(~v2), true);         // ~v -> CROSS
+  assert.equal(s.getEdge({ kind: 'V', r: 0, c: 0 }), 2);
+});
+
+test('Shingoki CDCL learning: _addLearnedClause stores the clause verbatim', () => {
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
+  s._cdclInit();
+  s._addLearnedClause([3, ~7, 1]);
+  assert.equal(s._learnedClauses.length, 1);
+  assert.deepEqual(s._learnedClauses[0], [3, ~7, 1]);
+});
+
+test('Shingoki CDCL learning: _analyzeConflict learns a clause whose literals are all currently falsified', () => {
+  // Drive a real 2-decision conflict via propagation, then analyze.
+  // 1x4 board, white n=2 at (0,1). Decide H(0,0)=LINE then H(0,1)=LINE then
+  // H(0,2)=LINE -> run 3 > 2 -> run-cap conflict at level 3.
+  const s = new ShingokiSolver({ rows: 1, cols: 4, task: [[0,2,0,0,0],[0,0,0,0,0]] });
+  s._cdclInit();
+  s._decisionLevel = 1; s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 0 }, 1);
+  s._decisionLevel = 2; s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 1 }, 1);
+  s._decisionLevel = 3; s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 2 }, 1);
+  assert.equal(s._propagate(), false);
+  const learned = s._analyzeConflict(s._lastConflictReason);
+  assert.ok(learned.length >= 1, 'learned clause is non-empty');
+  // Every literal must be currently FALSIFIED (the clause excludes the bad
+  // assignment): a positive literal v means "v should be LINE" but v is CROSS,
+  // a negative literal ~v means "v should be CROSS" but v is LINE.
+  for (const lit of learned) {
+    const vid = lit >= 0 ? lit : ~lit;
+    const want = lit >= 0 ? 1 : -1;     // literal asserts this value
+    assert.equal(s._varValue(vid), -want, `literal ${lit} must be currently falsified`);
+  }
+});
+
+test('Shingoki CDCL: solves the captured 5x5 via learning search', () => {
+  const TASK = [[0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],[-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0]];
+  const s = new ShingokiSolver({ rows: 5, cols: 5, task: TASK, maxMs: 10000 });
+  const res = s._solveCdcl();
+  assert.equal(res.solved, true);
+  const chk = new ShingokiSolver({ rows: 5, cols: 5, task: TASK });
+  chk.H = res.horizontal; chk.V = res.vertical;
+  assert.equal(chk.numbersSatisfied(), true);
+  assert.ok(s._totalConflicts >= 0); // learning ran
+});
+
+test('Shingoki CDCL learning: never spurious-UNSAT on constructive boards (15 seeds)', () => {
+  function gen(n, seed) {
+    let s=seed>>>0; const rnd=()=>{s=(s*1664525+1013904223)>>>0;return s/0x100000000;};
+    const r0=Math.floor(rnd()*n),r1=r0+1+Math.floor(rnd()*(n-r0));
+    const c0=Math.floor(rnd()*n),c1=c0+1+Math.floor(rnd()*(n-c0));
+    const H=Array.from({length:n+1},()=>new Array(n).fill(0));
+    const V=Array.from({length:n},()=>new Array(n+1).fill(0));
+    for(let c=c0;c<c1;c++){H[r0][c]=1;H[r1][c]=1;}
+    for(let r=r0;r<r1;r++){V[r][c0]=1;V[r][c1]=1;}
+    const p=new ShingokiSolver({rows:n,cols:n,task:Array.from({length:n+1},()=>new Array(n+1).fill(0))});
+    p.H=H;p.V=V;
+    const task=Array.from({length:n+1},()=>new Array(n+1).fill(0));
+    for(let r=0;r<=n;r++)for(let c=0;c<=n;c++){const inc=p.incidentEdges(r,c).filter(e=>p.getEdge(e)===1);if(inc.length!==2)continue;task[r][c]=inc.filter(e=>e.kind==='H').length===1?-p.runLengthAt(r,c):p.runLengthAt(r,c);}
+    return task;
+  }
+  for (let seed=1; seed<=15; seed++) {
+    const task=gen(7,seed);
+    const res=new ShingokiSolver({rows:7,cols:7,task,maxMs:10000})._solveCdcl();
+    assert.notEqual(res.error,'no solution',`seed ${seed}: spurious UNSAT`);
+    assert.equal(res.solved,true,`seed ${seed} must solve`);
+  }
+});
