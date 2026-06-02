@@ -440,6 +440,93 @@ class ShingokiSolver {
     return { solved: true, horizontal: grid.horizontal, vertical: grid.vertical };
   }
 
+  // CDCL path entry (correct-but-slow skeleton, NO clause learning). Separate
+  // from solve(); proves the var/trail/reason/level machinery is SOUND before
+  // learning is added. A later task makes solve() delegate here.
+  _solveCdcl() {
+    this._startedAt = Date.now();
+    this._cdclInit();
+    if (!this._propagate()) {
+      return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
+    }
+    const ok = this._cdclSkeletonSearch();
+    if (ok) {
+      return { solved: true, horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
+    }
+    if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) {
+      return { solved: false, horizontal: null, vertical: null, error: 'time limit exceeded' };
+    }
+    return { solved: false, horizontal: null, vertical: null, error: 'no solution' };
+  }
+
+  // Chronological CDCL skeleton (no learning): decide CROSS-first, propagate, on
+  // conflict pop to the prior decision and flip it. Mirrors solve()'s branching
+  // semantics (CROSS(2) before LINE(1)) and prune guards (!_hasPrematureLoop &&
+  // !_deadByConnectivity). Termination: each decision level tries both values at
+  // most once (triedFlip), so the level either advances or pops; the trail is
+  // strictly monotone between pops -> finite search.
+  _cdclSkeletonSearch() {
+    const triedFlip = [];      // per level: has the decision's opposite been tried?
+    const levelMark = [];      // per level: trail mark at the decision
+    const decisionEdge = [];   // per level: the edge decided at that level
+    for (;;) {
+      if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) return false;
+      // A conflict is: propagation failed OR the partial loop is dead OR every
+      // edge is assigned but the complete assignment is not a valid solution.
+      // The last case matters because propagation + the prune guards do NOT
+      // catch all invalidity (shape, full numbers, single-component closure are
+      // only verified by _isValidComplete). A complete-but-invalid leaf must be
+      // BACKTRACKED like any other conflict, NOT returned as terminal UNSAT —
+      // returning _isValidComplete() directly here was a spurious-UNSAT bug:
+      // the first leaf reached can be invalid while a sibling branch holds the
+      // real solution (mirrors solve()'s backtrack(), which returns falsy on an
+      // invalid leaf and lets the caller keep searching).
+      const ref = this._propagate() && !this._hasPrematureLoop() && !this._deadByConnectivity()
+        ? this._firstUnassignedEdge()
+        : undefined; // undefined => conflict; null => complete; ref => decide
+      if (ref === null && this._isValidComplete()) return true; // solved
+      if (ref === undefined || ref === null) {
+        if (this._decisionLevel === 0) return false; // UNSAT at root
+        if (!this._chronoBacktrackAndFlip(triedFlip, levelMark, decisionEdge)) return false;
+        continue;
+      }
+      // decide: CROSS first (matches solve()'s [2,1] order).
+      this._decisionLevel++;
+      triedFlip[this._decisionLevel] = false;
+      levelMark[this._decisionLevel] = this._trailMark();
+      decisionEdge[this._decisionLevel] = ref;
+      this._currentReason = null; // decision => null reason
+      this.setEdge(ref, 2);
+    }
+  }
+
+  _firstUnassignedEdge() {
+    for (const e of this._allEdgeRefs()) if (this.getEdge(e) === 0) return e;
+    return null;
+  }
+
+  // Pop to the previous decision level; if that level's decision hasn't had its
+  // opposite tried, set the opposite (LINE) and mark tried; else recurse upward.
+  // After _rollbackTo, the decision edge is back to UNKNOWN (0), so setEdge with
+  // the flipped value succeeds (setEdge only writes when cur===0).
+  _chronoBacktrackAndFlip(triedFlip, levelMark, decisionEdge) {
+    while (this._decisionLevel > 0) {
+      const lvl = this._decisionLevel;
+      this._rollbackTo(levelMark[lvl]);
+      this._decisionLevel = lvl - 1;
+      if (!triedFlip[lvl]) {
+        triedFlip[lvl] = true;
+        this._decisionLevel = lvl;
+        levelMark[lvl] = this._trailMark();
+        this._currentReason = null;
+        // first branch was CROSS(2); flip to LINE(1).
+        this.setEdge(decisionEdge[lvl], 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
   // One round of 1-step lookahead: for each unknown edge, tentatively set LINE
   // then CROSS on a probe; if exactly one value survives propagation, force it.
   // Returns false on contradiction, true otherwise. Bounded by maxMs.

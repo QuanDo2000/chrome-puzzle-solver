@@ -477,6 +477,41 @@ test('Shingoki CDCL: run-cap force reason includes the far run edge (sound, not 
   assert.equal(chk.getEdge({ kind: 'H', r: 0, c: 3 }), 2, 'reason edges alone must entail the forced cross (sufficiency)');
 });
 
+test('Shingoki CDCL skeleton: solves the captured 5x5 with a valid loop', () => {
+  const TASK_5x5 = [
+    [0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],
+    [-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0],
+  ];
+  const res = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5, maxMs: 10000 })._solveCdcl();
+  assert.equal(res.solved, true);
+  const chk = new ShingokiSolver({ rows: 5, cols: 5, task: TASK_5x5 });
+  chk.H = res.horizontal; chk.V = res.vertical;
+  assert.equal(chk.numbersSatisfied(), true);
+});
+
+test('Shingoki CDCL skeleton: never spurious-UNSAT on solvable constructive boards', () => {
+  function gen(n, seed) {
+    let s = seed>>>0; const rnd=()=>{s=(s*1664525+1013904223)>>>0;return s/0x100000000;};
+    const r0=Math.floor(rnd()*n),r1=r0+1+Math.floor(rnd()*(n-r0));
+    const c0=Math.floor(rnd()*n),c1=c0+1+Math.floor(rnd()*(n-c0));
+    const H=Array.from({length:n+1},()=>new Array(n).fill(0));
+    const V=Array.from({length:n},()=>new Array(n+1).fill(0));
+    for(let c=c0;c<c1;c++){H[r0][c]=1;H[r1][c]=1;}
+    for(let r=r0;r<r1;r++){V[r][c0]=1;V[r][c1]=1;}
+    const p=new ShingokiSolver({rows:n,cols:n,task:Array.from({length:n+1},()=>new Array(n+1).fill(0))});
+    p.H=H;p.V=V;
+    const task=Array.from({length:n+1},()=>new Array(n+1).fill(0));
+    for(let r=0;r<=n;r++)for(let c=0;c<=n;c++){const inc=p.incidentEdges(r,c).filter(e=>p.getEdge(e)===1);if(inc.length!==2)continue;task[r][c]=inc.filter(e=>e.kind==='H').length===1?-p.runLengthAt(r,c):p.runLengthAt(r,c);}
+    return task;
+  }
+  for (let seed = 1; seed <= 5; seed++) {
+    const task = gen(6, seed);
+    const res = new ShingokiSolver({ rows: 6, cols: 6, task, maxMs: 10000 })._solveCdcl();
+    assert.notEqual(res.error, 'no solution', `seed ${seed}: spurious UNSAT`);
+    assert.equal(res.solved, true, `seed ${seed} must solve`);
+  }
+});
+
 test('Shingoki CDCL: run-cap conflict reason includes the run edges', () => {
   // 1x4 board, white n=2 at (0,1), three collinear lines -> run 3 > 2 -> conflict.
   const s = new ShingokiSolver({ rows: 1, cols: 4, task: [[0,2,0,0,0],[0,0,0,0,0]] });
