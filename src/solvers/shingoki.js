@@ -10,6 +10,30 @@
 // { horizontal, vertical } so the widget reuses edge conventions.
 // Deductive hint entry point: getStepwiseHint(curH, curV) — propagation +
 // 1-step lookahead; returns forced LINE edges or null (see the deductive-hint spec).
+//
+// === CDCL search engine ===
+//
+// _solveCdcl() is a full CDCL solver with boolean edge variables (LINE = true,
+// CROSS = false). Each edge is one boolean var; H vars occupy [0, numH),
+// V vars [numH, numH+numV). Variable encoding: _varId / _decodeVar.
+//
+// Search loop: unit propagation (_propagate, reusing the sound degree/shape/
+// axis/run-cap/connectivity rules) → first-UIP conflict analysis
+// (_analyzeConflict) → non-chronological backjump → learned clause addition
+// (_addLearnedClause). Branching uses VSIDS (_pickDecisionVar, _bumpVar,
+// _decayVsids) with Luby-sequence restart intervals (_lubyNext). Learned
+// clause LRU capped at 2000. No in-search lookahead (propagation alone is
+// the propagator at every level).
+//
+// Partial-on-timeout: when the wall-clock budget expires, solve() collects
+// the level-0 (root) edge assignments (sound under any search path) and
+// returns { error: 'time limit exceeded', partial: true, horizontal, vertical }.
+// No degree > 2 can appear in the partial (soundness of the propagation rules).
+//
+// Measured reality: mid-size constructive boards (10x10–20x20) solve quickly.
+// The real 40x40 monthly puzzle still times out and returns a sound partial
+// (~57–72 level-0 edges). Full solve of the hardest monthlies is a known open
+// limit — the same situation as SlitherlinkSolver's CDCL on its 50x40 boards.
 const { timeUp } = require('./shared.js');
 
 class ShingokiSolver {

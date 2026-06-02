@@ -676,3 +676,51 @@ test('Shingoki solve: never spurious-UNSAT via the public entry (constructive)',
     assert.equal(res.solved,true);
   }
 });
+
+test('Shingoki CDCL: 40x40 monthly never spurious-UNSAT; returns solved or sound partial', { timeout: 10000 }, () => {
+  const fixtures = require('./fixtures/real-puzzles.js');
+  const p = fixtures.shingoki_40x40_monthly;
+  const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, maxMs: 6000 }).solve();
+  // MUST NEVER spurious-UNSAT a solvable board:
+  assert.notEqual(res.error, 'no solution', 'must never report no-solution on a solvable board');
+  if (res.solved) {
+    const chk = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task });
+    chk.H = res.horizontal; chk.V = res.vertical;
+    assert.equal(chk.numbersSatisfied(), true);
+  } else {
+    // timeout => sound partial (flat shape, level-0 only, no degree>2)
+    assert.equal(res.error, 'time limit exceeded');
+    assert.equal(res.partial, true);
+    assert.ok(res.horizontal && res.vertical);
+    const chk = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task });
+    chk.H = res.horizontal; chk.V = res.vertical;
+    for (let r = 0; r <= p.rows; r++) for (let c = 0; c <= p.cols; c++) {
+      const deg = chk.incidentEdges(r, c).filter(e => chk.getEdge(e) === 1).length;
+      assert.ok(deg <= 2, `partial vertex (${r},${c}) degree ${deg} > 2 (unsound)`);
+    }
+  }
+});
+
+test('Shingoki CDCL: mid-size constructive boards solve fast and valid', { timeout: 30000 }, () => {
+  function gen(n, seed) {
+    let s=seed>>>0; const rnd=()=>{s=(s*1664525+1013904223)>>>0;return s/0x100000000;};
+    const r0=Math.floor(rnd()*n),r1=r0+1+Math.floor(rnd()*(n-r0));
+    const c0=Math.floor(rnd()*n),c1=c0+1+Math.floor(rnd()*(n-c0));
+    const H=Array.from({length:n+1},()=>new Array(n).fill(0));
+    const V=Array.from({length:n},()=>new Array(n+1).fill(0));
+    for(let c=c0;c<c1;c++){H[r0][c]=1;H[r1][c]=1;}
+    for(let r=r0;r<r1;r++){V[r][c0]=1;V[r][c1]=1;}
+    const p=new ShingokiSolver({rows:n,cols:n,task:Array.from({length:n+1},()=>new Array(n+1).fill(0))});
+    p.H=H;p.V=V;
+    const task=Array.from({length:n+1},()=>new Array(n+1).fill(0));
+    for(let r=0;r<=n;r++)for(let c=0;c<=n;c++){const inc=p.incidentEdges(r,c).filter(e=>p.getEdge(e)===1);if(inc.length!==2)continue;task[r][c]=inc.filter(e=>e.kind==='H').length===1?-p.runLengthAt(r,c):p.runLengthAt(r,c);}
+    return task;
+  }
+  for (const n of [10, 15, 20]) {
+    const res = new ShingokiSolver({ rows: n, cols: n, task: gen(n, n*13), maxMs: 8000 }).solve();
+    assert.equal(res.solved, true, `${n}x${n} should solve`);
+    const chk = new ShingokiSolver({ rows: n, cols: n, task: gen(n, n*13) });
+    chk.H = res.horizontal; chk.V = res.vertical;
+    assert.equal(chk.numbersSatisfied(), true);
+  }
+});

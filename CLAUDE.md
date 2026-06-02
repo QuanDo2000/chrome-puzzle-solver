@@ -250,4 +250,4 @@ Modules with detailed design notes in their headers:
 - Pipes — `src/widget/puzzles/pipes.js`, `src/solvers/pipes.js`
 - Galaxies (shared statics) — `src/widget/galaxies-hint.js`,
   `src/solvers/galaxies.js`
-- Shingoki — `src/widget/puzzles/shingoki.js`, `src/solvers/shingoki.js` (Hint/Loop use a deductive getStepwiseHint — border/axis + number-run propagation + 1-step lookahead — falling back to the cached solution when logic is exhausted).
+- Shingoki — `src/widget/puzzles/shingoki.js`, `src/solvers/shingoki.js` (Hint/Loop use a deductive getStepwiseHint — border/axis + number-run propagation + 1-step lookahead — falling back to the cached solution when logic is exhausted) (solver: CDCL — boolean edge vars, first-UIP clause learning, VSIDS, Luby restarts; reuses the sound propagation rules, no in-search lookahead; partial-on-timeout. Mid-size boards solve; the 40x40 monthly still times out to a sound partial — see the CDCL spec.).
