@@ -766,3 +766,36 @@ test('Shingoki CDCL: stagnation exit does not break solvable mid-size boards', (
     assert.equal(res.solved, true, `seed ${seed} must still solve`);
   }
 });
+
+test('Shingoki CDCL: stagnation window does not abort a deep-search-solvable board', { timeout: 30000 }, () => {
+  // Regression guard for the stagnation early-exit. This sparse 8x8 board (only
+  // 4 clues) reaches its single-loop solution by DEEP branching: the level-0
+  // root snapshot plateaus almost immediately, then the solver deep-searches for
+  // ~7 s before finding the loop. With the OLD 2000 ms stagnation window the
+  // solver bailed to a (sound but incomplete) partial at ~2 s — a deterministic
+  // soundness/completeness regression. The shipped default (stagnationMs 8000)
+  // is sized above this ~7 s deep search, so the board solves.
+  //
+  // The hardcoded task was found by sparsifying a constructive rectangle-loop
+  // board (n=8, seed=13, keep ~0.35) until the root deductions stalled but the
+  // board stayed solvable. Measured wall-times: stagnationMs:0 ~7.1 s,
+  // default-8000 ~6.9 s (solves), old-2000 ~2.0 s (partial — would have caught
+  // the regression). Hardcoded literally so the test is deterministic.
+  const task = [
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,4,0,0],
+    [0,0,0,0,0,4,4,0,0],
+    [0,0,0,0,0,4,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+  ];
+  // Default stagnationMs (8000) — the shipped configuration — must SOLVE this.
+  const res = new ShingokiSolver({ rows: 8, cols: 8, task, maxMs: 30000 }).solve();
+  assert.equal(res.solved, true, 'default 8000 ms stagnation window must solve this deep-search board');
+  const chk = new ShingokiSolver({ rows: 8, cols: 8, task });
+  chk.H = res.horizontal; chk.V = res.vertical;
+  assert.equal(chk.numbersSatisfied(), true);
+});

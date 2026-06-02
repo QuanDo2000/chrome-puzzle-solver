@@ -42,16 +42,23 @@ class ShingokiSolver {
     return v > 0 ? { color: 'white', n: v } : { color: 'black', n: -v };
   }
 
-  constructor({ rows, cols, task, maxMs = 0, stagnationMs = 2000 }) {
+  constructor({ rows, cols, task, maxMs = 0, stagnationMs = 8000 }) {
     this.rows = rows;
     this.cols = cols;
     this.task = task;
     this.maxMs = maxMs;
     // Stagnation early-exit budget: if the level-0 root snapshot stops growing
     // for this many ms, return the (sound) partial instead of grinding the full
-    // maxMs budget. Default 2000 (always on); pass 0 to disable. A solvable
-    // board reaches a complete assignment before it can stagnate, so this only
-    // short-circuits the dead tail of a too-hard-for-budget board.
+    // maxMs budget. Default 8000 (always on); pass 0 to disable.
+    //
+    // The partial is SOUND (level-0 deductions only), so this never returns a
+    // wrong answer. The tradeoff is COMPLETENESS: a solvable board reaches its
+    // solution by DEEP branching (decision levels > 0), which need not grow the
+    // level-0 snapshot — so a board that solves via a long deep search with a
+    // stable root CAN be cut to a partial here. The window is sized (8 s) above
+    // the deepest solvable searches we have measured (~7 s) so genuine solves
+    // finish first, while the truly-stuck dead tail of an over-budget board
+    // (root plateaus early, then thrashes) is still short-circuited.
     this._stagnationMs = stagnationMs;
     this._stagnated = false;
     this._startedAt = 0;
