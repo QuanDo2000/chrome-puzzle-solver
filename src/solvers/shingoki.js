@@ -74,6 +74,19 @@ class ShingokiSolver {
     this._trail = [];
   }
 
+  // Initialize CDCL bookkeeping (separate from _initState's edge arrays).
+  _cdclInit() {
+    this._initState();              // builds H/V + _trail
+    const n = this._numVars();
+    this._reason = new Array(n).fill(undefined); // undefined=unassigned, null=decision, array=antecedents
+    const lv = new Int32Array(n); lv.fill(-1); this._level = lv;
+    this._assignTrail = [];         // var IDs in assignment order (for backjump)
+    this._decisionLevel = 0;
+    this._currentReason = null;     // set by rules before each forced setEdge
+    this._lastConflictReason = null;
+    this._cdcl = true;
+  }
+
   getEdge(ref) {
     return ref.kind === 'H' ? this.H[ref.r][ref.c] : this.V[ref.r][ref.c];
   }
@@ -84,6 +97,12 @@ class ShingokiSolver {
     if (cur === val) return true;
     if (cur !== 0) return false;
     if (this._trail) this._trail.push(ref.kind, ref.r, ref.c, cur);
+    if (this._cdcl) {
+      const vid = this._varId(ref.kind, ref.r, ref.c);
+      this._reason[vid] = this._currentReason; // null for a decision, array for a force
+      this._level[vid] = this._decisionLevel;
+      this._assignTrail.push(vid);
+    }
     if (ref.kind === 'H') this.H[ref.r][ref.c] = val; else this.V[ref.r][ref.c] = val;
     return true;
   }
@@ -96,6 +115,14 @@ class ShingokiSolver {
     while (t.length > mark) {
       const prev = t.pop(), c = t.pop(), r = t.pop(), kind = t.pop();
       if (kind === 'H') this.H[r][c] = prev; else this.V[r][c] = prev;
+      if (this._cdcl) {
+        const vid = this._varId(kind, r, c);
+        this._reason[vid] = undefined;
+        this._level[vid] = -1;
+        if (this._assignTrail.length && this._assignTrail[this._assignTrail.length - 1] === vid) {
+          this._assignTrail.pop();
+        }
+      }
     }
   }
 

@@ -399,3 +399,20 @@ test('Shingoki CDCL: _varId/_decodeVar round-trip for all edges', () => {
   }
   assert.equal(seen.size, (3+1)*4 + 3*(4+1));
 });
+
+test('Shingoki CDCL: setEdge records reason + level on the assignment trail', () => {
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
+  s._cdclInit();
+  s._decisionLevel = 1;
+  s._currentReason = null; // a decision
+  s.setEdge({ kind: 'H', r: 0, c: 0 }, 1);
+  const vid = s._varId('H', 0, 0);
+  assert.equal(s._level[vid], 1);
+  assert.equal(s._reason[vid], null); // decision => null reason
+  s._decisionLevel = 2;
+  s._currentReason = [vid]; // a forced edge, caused by the first
+  s.setEdge({ kind: 'V', r: 0, c: 0 }, 1);
+  const vid2 = s._varId('V', 0, 0);
+  assert.equal(s._level[vid2], 2);
+  assert.deepEqual(s._reason[vid2], [vid]);
+});
