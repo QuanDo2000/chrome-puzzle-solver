@@ -140,7 +140,30 @@ class ShingokiSolver {
     const enq = (r, c) => { const k = r * (cols + 2) + c; if (!seen.has(k)) { seen.add(k); queue.push([r, c]); } };
     for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) enq(r, c);
 
-    const trySet = (ref, val) => {
+    // Captures the incident-edge set of the vertex whose rule is currently
+    // forcing edges, so trySet/conflictReason can derive a local antecedent set.
+    let curInc = null;
+
+    const trySet = (ref, val, reasonOverride) => {
+      if (this._cdcl) {
+        // Most rules here are LOCAL to (r,c): sound local reason = the
+        // determined incident edges of the CURRENT vertex, excluding the edge
+        // being set (clue is a fixed fact -> omitted). The NON-LOCAL run-cap
+        // rule walks a straight run beyond (r,c)'s incident edges, so it passes
+        // an explicit reasonOverride spanning the full run (the true
+        // antecedents); using the local set there would under-approximate and
+        // yield an unsound learned clause.
+        if (reasonOverride) {
+          this._currentReason = reasonOverride;
+        } else {
+          const reason = [];
+          for (const e of curInc) {
+            if (e.kind === ref.kind && e.r === ref.r && e.c === ref.c) continue; // skip target
+            if (this.getEdge(e) !== 0) reason.push(this._varId(e.kind, e.r, e.c));
+          }
+          this._currentReason = reason;
+        }
+      }
       const before = this.getEdge(ref);
       if (!this.setEdge(ref, val)) return false;
       if (this.getEdge(ref) !== before) for (const v of this._endpoints(ref)) { seen.delete(v.r*(cols+2)+v.c); enq(v.r, v.c); }
@@ -151,25 +174,32 @@ class ShingokiSolver {
       const [r, c] = queue.pop();
       seen.delete(r * (cols + 2) + c);
       const inc = this.incidentEdges(r, c);
+      curInc = inc;
+      // Determined incident edges of the current vertex, as a conflict reason.
+      const conflictReason = () => {
+        const rs = [];
+        for (const e of inc) if (this.getEdge(e) !== 0) rs.push(this._varId(e.kind, e.r, e.c));
+        return rs;
+      };
       let lines = 0, crosses = 0;
       for (const e of inc) { const v = this.getEdge(e); if (v === 1) lines++; else if (v === 2) crosses++; }
       const unknown = inc.length - lines - crosses;
       const clue = ShingokiSolver.decodeClue(this.task[r][c]);
 
       // Degree rule: a vertex is degree 0 or 2.
-      if (lines > 2) return false;
-      if (lines === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 2)) return false; }
+      if (lines > 2) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+      if (lines === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } }
       // If only 2 edges can still be lines and a 2 is required, force them.
       if (lines === 1 && unknown === 1) {
         // degree must reach 2: the one unknown becomes a line.
-        for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) return false;
+        for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
       }
       // No vertex (clued or empty) may end at degree exactly 1.
-      if (lines === 1 && unknown === 0) return false;
+      if (lines === 1 && unknown === 0) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
       // Circled vertex must be degree 2 (cannot be 0).
       if (clue) {
-        if (lines + unknown < 2) return false; // can't reach degree 2
-        if (lines === 0 && unknown === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) return false; }
+        if (lines + unknown < 2) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } // can't reach degree 2
+        if (lines === 0 && unknown === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } }
       }
 
       // Border/axis forcing (sound opening deductions).
@@ -181,13 +211,13 @@ class ShingokiSolver {
           const vEdges = this._axisEdges(r, c, 'V');
           const hViable = hEdges.length === 2 && hEdges.every(e => this.getEdge(e) !== 2);
           const vViable = vEdges.length === 2 && vEdges.every(e => this.getEdge(e) !== 2);
-          if (!hViable && !vViable) return false;
+          if (!hViable && !vViable) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
           if (hViable && !vViable) {
-            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) return false;
-            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) return false;
+            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
           } else if (vViable && !hViable) {
-            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) return false;
-            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) return false;
+            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
           }
         } else {
           // Black needs one horizontal + one vertical line. If only one edge of
@@ -195,7 +225,7 @@ class ShingokiSolver {
           for (const axis of ['H', 'V']) {
             const avail = this._axisEdges(r, c, axis).filter(e => this.getEdge(e) !== 2);
             if (avail.length === 1 && this.getEdge(avail[0]) === 0) {
-              if (!trySet(avail[0], 1)) return false;
+              if (!trySet(avail[0], 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
             }
           }
         }
@@ -211,8 +241,8 @@ class ShingokiSolver {
           if (lineRefs.length >= 1) {
             const straightKind = isH(lineRefs[0]) ? 'H' : 'V';
             for (const e of inc) {
-              if (e.kind === straightKind) { if (this.getEdge(e) === 0 && !trySet(e, 1)) return false; }
-              else { if (this.getEdge(e) === 0 && !trySet(e, 2)) return false; }
+              if (e.kind === straightKind) { if (this.getEdge(e) === 0 && !trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } }
+              else { if (this.getEdge(e) === 0 && !trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } }
             }
           }
         } else {
@@ -220,9 +250,14 @@ class ShingokiSolver {
           if (lineRefs.length >= 1) {
             const sameKind = isH(lineRefs[0]) ? 'H' : 'V';
             // the collinear partner of the known line must be cross.
-            for (const e of inc) if (e.kind === sameKind && this.getEdge(e) === 0) if (!trySet(e, 2)) return false;
+            for (const e of inc) if (e.kind === sameKind && this.getEdge(e) === 0) if (!trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
           }
         }
+        // Run-cap is NON-LOCAL: it owns its conflict reason (the full run, which
+        // extends beyond (r,c)'s incident edges) via _lastConflictReason, set
+        // inside _applyRunCap. Do NOT recompute the local conflictReason() here
+        // or it would clobber the sound run-spanning reason with an
+        // under-approximation.
         if (!this._applyRunCap(r, c, clue, trySet)) return false;
       }
     }
@@ -274,10 +309,12 @@ class ShingokiSolver {
   _applyRunCap(r, c, clue, trySet) {
     const inc = this.incidentEdges(r, c).filter(e => this.getEdge(e) === 1);
     if (inc.length === 0) return true;
-    // Walk a direction counting CONFIRMED line edges; return {len, endRef} where
-    // endRef is the next edge beyond the run (or null if border).
+    // Walk a direction counting CONFIRMED line edges; return {len, endRef, edges}
+    // where endRef is the next edge beyond the run (or null if border) and edges
+    // is the list of confirmed run-edge refs traversed in that direction.
     const walk = (dr, dc) => {
       let len = 0, cr = r, cc = c, endRef = null;
+      const edges = [];
       for (;;) {
         const nr = cr + dr, nc = cc + dc;
         let ref;
@@ -291,20 +328,48 @@ class ShingokiSolver {
           ref = { kind: 'V', r: er, c: cc };
         }
         if (this.getEdge(ref) !== 1) { endRef = ref; break; }
+        edges.push(ref);
         len++; cr = nr; cc = nc;
       }
-      return { len, endRef };
+      return { len, endRef, edges };
     };
     const horiz = inc.some(e => e.kind === 'H');
     const vert = inc.some(e => e.kind === 'V');
     let total = 0;
     const ends = [];
-    if (horiz) { const a = walk(0, -1), b = walk(0, 1); total += a.len + b.len; ends.push(a.endRef, b.endRef); }
-    if (vert)  { const a = walk(-1, 0), b = walk(1, 0); total += a.len + b.len; ends.push(a.endRef, b.endRef); }
-    if (total > clue.n) return false;
+    const runEdges = [];
+    if (horiz) {
+      const a = walk(0, -1), b = walk(0, 1);
+      total += a.len + b.len; ends.push(a.endRef, b.endRef);
+      runEdges.push(...a.edges, ...b.edges);
+    }
+    if (vert) {
+      const a = walk(-1, 0), b = walk(1, 0);
+      total += a.len + b.len; ends.push(a.endRef, b.endRef);
+      runEdges.push(...a.edges, ...b.edges);
+    }
+    // Run-cap is a NON-LOCAL rule: the antecedents of every force/conflict it
+    // produces are the CONFIRMED edges of the whole run (which extend beyond
+    // (r,c)'s incident edges), not just the clue vertex's local edges. Recording
+    // only the local edges would under-approximate the reason and make the
+    // learned clause unsound (the omitted far run edges are necessary to entail
+    // the force). So build the run-spanning reason here and pass it explicitly.
+    const runReason = this._cdcl
+      ? runEdges.map(e => this._varId(e.kind, e.r, e.c))
+      : null;
+    if (total > clue.n) {
+      if (this._cdcl) this._lastConflictReason = runReason;
+      return false;
+    }
     if (total === clue.n) {
       for (const ref of ends) {
-        if (ref && this.getEdge(ref) === 0 && !trySet(ref, 2)) return false;
+        // Pass runReason as an explicit override so trySet records the full run
+        // (not its local recompute). The target end edge is unknown (==0) so it
+        // is never itself in runReason; no self-reference to strip.
+        if (ref && this.getEdge(ref) === 0 && !trySet(ref, 2, runReason)) {
+          if (this._cdcl) this._lastConflictReason = runReason;
+          return false;
+        }
       }
     }
     return true;

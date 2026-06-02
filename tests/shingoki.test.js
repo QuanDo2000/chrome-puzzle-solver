@@ -416,3 +416,79 @@ test('Shingoki CDCL: setEdge records reason + level on the assignment trail', ()
   assert.equal(s._level[vid2], 2);
   assert.deepEqual(s._reason[vid2], [vid]);
 });
+
+test('Shingoki CDCL: degree-forced cross carries its determined-edge antecedents', () => {
+  // center vertex (1,1) gets two lines (E,S) -> W,N forced cross. The forced
+  // cross's reason must reference the determined incident edges (the lines).
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
+  s._cdclInit();
+  s._decisionLevel = 1;
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 1, c: 1 }, 1); // E decision
+  s._currentReason = null; s.setEdge({ kind: 'V', r: 1, c: 1 }, 1); // S decision
+  assert.equal(s._propagate(), true);
+  const wVar = s._varId('H', 1, 0); // West edge, forced cross
+  assert.equal(s.getEdge({ kind: 'H', r: 1, c: 0 }), 2);
+  const reason = s._reason[wVar];
+  assert.ok(Array.isArray(reason), 'forced cross must carry an antecedent array');
+  const eVar = s._varId('H', 1, 1), sVar = s._varId('V', 1, 1);
+  // reason must reference the lines that drove the degree rule at (1,1)
+  assert.ok(reason.includes(eVar) && reason.includes(sVar), 'reason must cite both forcing lines');
+  // reason must NOT include the forced edge itself
+  assert.ok(!reason.includes(wVar), 'reason must not include the forced var');
+});
+
+test('Shingoki CDCL: contradiction sets _lastConflictReason to the determined edges', () => {
+  // White at (1,1); cross W,E,N -> no viable axis -> contradiction.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,2,0],[0,0,0]] });
+  s._cdclInit();
+  s._decisionLevel = 1;
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 1, c: 0 }, 2);
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 1, c: 1 }, 2);
+  s._currentReason = null; s.setEdge({ kind: 'V', r: 0, c: 1 }, 2);
+  assert.equal(s._propagate(), false);
+  assert.ok(Array.isArray(s._lastConflictReason) && s._lastConflictReason.length >= 1,
+    'contradiction must set a non-empty conflict reason');
+});
+
+test('Shingoki CDCL: run-cap force reason includes the far run edge (sound, not under-approximated)', () => {
+  // 1x4 board (2x5 verts): white n=3 at (0,1). Lay H[0][0],H[0][1],H[0][2] lines.
+  // run through (0,1) = West(H[0][0]=1) + East(H[0][1],H[0][2]=2) = 3 == n ->
+  // force cross at H[0][3] (the next east edge).
+  const s = new ShingokiSolver({ rows: 1, cols: 4, task: [[0,3,0,0,0],[0,0,0,0,0]] });
+  s._cdclInit();
+  s._decisionLevel = 1;
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 0 }, 1);
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 1 }, 1);
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 2 }, 1);
+  assert.equal(s._propagate(), true);
+  const farVar = s._varId('H', 0, 3); // forced cross at the run's far end
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 3 }), 2);
+  const reason = s._reason[farVar];
+  assert.ok(Array.isArray(reason), 'run-cap force must carry a reason');
+  const runFar = s._varId('H', 0, 2); // the far run edge NOT incident to clue vertex (0,1)
+  assert.ok(reason.includes(runFar), 'reason MUST include the far run edge H[0][2] (was the under-approximation bug)');
+  // SUFFICIENCY: the reason edges alone must entail the forced cross. Replay on a
+  // fresh solver: set exactly the reason edges to LINE, propagate, confirm the
+  // far edge is forced to cross.
+  const chk = new ShingokiSolver({ rows: 1, cols: 4, task: [[0,3,0,0,0],[0,0,0,0,0]] });
+  chk._cdclInit();
+  for (const vid of reason) { const d = chk._decodeVar(vid); chk._currentReason = null; chk.setEdge({ kind: d.kind, r: d.r, c: d.c }, 1); }
+  chk._propagate();
+  assert.equal(chk.getEdge({ kind: 'H', r: 0, c: 3 }), 2, 'reason edges alone must entail the forced cross (sufficiency)');
+});
+
+test('Shingoki CDCL: run-cap conflict reason includes the run edges', () => {
+  // 1x4 board, white n=2 at (0,1), three collinear lines -> run 3 > 2 -> conflict.
+  const s = new ShingokiSolver({ rows: 1, cols: 4, task: [[0,2,0,0,0],[0,0,0,0,0]] });
+  s._cdclInit();
+  s._decisionLevel = 1;
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 0 }, 1);
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 1 }, 1);
+  s._currentReason = null; s.setEdge({ kind: 'H', r: 0, c: 2 }, 1);
+  assert.equal(s._propagate(), false);
+  const cr = s._lastConflictReason;
+  assert.ok(Array.isArray(cr) && cr.length >= 1, 'conflict reason set');
+  // must reference the run edges that exceed the clue (at least the ones beyond the clue vertex's incidents)
+  const runFar = s._varId('H', 0, 2);
+  assert.ok(cr.includes(runFar), 'conflict reason MUST include the far run edge');
+});
