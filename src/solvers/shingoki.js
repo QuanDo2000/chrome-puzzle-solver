@@ -53,6 +53,20 @@ class ShingokiSolver {
     return out;
   }
 
+  // CDCL variable encoding: each edge is one boolean var (true=LINE, false=CROSS).
+  // H edges occupy [0, numH); V edges [numH, numH+numV). numH = (rows+1)*cols.
+  _numH() { return (this.rows + 1) * this.cols; }
+  _varId(kind, r, c) {
+    return kind === 'H' ? r * this.cols + c : this._numH() + r * (this.cols + 1) + c;
+  }
+  _decodeVar(id) {
+    const numH = this._numH();
+    if (id < numH) return { kind: 'H', r: Math.floor(id / this.cols), c: id % this.cols };
+    const v = id - numH; const w = this.cols + 1;
+    return { kind: 'V', r: Math.floor(v / w), c: v % w };
+  }
+  _numVars() { return this._numH() + this.rows * (this.cols + 1); }
+
   _initState() {
     const { rows, cols } = this;
     this.H = Array.from({ length: rows + 1 }, () => new Array(cols).fill(0));

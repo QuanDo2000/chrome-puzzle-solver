@@ -383,3 +383,19 @@ test('ShingokiSolver: trail records and rolls back edge writes', () => {
   assert.equal(s.getEdge({ kind: 'H', r: 0, c: 0 }), 0);
   assert.equal(s.getEdge({ kind: 'V', r: 1, c: 1 }), 0);
 });
+
+test('Shingoki CDCL: _varId/_decodeVar round-trip for all edges', () => {
+  const s = new ShingokiSolver({ rows: 3, cols: 4, task: [] });
+  const seen = new Set();
+  for (let r = 0; r <= 3; r++) for (let c = 0; c < 4; c++) {
+    const id = s._varId('H', r, c);
+    assert.ok(!seen.has(id), `H var ${id} collides`); seen.add(id);
+    assert.deepEqual(s._decodeVar(id), { kind: 'H', r, c });
+  }
+  for (let r = 0; r < 3; r++) for (let c = 0; c <= 4; c++) {
+    const id = s._varId('V', r, c);
+    assert.ok(!seen.has(id), `V var ${id} collides`); seen.add(id);
+    assert.deepEqual(s._decodeVar(id), { kind: 'V', r, c });
+  }
+  assert.equal(seen.size, (3+1)*4 + 3*(4+1));
+});
