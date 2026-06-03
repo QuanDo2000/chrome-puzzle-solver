@@ -44,7 +44,11 @@
 //       contradiction. Disabled inside probes to prevent unbounded recursion.
 //   _deduceAll alternates Tier 1 ↔ Tier 2 to a joint fixpoint. solve()/_dfs
 //   call _deduceAll(0) (unbounded Tier 2); getStepwiseHint caps Tier 2 at
-//   _hintBudgetMs=800ms so Hint stays interactive.
+//   _hintBudgetMs=800ms so Hint stays interactive. The cap is enforced as an
+//   absolute wall-clock deadline (_deduceDeadline) threaded into the heavy
+//   per-edge loops (_connectivityForce/_bifurcateForce break mid-pass at the
+//   deadline; _candidateIntersectForce is cheap and runs unbounded), so a single
+//   heavy pass can't overrun the Hint budget. solve() resets _deduceDeadline=0.
 //
 // Partial-on-timeout: a searchMs deep-search cap (~6 s; maxMs is the outer
 // ceiling) unwinds via a thrown SEARCH_BUDGET sentinel, and solve() returns the
@@ -86,6 +90,12 @@ class ShingokiSolver {
     this._heavyBudgetMs = 0;
     this._hintBudgetMs = 800;
     this._startedAt = 0;
+    // Absolute wall-clock deadline (Date.now() ms) for the heavy per-edge Tier-2
+    // loops in the interactive Hint path. 0 = no deadline (solve()/_dfs run full
+    // unbounded Tier-2). getStepwiseHint sets this so _connectivityForce/
+    // _bifurcateForce bail mid-pass; bailing only forces FEWER edges, never wrong
+    // ones, so it is sound-neutral.
+    this._deduceDeadline = 0;
     this._bifurcationDisabled = false;
   }
 
@@ -258,6 +268,7 @@ class ShingokiSolver {
   _deduceHeavy(budgetMs) {
     this._heavyChanged = false;
     if (budgetMs > 0 && timeUp(budgetMs, this._startedAt)) return true; // interactive cap
+    if (this._deduceDeadline && Date.now() > this._deduceDeadline) return true; // Hint deadline
     if (!this._candidateIntersectForce()) return false;
     if (!this._connectivityForce()) return false;
     if (!this._bifurcationDisabled && !this._bifurcateForce()) return false;
@@ -279,6 +290,7 @@ class ShingokiSolver {
       this._endpoints(e).some(v => this.incidentEdges(v.r, v.c).some(x => this.getEdge(x) === 1)));
     for (const e of frontier) {
       if (this.getEdge(e) !== 0) continue;
+      if (this._deduceDeadline && Date.now() > this._deduceDeadline) break; // Hint deadline (sound: partial forcing only)
       // Respect the overall solve budget so a single deduction pass can't hang
       // between _dfs budget checks (`_heavyBudgetMs` is the optional finer cap;
       // `budgetMs` passed to _deduceHeavy already caps the interactive Hint case).
@@ -449,6 +461,7 @@ class ShingokiSolver {
     let changed = false;
     for (const e of this._allEdgeRefs()) {
       if (this.getEdge(e) !== 0) continue;
+      if (this._deduceDeadline && Date.now() > this._deduceDeadline) break; // Hint deadline (sound: partial forcing only)
       // probe LINE
       const m1 = this._trailMark();
       let lineDead = false;
@@ -668,6 +681,7 @@ class ShingokiSolver {
   // shingoki-specific dispatch.
   solve() {
     this._startedAt = Date.now();
+    this._deduceDeadline = 0; // solver runs full unbounded Tier-2; no Hint deadline leak
     this._initState();
     if (!this._deduceAll(0)) {
       return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
@@ -819,6 +833,7 @@ class ShingokiSolver {
   // null when logic forces no new line. Pure: never mutates curH/curV.
   getStepwiseHint(curH, curV) {
     this._startedAt = Date.now();
+    this._deduceDeadline = Date.now() + (this._hintBudgetMs || 800); // bound heavy per-edge Tier-2 loops for interactivity
     this.H = curH.map(row => row.slice());
     this.V = curV.map(row => row.slice());
     this._trail = [];
