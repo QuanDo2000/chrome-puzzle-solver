@@ -799,3 +799,36 @@ test('Shingoki CDCL: stagnation window does not abort a deep-search-solvable boa
   chk.H = res.horizontal; chk.V = res.vertical;
   assert.equal(chk.numbersSatisfied(), true);
 });
+
+test('Shingoki DFS: _pickBranch extends a chain endpoint, LINE first', () => {
+  // 3x3 vertices (2x2 cells). Put one committed LINE so vertex (0,0) has
+  // exactly one line and >=1 unknown incident edge -> a chain endpoint.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
+  s._initState();
+  s.setEdge({ kind: 'H', r: 0, c: 0 }, 1); // line between (0,0)-(0,1)
+  const br = s._pickBranch();
+  assert.ok(br, 'must return a branch');
+  // (0,0) now has 1 line (H 0,0) and unknown V(0,0); the branch must be an
+  // unknown edge incident to a chain endpoint, tried LINE(1) first.
+  assert.equal(br.firstVal, 1);
+  assert.equal(s.getEdge(br.ref), 0, 'branch edge must currently be unknown');
+});
+
+test('Shingoki DFS: _pickBranch returns null when all edges are assigned', () => {
+  const s = new ShingokiSolver({ rows: 1, cols: 1, task: [[0,0],[0,0]] });
+  s._initState();
+  for (const e of s._allEdgeRefs()) s.setEdge(e, 2); // all crossed
+  assert.equal(s._pickBranch(), null);
+});
+
+test('Shingoki DFS: _pickBranch picks a clued-incident edge when no chain exists', () => {
+  // No committed lines anywhere, one white clue at (0,1). The constraint-focused
+  // branch must return an unknown edge incident to a clued vertex, LINE first.
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,2,0],[0,0,0],[0,0,0]] });
+  s._initState();
+  const br = s._pickBranch();
+  assert.ok(br, 'must return a branch');
+  assert.equal(br.firstVal, 1);
+  const eps = s._endpoints(br.ref);
+  assert.ok(eps.some(v => s.task[v.r][v.c] !== 0), 'edge must touch a clued vertex');
+});

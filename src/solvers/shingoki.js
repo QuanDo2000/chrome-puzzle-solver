@@ -903,6 +903,78 @@ class ShingokiSolver {
     return null;
   }
 
+  // Flip a decision value: LINE(1) <-> CROSS(2).
+  _otherVal(v) { return v === 1 ? 2 : 1; }
+
+  // Adaptive branch selection. Returns { ref, firstVal } for the next edge to
+  // assign, or null when every edge is assigned. SOUND-NEUTRAL: affects only
+  // search order/speed, never correctness.
+  _pickBranch() {
+    const { rows, cols } = this;
+    // 1) Loop-aware: a "chain endpoint" is a vertex with exactly one committed
+    //    LINE and >=1 unknown incident edge. Extend it (LINE first) to build the
+    //    loop. Prefer a clued chain endpoint (tighter) over an unclued one.
+    let chainEdge = null, chainCluedEdge = null;
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      const inc = this.incidentEdges(r, c);
+      let lines = 0, unknownRef = null;
+      for (const e of inc) {
+        const g = this.getEdge(e);
+        if (g === 1) lines++;
+        else if (g === 0 && !unknownRef) unknownRef = e;
+      }
+      if (lines === 1 && unknownRef) {
+        if (this.task[r][c]) { chainCluedEdge = unknownRef; }
+        else if (!chainEdge) { chainEdge = unknownRef; }
+      }
+    }
+    if (chainCluedEdge) return { ref: chainCluedEdge, firstVal: 1 };
+    if (chainEdge) return { ref: chainEdge, firstVal: 1 };
+    // 2) No chain exists -> constraint-focused choice.
+    return this._pickConstrainedEdge();
+  }
+
+  // Constraint-focused selection for when no chain endpoint exists (e.g. an
+  // ultra-sparse board at the root). Probe-guided: among unknown edges incident
+  // to a clued vertex, pick the one whose LINE assignment forces the most
+  // propagation (focuses search the way the sparse-board case needs). Falls back
+  // to the first unknown edge anywhere. Returns { ref, firstVal:1 } or null.
+  _pickConstrainedEdge() {
+    const { rows, cols } = this;
+    let best = null, bestScore = -1;
+    const seen = new Set();
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      if (!this.task[r][c]) continue;
+      for (const e of this.incidentEdges(r, c)) {
+        if (this.getEdge(e) !== 0) continue;
+        const k = e.kind + e.r + ',' + e.c;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const score = this._probePropagationCount(e, 1);
+        if (score > bestScore) { bestScore = score; best = e; }
+      }
+    }
+    if (best) return { ref: best, firstVal: 1 };
+    const any = this._firstUnassignedEdge();
+    return any ? { ref: any, firstVal: 1 } : null;
+  }
+
+  // Edges determined by propagation after tentatively setting `e=val` on a clone
+  // of the current state. Returns -1 if that assignment immediately contradicts
+  // (so the caller prefers any non-contradicting edge). Mirrors _lookahead1's
+  // probe pattern; pure (never mutates this.H/this.V).
+  _probePropagationCount(e, val) {
+    const probe = new ShingokiSolver({ rows: this.rows, cols: this.cols, task: this.task });
+    probe.H = this.H.map(row => row.slice());
+    probe.V = this.V.map(row => row.slice());
+    let before = 0;
+    for (const ref of probe._allEdgeRefs()) if (probe.getEdge(ref) !== 0) before++;
+    if (!(probe.setEdge(e, val) && probe._propagate())) return -1;
+    let after = 0;
+    for (const ref of probe._allEdgeRefs()) if (probe.getEdge(ref) !== 0) after++;
+    return after - before;
+  }
+
   // One round of 1-step lookahead: for each unknown edge, tentatively set LINE
   // then CROSS on a probe; if exactly one value survives propagation, force it.
   // Returns false on contradiction, true otherwise. Bounded by maxMs.
