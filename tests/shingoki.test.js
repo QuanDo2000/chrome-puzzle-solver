@@ -562,6 +562,33 @@ test('Shingoki connectivity: an empty board is NOT pruned', () => {
   assert.equal(s._deadByConnectivity(), false);
 });
 
+test('Shingoki connectivity-force: an edge whose LINE value closes a loop excluding a clue is forced CROSS', () => {
+  // Smoke check: _connectivityForce exists. Hand-building a board where exactly
+  // one unknown edge's LINE value closes a clue-excluding subloop is impractical;
+  // the ORACLE soundness test below carries the soundness weight (intentional).
+  const task = [[-2,0,0,0,-2],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[-2,0,0,0,-2]];
+  const s = new ShingokiSolver({ rows: 4, cols: 4, task });
+  s._initState();
+  assert.equal(typeof s._connectivityForce, 'function');
+});
+
+test('Shingoki connectivity-force: force-soundness vs the oracle (3x3 + 4x4)', () => {
+  // SOUNDNESS GATE for technique 3. Both boards MUST be satisfiable with >=2
+  // distinct solutions (an unsat board makes assertForceSoundness a vacuous
+  // no-op). The plan's illustrative numbers were UNSAT; replaced per the same
+  // arithmetic learned in Task 3 (a black corner clue's number = the SUM of both
+  // straight runs): 3x3 four black corners n=4 -> 2 sols; 4x4 four black corners
+  // n=3 -> 2 sols.
+  const boards = [
+    { rows: 3, cols: 3, task: [[-4,0,0,-4],[0,0,0,0],[0,0,0,0],[-4,0,0,-4]] },
+    { rows: 4, cols: 4, task: [[-3,0,0,0,-3],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[-3,0,0,0,-3]] },
+  ];
+  for (const b of boards) {
+    assert.ok(bruteForceSolutions(b.rows, b.cols, b.task).length >= 2, 'oracle board must have >=2 solutions');
+    assertForceSoundness(b.rows, b.cols, b.task, (s) => s._connectivityForce(), { trials: 60 });
+  }
+});
+
 test('ShingokiSolver: trail records and rolls back edge writes', () => {
   const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
   s._initState();

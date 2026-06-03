@@ -237,6 +237,7 @@ class ShingokiSolver {
     this._heavyChanged = false;
     if (budgetMs > 0 && timeUp(budgetMs, this._startedAt)) return true; // interactive cap
     if (!this._candidateIntersectForce()) return false;
+    if (!this._connectivityForce()) return false;
     return true;
   }
 
@@ -354,6 +355,38 @@ class ShingokiSolver {
       };
       if (!apply(lineCommon, 1)) return false;
       if (!apply(crossCommon, 2)) return false;
+    }
+    if (changed) this._heavyChanged = true;
+    return true;
+  }
+
+  // Technique 3: 1-ply structural connectivity forcing (Tier 2). For each unknown
+  // edge, probe LINE — if setting it LINE immediately creates a premature closed
+  // loop (_hasPrematureLoop) or a connectivity-dead state (_deadByConnectivity),
+  // it cannot be LINE -> force CROSS. Symmetrically probe CROSS — if setting it
+  // CROSS strands a clued vertex (_deadByConnectivity), force LINE. Both probes
+  // restore state exactly (setEdge then _rollbackTo). Soundness reduces to the
+  // trusted checkers + correct rollback; the oracle confirms. Returns false on a
+  // contradiction (an edge whose both values are dead).
+  _connectivityForce() {
+    let changed = false;
+    for (const e of this._allEdgeRefs()) {
+      if (this.getEdge(e) !== 0) continue;
+      // probe LINE
+      const m1 = this._trailMark();
+      let lineDead = false;
+      if (this.setEdge(e, 1)) { if (this._hasPrematureLoop() || this._deadByConnectivity()) lineDead = true; }
+      else lineDead = true;
+      this._rollbackTo(m1);
+      // probe CROSS
+      const m2 = this._trailMark();
+      let crossDead = false;
+      if (this.setEdge(e, 2)) { if (this._deadByConnectivity()) crossDead = true; }
+      else crossDead = true;
+      this._rollbackTo(m2);
+      if (lineDead && crossDead) return false;     // neither value works -> contradiction
+      if (lineDead) { if (!this.setEdge(e, 2)) return false; changed = true; }
+      else if (crossDead) { if (!this.setEdge(e, 1)) return false; changed = true; }
     }
     if (changed) this._heavyChanged = true;
     return true;
