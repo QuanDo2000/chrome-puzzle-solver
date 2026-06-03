@@ -25,6 +25,8 @@ Every new rule may **force** edges (set an unknown edge to LINE/CROSS) or signal
 
 Likewise a forcing rule may signal contradiction ONLY when it is certain no completion exists. The **brute-force oracle (Task 0)** is the objective gate: it catches any force the rule makes that some valid solution contradicts. Run it after every technique. The constructive fuzz (`tests/shingoki-fuzz.test.js`) is the secondary master guard.
 
+**CRITICAL test-board caveat (learned the hard way):** `assertForceSoundness` EARLY-RETURNS when the board is UNSATISFIABLE (`bruteForceSolutions` returns `[]`) — so an unsat test board makes the oracle test pass VACUOUSLY (it verifies nothing). Every oracle test board you write MUST be satisfiable, and for intersection-style rules ideally have ≥2 distinct solutions (so the intersection logic is actually exercised). **Before trusting any oracle test, add `assert.ok(bruteForceSolutions(rows, cols, task).length >= 1)` (≥2 for Task 3+) to that board's setup, or check it once interactively.** Also note the number arithmetic when hand-building boards: a BLACK clue's number = the sum of BOTH straight-run lengths (e.g. a black corner of an N×N border loop has number = the two side-lengths it sees to the next corners, NOT 2). The plan's literal test-board numbers are illustrative — VERIFY each board is satisfiable and adjust the clue numbers if not.
+
 ---
 
 ## File Structure
