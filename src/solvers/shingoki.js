@@ -940,28 +940,28 @@ class ShingokiSolver {
   // assign, or null when every edge is assigned. SOUND-NEUTRAL: affects only
   // search order/speed, never correctness.
   _pickBranch() {
-    const { rows, cols } = this;
-    // 1) Loop-aware: a "chain endpoint" is a vertex with exactly one committed
-    //    LINE and >=1 unknown incident edge. Extend it (LINE first) to build the
-    //    loop. Prefer a clued chain endpoint (tighter) over an unclued one.
-    let chainEdge = null, chainCluedEdge = null;
-    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
-      const inc = this.incidentEdges(r, c);
-      let lines = 0, unknownRef = null;
-      for (const e of inc) {
-        const g = this.getEdge(e);
-        if (g === 1) lines++;
-        else if (g === 0 && !unknownRef) unknownRef = e;
+    // Score each unknown edge by its endpoints' line-adjacency: an endpoint with
+    // exactly one committed LINE (a chain endpoint, score 3) is the best place to
+    // extend the loop; an endpoint already touching a line (score 2) is next;
+    // an isolated edge scores 1. Take the global max, short-circuiting on the
+    // first score-3 (chain extension), and try LINE(1) first. When nothing is
+    // adjacent to a line (score 1 only — a sparse start), defer to the
+    // probe-guided constraint-focused choice. SOUND-NEUTRAL.
+    let best = null, bestScore = -1;
+    for (const e of this._allEdgeRefs()) {
+      if (this.getEdge(e) !== 0) continue;
+      let sc = 0;
+      for (const v of this._endpoints(e)) {
+        const inc = this.incidentEdges(v.r, v.c);
+        let ln = 0;
+        for (const x of inc) if (this.getEdge(x) === 1) ln++;
+        sc = Math.max(sc, ln === 1 ? 3 : ln > 0 ? 2 : 1);
       }
-      if (lines === 1 && unknownRef) {
-        if (this.task[r][c]) { chainCluedEdge = unknownRef; }
-        else if (!chainEdge) { chainEdge = unknownRef; }
-      }
+      if (sc > bestScore) { bestScore = sc; best = e; if (sc === 3) break; }
     }
-    if (chainCluedEdge) return { ref: chainCluedEdge, firstVal: 1 };
-    if (chainEdge) return { ref: chainEdge, firstVal: 1 };
-    // 2) No chain exists -> constraint-focused choice.
-    return this._pickConstrainedEdge();
+    if (best === null) return null;             // all edges assigned
+    if (bestScore <= 1) return this._pickConstrainedEdge(); // no chains -> constraint-focused
+    return { ref: best, firstVal: 1 };
   }
 
   // Constraint-focused selection for when no chain endpoint exists (e.g. an

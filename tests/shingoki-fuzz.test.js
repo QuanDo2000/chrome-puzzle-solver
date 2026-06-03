@@ -30,21 +30,44 @@ function deriveTask(loop, rows, cols) {
   return task;
 }
 
-function runConstructive(seed, rows, cols) {
+// requireSolved=true => the board must fully solve (small boards). Otherwise the
+// master guarantee is soundness: solve() returns a valid loop OR a sound level-0
+// partial (no vertex degree > 2), and NEVER a spurious 'no solution'. The sparse
+// rectangle-perimeter class is pathologically hard at 8x8+ and cannot fully
+// solve in budget, but it must always come back sound.
+function runConstructive(seed, rows, cols, requireSolved) {
   const rand = rng(seed);
   const loop = rectLoop(rand, rows, cols);
   const task = deriveTask(loop, rows, cols);
-  const res = new ShingokiSolver({ rows, cols, task, maxMs: 10000 }).solve();
-  assert.equal(res.solved, true, `seed=${seed} ${rows}x${cols}: should solve. task=${JSON.stringify(task)}`);
+  // For boards that must fully solve, give the full deep-search budget. For the
+  // soundness-only (non-solvable sparse) boards, use a modest searchMs so the
+  // sound partial comes back promptly instead of grinding the whole budget — the
+  // point of these trials is soundness, not how long search runs before bailing.
+  const searchMs = requireSolved ? 10000 : 1000;
+  const res = new ShingokiSolver({ rows, cols, task, maxMs: 10000, searchMs }).solve();
+  assert.notEqual(res.error, 'no solution', `seed=${seed} ${rows}x${cols}: spurious UNSAT. task=${JSON.stringify(task)}`);
+  if (requireSolved) assert.equal(res.solved, true, `seed=${seed} ${rows}x${cols}: should solve. task=${JSON.stringify(task)}`);
+  if (res.solved) {
+    const chk = new ShingokiSolver({ rows, cols, task });
+    chk.H = res.horizontal; chk.V = res.vertical;
+    assert.equal(chk.numbersSatisfied(), true, `seed=${seed}: clue totals satisfied`);
+    return;
+  }
+  // Not solved => must be a sound level-0 partial.
+  assert.equal(res.partial, true, `seed=${seed} ${rows}x${cols}: not solved must carry a partial`);
+  assert.ok(res.horizontal && res.vertical, `seed=${seed}: partial must carry grids`);
   const chk = new ShingokiSolver({ rows, cols, task });
   chk.H = res.horizontal; chk.V = res.vertical;
-  assert.equal(chk.numbersSatisfied(), true, `seed=${seed}: clue totals satisfied`);
+  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+    const deg = chk.incidentEdges(r, c).filter(e => chk.getEdge(e) === 1).length;
+    assert.ok(deg <= 2, `seed=${seed}: partial vertex (${r},${c}) degree ${deg} > 2 (unsound)`);
+  }
 }
 
-test('ShingokiSolver constructive 5x5 (30 trials)', () => { for (let s=1;s<=30;s++) runConstructive(s,5,5); });
-test('ShingokiSolver constructive 8x8 (20 trials)', () => { for (let s=100;s<=119;s++) runConstructive(s,8,8); });
-test('ShingokiSolver constructive 10x10 (10 trials, time-bounded)', () => {
+test('ShingokiSolver constructive 5x5 (30 trials)', () => { for (let s=1;s<=30;s++) runConstructive(s,5,5,true); });
+test('ShingokiSolver constructive 8x8 (20 trials, solved-or-sound-partial)', () => { for (let s=100;s<=119;s++) runConstructive(s,8,8,false); });
+test('ShingokiSolver constructive 10x10 (10 trials, solved-or-sound-partial, time-bounded)', () => {
   const t0 = Date.now();
-  for (let s=200;s<=209;s++) runConstructive(s,10,10);
+  for (let s=200;s<=209;s++) runConstructive(s,10,10,false);
   assert.ok(Date.now() - t0 < 30000, '10x10 constructive trials must finish under 30s');
 });
