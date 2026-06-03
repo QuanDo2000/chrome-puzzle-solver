@@ -238,7 +238,62 @@ class ShingokiSolver {
     if (budgetMs > 0 && timeUp(budgetMs, this._startedAt)) return true; // interactive cap
     if (!this._candidateIntersectForce()) return false;
     if (!this._connectivityForce()) return false;
+    if (!this._bifurcationDisabled && !this._bifurcateForce()) return false;
     return true;
+  }
+
+  // Tier-2 bounded bifurcation (1-ply lookahead using the FULL sound deduction).
+  // For each unknown FRONTIER edge (incident to a committed line, to bound cost),
+  // probe LINE then CROSS on a CLONE running `_deduceAllNoBif` (the full
+  // no-bifurcation deduction). If one value PROVABLY has no completion (the
+  // sound deduction reaches a contradiction), force the other. Sound because a
+  // contradiction from a sound deduction proves the probed value is impossible.
+  // Returns false on contradiction; sets `this._heavyChanged` if it forced an
+  // edge. Probe clones carry `_bifurcationDisabled` (belt-and-suspenders) and use
+  // `_deduceAllNoBif`, so there is no nested bifurcation/unbounded recursion.
+  _bifurcateForce() {
+    let changed = false;
+    const frontier = this._allEdgeRefs().filter(e => this.getEdge(e) === 0 &&
+      this._endpoints(e).some(v => this.incidentEdges(v.r, v.c).some(x => this.getEdge(x) === 1)));
+    for (const e of frontier) {
+      if (this.getEdge(e) !== 0) continue;
+      // Respect the overall solve budget so a single deduction pass can't hang
+      // between _dfs budget checks (`_heavyBudgetMs` is the optional finer cap;
+      // `budgetMs` passed to _deduceHeavy already caps the interactive Hint case).
+      if ((this._heavyBudgetMs > 0 && timeUp(this._heavyBudgetMs, this._startedAt)) ||
+          (this._searchMs > 0 && timeUp(this._searchMs, this._startedAt)) ||
+          (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt))) break;
+      const probe = (val) => {
+        const p = new ShingokiSolver({ rows: this.rows, cols: this.cols, task: this.task });
+        p.H = this.H.map(row => row.slice()); p.V = this.V.map(row => row.slice());
+        p._trail = []; // probe runs connectivity/candidate rules that setEdge+_rollbackTo;
+                       // without a trail _rollbackTo no-ops and corrupts the probe board.
+        p._heavyBudgetMs = 0; // bounded by the outer loop's frontier limit + no nested bifurcation
+        p._bifurcationDisabled = true;
+        return p.setEdge(val.ref, val.val) && p._deduceAllNoBif();
+      };
+      const lineOk = probe({ ref: e, val: 1 });
+      const crossOk = probe({ ref: e, val: 2 });
+      if (!lineOk && !crossOk) return false;
+      if (lineOk && !crossOk) { if (!this.setEdge(e, 1)) return false; changed = true; }
+      else if (crossOk && !lineOk) { if (!this.setEdge(e, 2)) return false; changed = true; }
+    }
+    if (changed) this._heavyChanged = true;
+    return true;
+  }
+
+  // _deduceAll WITHOUT bifurcation (prevents unbounded recursion in probes).
+  // Includes Tier 1 (propagate + max-reach) and the non-bifurcation Tier-2 rules.
+  _deduceAllNoBif() {
+    for (;;) {
+      if (!this._propagate()) return false;
+      if (!this._maxReachForce()) return false;
+      if (this._maxReachChanged) continue;
+      this._heavyChanged = false;
+      if (!this._candidateIntersectForce()) return false;
+      if (!this._connectivityForce()) return false;
+      if (!this._heavyChanged) return true;
+    }
   }
 
   _edgeKey(kind, r, c) { return kind + r + ',' + c; }

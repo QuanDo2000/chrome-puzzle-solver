@@ -589,6 +589,28 @@ test('Shingoki connectivity-force: force-soundness vs the oracle (3x3 + 4x4)', (
   }
 });
 
+test('Shingoki bifurcation: forces an edge when one value deduces a contradiction', () => {
+  assert.equal(typeof ShingokiSolver.prototype._bifurcateForce, 'function');
+});
+test('Shingoki bifurcation: force-soundness vs the oracle (3x3 + 4x4)', () => {
+  // SOUNDNESS GATE for technique 4 (bounded bifurcation). Both boards MUST be
+  // satisfiable (>=1 solution) or assertForceSoundness early-returns on the
+  // UNSAT board and tests nothing. The plan's illustrative 3x3 (mixed
+  // white/black corners) is UNSAT — a corner vertex can only TURN, so a white
+  // (straight) corner clue is unrealizable. Replaced with the proven-satisfiable
+  // all-black-corner n=4 board (2 sols; same arithmetic as Tasks 3/4: a black
+  // corner clue's number = the SUM of both straight runs). The plan's 4x4 board
+  // is satisfiable (53 sols) and kept verbatim.
+  const boards = [
+    { rows: 3, cols: 3, task: [[-4,0,0,-4],[0,0,0,0],[0,0,0,0],[-4,0,0,-4]] },
+    { rows: 4, cols: 4, task: [[0,0,3,0,0],[0,-2,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,2,0,0]] },
+  ];
+  for (const b of boards) {
+    assert.ok(bruteForceSolutions(b.rows, b.cols, b.task).length >= 1, 'oracle board must be satisfiable');
+    assertForceSoundness(b.rows, b.cols, b.task, (s) => s._bifurcateForce(), { trials: 40 });
+  }
+});
+
 test('ShingokiSolver: trail records and rolls back edge writes', () => {
   const s = new ShingokiSolver({ rows: 2, cols: 2, task: [[0,0,0],[0,0,0],[0,0,0]] });
   s._initState();
