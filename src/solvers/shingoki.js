@@ -247,9 +247,86 @@ class ShingokiSolver {
   _deduceAll(budgetMs) {
     for (;;) {
       if (!this._propagate()) return false;
+      if (!this._maxReachForce()) return false;
+      if (this._maxReachChanged) continue;     // forced edges -> re-propagate
       if (!this._deduceHeavy(budgetMs)) return false;
       if (!this._heavyChanged) return true;
     }
+  }
+
+  // Max achievable straight-run length (in edges) from vertex (r,c) in direction
+  // (dr,dc): count consecutive edges that are not CROSS until border/cross.
+  _maxRun(r, c, dr, dc) {
+    const { rows, cols } = this;
+    let len = 0, cr = r, cc = c;
+    for (;;) {
+      const nr = cr + dr, nc = cc + dc; let ref;
+      if (dr === 0) { const ec = Math.min(cc, nc); if (ec < 0 || ec >= cols || cr < 0 || cr > rows) break; ref = { kind: 'H', r: cr, c: ec }; }
+      else { const er = Math.min(cr, nr); if (er < 0 || er >= rows || cc < 0 || cc > cols) break; ref = { kind: 'V', r: er, c: cc }; }
+      if (this.getEdge(ref) === 2) break;       // a cross stops the run
+      len++; cr = nr; cc = nc;
+    }
+    return len;
+  }
+
+  // Technique 1: max-reach number forcing. Tier 1. Returns false on contradiction.
+  // Sets edges via setEdge (trail-tracked). Re-runs cheap; called from _deduceAll.
+  _maxReachForce() {
+    const { rows, cols } = this;
+    let changed = false;
+    const force = (ref, val) => { if (this.getEdge(ref) === 0) { if (!this.setEdge(ref, val)) return false; changed = true; } else if (this.getEdge(ref) !== val) return false; return true; };
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      const clue = ShingokiSolver.decodeClue(this.task[r][c]);
+      if (!clue) continue;
+      // axis max totals: H = left+right reach, V = up+down reach (edges).
+      const hMax = this._maxRun(r, c, 0, -1) + this._maxRun(r, c, 0, 1);
+      const vMax = this._maxRun(r, c, -1, 0) + this._maxRun(r, c, 1, 0);
+      if (clue.color === 'white') {
+        const hOk = hMax >= clue.n, vOk = vMax >= clue.n;
+        if (!hOk && !vOk) return false;                 // number unreachable -> contradiction
+        if (hOk && !vOk) {                               // must be horizontal
+          for (const e of this._axisEdges(r, c, 'V')) if (!force(e, 2)) return false;
+        } else if (vOk && !hOk) {                        // must be vertical
+          for (const e of this._axisEdges(r, c, 'H')) if (!force(e, 2)) return false;
+        }
+        // forced-extension: if the chosen axis is known (one axis viable), and one
+        // direction is capped below what's needed, force the minimum in the other.
+        for (const axis of ['H', 'V']) {
+          const viable = axis === 'H' ? (hOk && !vOk) : (vOk && !hOk);
+          if (!viable) continue;
+          const dirs = axis === 'H' ? [[0,-1],[0,1]] : [[-1,0],[1,0]];
+          const maxA = this._maxRun(r, c, dirs[0][0], dirs[0][1]);
+          const maxB = this._maxRun(r, c, dirs[1][0], dirs[1][1]);
+          // need a+b = n, a<=maxA, b<=maxB, a,b>=1. min a = max(1, n-maxB).
+          const minA = Math.max(1, clue.n - maxB), minB = Math.max(1, clue.n - maxA);
+          if (minA > maxA || minB > maxB) return false;
+          if (!this._forceMinRun(r, c, dirs[0][0], dirs[0][1], minA, force)) return false;
+          if (!this._forceMinRun(r, c, dirs[1][0], dirs[1][1], minB, force)) return false;
+        }
+      } else { // black: one H arm + one V arm; each arm >=1, sum = n.
+        // each arm's max reach is the best of its two directions.
+        const hArm = Math.max(this._maxRun(r, c, 0, -1), this._maxRun(r, c, 0, 1));
+        const vArm = Math.max(this._maxRun(r, c, -1, 0), this._maxRun(r, c, 1, 0));
+        if (hArm < 1 || vArm < 1) return false;          // black needs both arms
+        if (hArm + vArm < clue.n) return false;          // unreachable
+      }
+    }
+    this._maxReachChanged = changed; // Tier-1 re-settle flag (read by _deduceAll)
+    return true;
+  }
+
+  // Force the first `m` edges LINE along (dr,dc) from (r,c) (m>=1). Sound only when
+  // the caller has established this direction must contribute at least m edges.
+  _forceMinRun(r, c, dr, dc, m, force) {
+    let cr = r, cc = c;
+    for (let i = 0; i < m; i++) {
+      const nr = cr + dr, nc = cc + dc; let ref;
+      if (dr === 0) { const ec = Math.min(cc, nc); ref = { kind: 'H', r: cr, c: ec }; }
+      else { const er = Math.min(cr, nr); ref = { kind: 'V', r: er, c: cc }; }
+      if (!force(ref, 1)) return false;
+      cr = nr; cc = nc;
+    }
+    return true;
   }
 
   // Length (in line-edges) of the maximal straight runs through vertex (r,c),

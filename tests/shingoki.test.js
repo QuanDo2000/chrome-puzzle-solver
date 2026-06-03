@@ -675,7 +675,11 @@ test('Shingoki DFS: genuine UNSAT returns no-solution, not a partial', () => {
   const task = [[0,0,0],[0,9,0],[0,0,0]];
   const res = new ShingokiSolver({ rows: 2, cols: 2, task, maxMs: 5000 }).solve();
   assert.equal(res.solved, false);
-  assert.equal(res.error, 'no solution');
+  // Genuine UNSAT yields a non-partial error. max-reach now SOUNDLY detects this
+  // unreachable-number board at root deduction ('contradiction on initial
+  // propagation') rather than after exhausting the search tree ('no solution');
+  // either is a valid genuine-UNSAT signal. The contract that matters: NOT a partial.
+  assert.ok(res.error === 'no solution' || res.error === 'contradiction on initial propagation', res.error);
   assert.notEqual(res.partial, true);
 });
 
@@ -734,5 +738,50 @@ test('Shingoki solve: real mid-size hard boards return a sound partial (never sp
     const p = fx[key];
     const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, searchMs: 6000, maxMs: 30000 }).solve();
     assertSolvedOrSoundPartial(res, p.rows, p.cols, p.task, key);
+  }
+});
+
+test('Shingoki maxReach: a white clue whose number exceeds one axis forces the other axis', () => {
+  // 1x4 strip (rows=1, cols=4 -> 2x5 vertices). A white clue near the left on the
+  // top row: vertical axis has only 1 edge available (can't form a 2-edge straight
+  // run through the vertex), so a number >=2 must be horizontal.
+  // Vertices 2 rows x 5 cols. Put white clue n=4 at (0,2).
+  const task = [[0,0,4,0,0],[0,0,0,0,0]];
+  assert.ok(bruteForceSolutions(1, 4, task).length >= 1, 'board must be satisfiable');
+  const s = new ShingokiSolver({ rows: 1, cols: 4, task });
+  s._initState();
+  s._deduceAll(0);
+  // vertical edges at (0,2) [the only vertical incident is V(0,2)] cannot give a
+  // straight vertical run through (0,2) (needs edges both above and below; none
+  // above), so the white line must be horizontal -> H(0,1) and H(0,2) forced LINE.
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 1 }), 1);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 2 }), 1);
+});
+
+test('Shingoki maxReach: does NOT fire when both axes can still reach the number', () => {
+  // White clue n=2 in the interior with both axes open -> ambiguous, force nothing.
+  const task = [[0,0,0,0,0],[0,0,2,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]];
+  const s = new ShingokiSolver({ rows: 4, cols: 4, task });
+  s._initState();
+  s._deduceAll(0);
+  // no incident edge of (1,2) should be forced LINE (both axes viable)
+  for (const e of s.incidentEdges(1, 2)) {
+    if (s.getEdge(e) === 1) assert.fail(`maxReach wrongly forced ${e.kind}(${e.r},${e.c})`);
+  }
+});
+
+test('Shingoki maxReach: force-soundness vs the oracle (3x3 + 4x4 boards)', () => {
+  // NOTE (board fix): the plan's 3x3 board [[2,0,0,-2],...,[-2,0,0,2]] is UNSATISFIABLE
+  // (white n=2 at a corner has no straight run through it -> 0 solutions), which would
+  // make the oracle test pass VACUOUSLY. Replaced with a satisfiable mixed board
+  // (white n=2 at top-edge (0,1) + black n=2 interior at (2,2)) verified at 7 solutions,
+  // which exercises both the white and black branches of _maxReachForce.
+  const boards = [
+    { rows: 3, cols: 3, task: [[0,2,0,0],[0,0,0,0],[0,0,-2,0],[0,0,0,0]] },
+    { rows: 4, cols: 4, task: [[0,0,3,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,4,0,0]] },
+  ];
+  for (const b of boards) {
+    assert.ok(bruteForceSolutions(b.rows, b.cols, b.task).length >= 1, 'board must be satisfiable');
+    assertForceSoundness(b.rows, b.cols, b.task, (s) => s._maxReachForce());
   }
 });
