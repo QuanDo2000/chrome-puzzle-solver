@@ -11,29 +11,35 @@
 // Deductive hint entry point: getStepwiseHint(curH, curV) — propagation +
 // 1-step lookahead; returns forced LINE edges or null (see the deductive-hint spec).
 //
-// === CDCL search engine ===
+// === Adaptive DFS search engine ===
 //
-// _solveCdcl() is a full CDCL solver with boolean edge variables (LINE = true,
-// CROSS = false). Each edge is one boolean var; H vars occupy [0, numH),
-// V vars [numH, numH+numV). Variable encoding: _varId / _decodeVar.
+// solve() runs a recursive backtracking search over edge values, built on the
+// sound primitives _propagate (degree/shape/axis/run-cap), the change-trail
+// (setEdge push + _trailMark/_rollbackTo), the structural prunes
+// (_hasPrematureLoop / _deadByConnectivity), and the acceptance gate
+// _isValidComplete. Branch selection (_pickBranch) is adaptive and
+// SOUND-NEUTRAL: it extends a committed chain (LINE first) where one exists,
+// else picks a constraint-focused edge by probing which assignment propagates
+// most. CDCL was tried and removed: ~88% of conflicts on real boards are
+// structural (connectivity) with no tight var-reason, so clause learning was
+// useless AND bloated propagation, regressing small boards (see the
+// adaptive-DFS design spec).
 //
-// Search loop: unit propagation (_propagate, reusing the sound degree/shape/
-// axis/run-cap/connectivity rules) → first-UIP conflict analysis
-// (_analyzeConflict) → non-chronological backjump → learned clause addition
-// (_addLearnedClause). Branching uses VSIDS (_pickDecisionVar, _bumpVar,
-// _decayVsids) with Luby-sequence restart intervals (_lubyNext). Learned
-// clause LRU capped at 2000. No in-search lookahead (propagation alone is
-// the propagator at every level).
+// Partial-on-timeout: a searchMs deep-search cap (~6 s; maxMs is the outer
+// ceiling) unwinds via a thrown SEARCH_BUDGET sentinel, and solve() returns the
+// level-0 propagation snapshot captured before the first branch — a SOUND
+// partial (every edge entailed by the clues, no vertex degree > 2). Only a
+// budget bail yields a partial; an exhausted tree returns 'no solution'.
 //
-// Partial-on-timeout: when the wall-clock budget expires, solve() collects
-// the level-0 (root) edge assignments (sound under any search path) and
-// returns { error: 'time limit exceeded', partial: true, horizontal, vertical }.
-// No degree > 2 can appear in the partial (soundness of the propagation rules).
-//
-// Measured reality: mid-size constructive boards (10x10–20x20) solve quickly.
-// The real 40x40 monthly puzzle still times out and returns a sound partial
-// (~57–72 level-0 edges). Full solve of the hardest monthlies is a known open
-// limit — the same situation as SlitherlinkSolver's CDCL on its 50x40 boards.
+// Measured reality (real captured boards): the 7x7-hard and dense/fully-clued
+// boards solve in a few seconds. Real HARD boards >=10x10 do NOT fully solve in
+// budget — the deduction engine stalls at ~9-16 edges and the residual search
+// space is astronomical (CDCL and iterated lookahead also fail them) — so they
+// return a sound partial at the searchMs cap (the 'finish manually' widget
+// path). Solving real mid-size hard boards needs a much stronger deduction
+// engine (advanced number-reachability / loop-parity / region connectivity),
+// which is out of scope here. See the adaptive-DFS design spec's revised
+// success criteria.
 const { timeUp } = require('./shared.js');
 
 // Thrown by _dfs to unwind to solve() when the deep-search budget expires.
@@ -46,7 +52,7 @@ class ShingokiSolver {
     return v > 0 ? { color: 'white', n: v } : { color: 'black', n: -v };
   }
 
-  constructor({ rows, cols, task, maxMs = 0, searchMs = 6000, stagnationMs = 8000 }) {
+  constructor({ rows, cols, task, maxMs = 0, searchMs = 6000 }) {
     this.rows = rows;
     this.cols = cols;
     this.task = task;
@@ -56,8 +62,6 @@ class ShingokiSolver {
     // searchMs cap fires first in practice; maxMs is an outer ceiling. Pass 0 to
     // disable searchMs (rely on maxMs only).
     this._searchMs = searchMs;
-    this._stagnationMs = stagnationMs;
-    this._stagnated = false;
     this._startedAt = 0;
   }
 
@@ -88,147 +92,11 @@ class ShingokiSolver {
     return out;
   }
 
-  // CDCL variable encoding: each edge is one boolean var (true=LINE, false=CROSS).
-  // H edges occupy [0, numH); V edges [numH, numH+numV). numH = (rows+1)*cols.
-  _numH() { return (this.rows + 1) * this.cols; }
-  _varId(kind, r, c) {
-    return kind === 'H' ? r * this.cols + c : this._numH() + r * (this.cols + 1) + c;
-  }
-  _decodeVar(id) {
-    const numH = this._numH();
-    if (id < numH) return { kind: 'H', r: Math.floor(id / this.cols), c: id % this.cols };
-    const v = id - numH; const w = this.cols + 1;
-    return { kind: 'V', r: Math.floor(v / w), c: v % w };
-  }
-  _numVars() { return this._numH() + this.rows * (this.cols + 1); }
-
   _initState() {
     const { rows, cols } = this;
     this.H = Array.from({ length: rows + 1 }, () => new Array(cols).fill(0));
     this.V = Array.from({ length: rows }, () => new Array(cols + 1).fill(0));
     this._trail = [];
-  }
-
-  // Initialize CDCL bookkeeping (separate from _initState's edge arrays).
-  _cdclInit() {
-    this._initState();              // builds H/V + _trail
-    const n = this._numVars();
-    this._reason = new Array(n).fill(undefined); // undefined=unassigned, null=decision, array=antecedents
-    const lv = new Int32Array(n); lv.fill(-1); this._level = lv;
-    this._assignTrail = [];         // var IDs in assignment order (for backjump)
-    this._decisionLevel = 0;
-    this._currentReason = null;     // set by rules before each forced setEdge
-    this._lastConflictReason = null;
-    this._learnedClauses = [];      // each: array of literals (~lit convention)
-    this._totalConflicts = 0;
-    this._cdcl = true;
-    this._initVsids();
-  }
-
-  // VSIDS (Variable State Independent Decaying Sum) activity heuristic.
-  // Float32Array scores per var; increment _vsidsInc decays every 256 conflicts
-  // (the MiniSAT trick: dividing the increment makes future bumps worth more,
-  // effectively decaying old scores without touching the whole array each time).
-  _initVsids() {
-    this._activity = new Float32Array(this._numVars()); // all zeros
-    this._vsidsInc = 1;
-    this._vsidsConflicts = 0;
-  }
-
-  // Bump the activity of a single variable. If any score overflows Float32 range,
-  // rescale all activities and the increment by 1e-30 to prevent NaN/Infinity.
-  _bumpVar(vid) {
-    this._activity[vid] += this._vsidsInc;
-    if (this._activity[vid] > 1e30) {
-      const n = this._numVars();
-      for (let i = 0; i < n; i++) this._activity[i] *= 1e-30;
-      this._vsidsInc *= 1e-30;
-    }
-  }
-
-  // Bump all vars in a learned clause, then decay if due.
-  _bumpVsids(clause) {
-    for (const lit of clause) {
-      const vid = lit >= 0 ? lit : ~lit;
-      this._bumpVar(vid);
-    }
-    this._decayVsidsIfDue();
-  }
-
-  // Increment the conflict counter; every 256 conflicts increase _vsidsInc by
-  // dividing by the decay factor (0.95), which is equivalent to decaying all
-  // existing scores — future bumps become proportionally larger.
-  _decayVsidsIfDue() {
-    this._vsidsConflicts++;
-    if (this._vsidsConflicts % 256 === 0) this._vsidsInc /= 0.95;
-  }
-
-  // Pick the highest-activity unassigned variable. Returns var id, or -1 if
-  // all vars are assigned. Ties broken by lowest var id (stable).
-  _pickDecisionVar() {
-    const n = this._numVars();
-    let best = -1, bestScore = -1;
-    for (let vid = 0; vid < n; vid++) {
-      if (this._varValue(vid) !== 0) continue; // already assigned
-      const sc = this._activity[vid];
-      if (best === -1 || sc > bestScore) { bestScore = sc; best = vid; }
-    }
-    return best; // -1 means all assigned
-  }
-
-  // Truth value of a variable under the current edge assignment:
-  //  1 = LINE (positive), -1 = CROSS (negative), 0 = unassigned.
-  _varValue(vid) {
-    const d = this._decodeVar(vid);
-    const v = d.kind === 'H' ? this.H[d.r][d.c] : this.V[d.r][d.c];
-    return v === 0 ? 0 : v === 1 ? 1 : -1;
-  }
-
-  // Sets the edge corresponding to a literal under the ~lit convention:
-  //   lit >= 0 -> var is positive (LINE);  lit < 0 -> var is negative (CROSS).
-  //   varId = lit >= 0 ? lit : ~lit.  NEVER Math.abs/-lit (var 0 is real).
-  // Returns false on contradiction (same contract as setEdge).
-  _forceLiteral(lit) {
-    const vid = lit >= 0 ? lit : ~lit;
-    const d = this._decodeVar(vid);
-    return this.setEdge({ kind: d.kind, r: d.r, c: d.c }, lit >= 0 ? 1 : 2);
-  }
-
-  _addLearnedClause(literals) {
-    this._learnedClauses.push(literals.slice());
-  }
-
-  // Canonical Luby sequence (0-indexed). Knuth, AofA Vol 4A §7.2.2.2.
-  // For 1-indexed k: if k == 2^n - 1 return 2^(n-1), else recurse on
-  // k - 2^(n-1) + 1 with the smallest n satisfying 2^n - 1 >= k.
-  // Note: the plain iterative recurrence non-terminates on idx===0 (k===1),
-  // so the first call short-circuits before entering the loop.
-  _lubyNext(idx) {
-    let k = idx + 1;
-    for (;;) {
-      let n = 1;
-      while ((1 << n) - 1 < k) n++;
-      if (k === (1 << n) - 1) return 1 << (n - 1);
-      k = k - (1 << (n - 1)) + 1;
-    }
-  }
-
-  // Restart: non-chronologically backjump to level 0, keeping learned clauses
-  // and VSIDS activity intact (they keep the search sound and help avoid
-  // re-exploring the same bad subspaces). Pruning learned clauses here (at
-  // level 0) is safe: no learned clause can be an active reason for any
-  // current assignment because all assignments have been undone. At level 0
-  // the next _propagateAll() re-derives level-0 implications from the
-  // retained (and now capped) clause set, keeping termination guarantees.
-  _restart() {
-    this._backjumpTo(0);
-    // LRU cap: prune at restart (level 0) where no clause is an active
-    // reason — dropping a clause here is always sound (learned clauses are
-    // redundant implied constraints). Keep the 5000 most-recently-added.
-    const CAP = 5000;
-    if (this._learnedClauses.length > CAP) {
-      this._learnedClauses = this._learnedClauses.slice(-CAP);
-    }
   }
 
   getEdge(ref) {
@@ -241,12 +109,6 @@ class ShingokiSolver {
     if (cur === val) return true;
     if (cur !== 0) return false;
     if (this._trail) this._trail.push(ref.kind, ref.r, ref.c, cur);
-    if (this._cdcl) {
-      const vid = this._varId(ref.kind, ref.r, ref.c);
-      this._reason[vid] = this._currentReason; // null for a decision, array for a force
-      this._level[vid] = this._decisionLevel;
-      this._assignTrail.push(vid);
-    }
     if (ref.kind === 'H') this.H[ref.r][ref.c] = val; else this.V[ref.r][ref.c] = val;
     return true;
   }
@@ -259,14 +121,6 @@ class ShingokiSolver {
     while (t.length > mark) {
       const prev = t.pop(), c = t.pop(), r = t.pop(), kind = t.pop();
       if (kind === 'H') this.H[r][c] = prev; else this.V[r][c] = prev;
-      if (this._cdcl) {
-        const vid = this._varId(kind, r, c);
-        this._reason[vid] = undefined;
-        this._level[vid] = -1;
-        if (this._assignTrail.length && this._assignTrail[this._assignTrail.length - 1] === vid) {
-          this._assignTrail.pop();
-        }
-      }
     }
   }
 
@@ -284,30 +138,7 @@ class ShingokiSolver {
     const enq = (r, c) => { const k = r * (cols + 2) + c; if (!seen.has(k)) { seen.add(k); queue.push([r, c]); } };
     for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) enq(r, c);
 
-    // Captures the incident-edge set of the vertex whose rule is currently
-    // forcing edges, so trySet/conflictReason can derive a local antecedent set.
-    let curInc = null;
-
-    const trySet = (ref, val, reasonOverride) => {
-      if (this._cdcl) {
-        // Most rules here are LOCAL to (r,c): sound local reason = the
-        // determined incident edges of the CURRENT vertex, excluding the edge
-        // being set (clue is a fixed fact -> omitted). The NON-LOCAL run-cap
-        // rule walks a straight run beyond (r,c)'s incident edges, so it passes
-        // an explicit reasonOverride spanning the full run (the true
-        // antecedents); using the local set there would under-approximate and
-        // yield an unsound learned clause.
-        if (reasonOverride) {
-          this._currentReason = reasonOverride;
-        } else {
-          const reason = [];
-          for (const e of curInc) {
-            if (e.kind === ref.kind && e.r === ref.r && e.c === ref.c) continue; // skip target
-            if (this.getEdge(e) !== 0) reason.push(this._varId(e.kind, e.r, e.c));
-          }
-          this._currentReason = reason;
-        }
-      }
+    const trySet = (ref, val) => {
       const before = this.getEdge(ref);
       if (!this.setEdge(ref, val)) return false;
       if (this.getEdge(ref) !== before) for (const v of this._endpoints(ref)) { seen.delete(v.r*(cols+2)+v.c); enq(v.r, v.c); }
@@ -318,32 +149,25 @@ class ShingokiSolver {
       const [r, c] = queue.pop();
       seen.delete(r * (cols + 2) + c);
       const inc = this.incidentEdges(r, c);
-      curInc = inc;
-      // Determined incident edges of the current vertex, as a conflict reason.
-      const conflictReason = () => {
-        const rs = [];
-        for (const e of inc) if (this.getEdge(e) !== 0) rs.push(this._varId(e.kind, e.r, e.c));
-        return rs;
-      };
       let lines = 0, crosses = 0;
       for (const e of inc) { const v = this.getEdge(e); if (v === 1) lines++; else if (v === 2) crosses++; }
       const unknown = inc.length - lines - crosses;
       const clue = ShingokiSolver.decodeClue(this.task[r][c]);
 
       // Degree rule: a vertex is degree 0 or 2.
-      if (lines > 2) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
-      if (lines === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } }
+      if (lines > 2) return false;
+      if (lines === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 2)) return false; }
       // If only 2 edges can still be lines and a 2 is required, force them.
       if (lines === 1 && unknown === 1) {
         // degree must reach 2: the one unknown becomes a line.
-        for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+        for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) return false;
       }
       // No vertex (clued or empty) may end at degree exactly 1.
-      if (lines === 1 && unknown === 0) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+      if (lines === 1 && unknown === 0) return false;
       // Circled vertex must be degree 2 (cannot be 0).
       if (clue) {
-        if (lines + unknown < 2) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } // can't reach degree 2
-        if (lines === 0 && unknown === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } }
+        if (lines + unknown < 2) return false; // can't reach degree 2
+        if (lines === 0 && unknown === 2) { for (const e of inc) if (this.getEdge(e) === 0) if (!trySet(e, 1)) return false; }
       }
 
       // Border/axis forcing (sound opening deductions).
@@ -355,13 +179,13 @@ class ShingokiSolver {
           const vEdges = this._axisEdges(r, c, 'V');
           const hViable = hEdges.length === 2 && hEdges.every(e => this.getEdge(e) !== 2);
           const vViable = vEdges.length === 2 && vEdges.every(e => this.getEdge(e) !== 2);
-          if (!hViable && !vViable) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+          if (!hViable && !vViable) return false;
           if (hViable && !vViable) {
-            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
-            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) return false;
+            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) return false;
           } else if (vViable && !hViable) {
-            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
-            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+            for (const e of vEdges) if (this.getEdge(e) === 0 && !trySet(e, 1)) return false;
+            for (const e of hEdges) if (this.getEdge(e) === 0 && !trySet(e, 2)) return false;
           }
         } else {
           // Black needs one horizontal + one vertical line. If only one edge of
@@ -369,7 +193,7 @@ class ShingokiSolver {
           for (const axis of ['H', 'V']) {
             const avail = this._axisEdges(r, c, axis).filter(e => this.getEdge(e) !== 2);
             if (avail.length === 1 && this.getEdge(avail[0]) === 0) {
-              if (!trySet(avail[0], 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+              if (!trySet(avail[0], 1)) return false;
             }
           }
         }
@@ -385,8 +209,8 @@ class ShingokiSolver {
           if (lineRefs.length >= 1) {
             const straightKind = isH(lineRefs[0]) ? 'H' : 'V';
             for (const e of inc) {
-              if (e.kind === straightKind) { if (this.getEdge(e) === 0 && !trySet(e, 1)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } }
-              else { if (this.getEdge(e) === 0 && !trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; } }
+              if (e.kind === straightKind) { if (this.getEdge(e) === 0 && !trySet(e, 1)) return false; }
+              else { if (this.getEdge(e) === 0 && !trySet(e, 2)) return false; }
             }
           }
         } else {
@@ -394,14 +218,9 @@ class ShingokiSolver {
           if (lineRefs.length >= 1) {
             const sameKind = isH(lineRefs[0]) ? 'H' : 'V';
             // the collinear partner of the known line must be cross.
-            for (const e of inc) if (e.kind === sameKind && this.getEdge(e) === 0) if (!trySet(e, 2)) { if (this._cdcl) this._lastConflictReason = conflictReason(); return false; }
+            for (const e of inc) if (e.kind === sameKind && this.getEdge(e) === 0) if (!trySet(e, 2)) return false;
           }
         }
-        // Run-cap is NON-LOCAL: it owns its conflict reason (the full run, which
-        // extends beyond (r,c)'s incident edges) via _lastConflictReason, set
-        // inside _applyRunCap. Do NOT recompute the local conflictReason() here
-        // or it would clobber the sound run-spanning reason with an
-        // under-approximation.
         if (!this._applyRunCap(r, c, clue, trySet)) return false;
       }
     }
@@ -481,39 +300,18 @@ class ShingokiSolver {
     const vert = inc.some(e => e.kind === 'V');
     let total = 0;
     const ends = [];
-    const runEdges = [];
     if (horiz) {
       const a = walk(0, -1), b = walk(0, 1);
       total += a.len + b.len; ends.push(a.endRef, b.endRef);
-      runEdges.push(...a.edges, ...b.edges);
     }
     if (vert) {
       const a = walk(-1, 0), b = walk(1, 0);
       total += a.len + b.len; ends.push(a.endRef, b.endRef);
-      runEdges.push(...a.edges, ...b.edges);
     }
-    // Run-cap is a NON-LOCAL rule: the antecedents of every force/conflict it
-    // produces are the CONFIRMED edges of the whole run (which extend beyond
-    // (r,c)'s incident edges), not just the clue vertex's local edges. Recording
-    // only the local edges would under-approximate the reason and make the
-    // learned clause unsound (the omitted far run edges are necessary to entail
-    // the force). So build the run-spanning reason here and pass it explicitly.
-    const runReason = this._cdcl
-      ? runEdges.map(e => this._varId(e.kind, e.r, e.c))
-      : null;
-    if (total > clue.n) {
-      if (this._cdcl) this._lastConflictReason = runReason;
-      return false;
-    }
+    if (total > clue.n) return false;
     if (total === clue.n) {
       for (const ref of ends) {
-        // Pass runReason as an explicit override so trySet records the full run
-        // (not its local recompute). The target end edge is unknown (==0) so it
-        // is never itself in runReason; no self-reference to strip.
-        if (ref && this.getEdge(ref) === 0 && !trySet(ref, 2, runReason)) {
-          if (this._cdcl) this._lastConflictReason = runReason;
-          return false;
-        }
+        if (ref && this.getEdge(ref) === 0 && !trySet(ref, 2)) return false;
       }
     }
     return true;
@@ -582,350 +380,6 @@ class ShingokiSolver {
       this._rollbackTo(mark);
     }
     return false;
-  }
-
-  // Learning CDCL engine. Returns { solved, horizontal, vertical, error? }:
-  // solved:true with the grid, or solved:false with error 'time limit
-  // exceeded' / 'no solution' / 'contradiction on initial propagation'.
-  _solveCdcl() {
-    this._startedAt = Date.now();
-    this._stagnated = false;
-    this._cdclInit();
-    if (!this._propagate()) {
-      return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
-    }
-    // Root (decision-level-0) snapshot: edges deduced from the givens alone,
-    // with no speculative branch decision. Every edge here is entailed by the
-    // clues, so it is a SOUND partial. Captured now (before the first decision)
-    // and refreshed by _cdclSearch whenever the search returns to level 0
-    // (after a backjump-to-0 or a restart), where the strongest set of level-0
-    // facts is known. On timeout solve() returns this as the partial.
-    this._rootSnapshot = { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
-    const ok = this._cdclSearch();
-    if (ok) {
-      return { solved: true, horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
-    }
-    // A stagnation bail is "best partial reached", not a real timeout and not
-    // UNSAT. Route it through the SAME shape as a timeout (error 'time limit
-    // exceeded') so solve() attaches the level-0 snapshot as a sound partial.
-    // A genuine UNSAT reaches a level-0 conflict and returns false WITHOUT
-    // setting _stagnated, so it still falls through to 'no solution'.
-    if (this._stagnated || (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt))) {
-      return { solved: false, horizontal: null, vertical: null, error: 'time limit exceeded' };
-    }
-    return { solved: false, horizontal: null, vertical: null, error: 'no solution' };
-  }
-
-  // Decision level at which `vid` was assigned (0 if unassigned/root).
-  _decisionLevelOf(vid) {
-    const lv = this._level[vid];
-    return lv < 0 ? 0 : lv;
-  }
-
-  // First-UIP conflict analysis (CDCL §4), ported from SlitherlinkSolver and
-  // adapted to Shingoki's var-keyed reason/level bookkeeping (edge-only vars).
-  //
-  // Slitherlink keys `_reasons[]`/`_decisionLevels[]` by TRAIL INDEX and stores
-  // literals; Shingoki keys `_reason[vid]`/`_level[vid]` by VAR ID and stores
-  // antecedent VAR IDs (Task 3). So here:
-  //   - `_decisionLevelOf(vid)` reads `_level[vid]` directly (no _trailIndexOf).
-  //   - the reason of a seen var is `_reason[vid]` directly.
-  //   - the trail walk iterates `_assignTrail` (var ids in assignment order).
-  // The learned clause is an array of literals; each literal NEGATES the seen
-  // var's current assignment: LINE (value 1) -> `~v`, CROSS (value -1) -> `v`,
-  // so the clause excludes the current (bad) assignment but is implied true.
-  //
-  // Textbook first-UIP (no subsumption pre-pass). Shingoki's CDCL search does
-  // NOT run lookahead, so every reason (`_reason[vid]`) is a well-formed,
-  // SUFFICIENT antecedent set for its forced var (sound local reason from
-  // _propagate; the non-local run-cap rule records its full run as the reason).
-  // Slitherlink's subsumption pre-pass + rescue path exist to cope with
-  // lookahead "ghost" vars in its conflict reasons; importing them here is
-  // unsound because subsumption can drop a needed current-level antecedent
-  // (e.g. a var X that is BOTH in another conflict var's reason and the sole
-  // bridge to a separate current-level fact), yielding a too-short unit clause
-  // that wrongly asserts a decision's negation -> spurious UNSAT. Plain first-
-  // UIP resolves every current-level var down to ONE asserting literal and
-  // keeps all earlier-level literals, which is exactly what we need.
-  _analyzeConflict(conflictReason) {
-    const n = this._numVars();
-    const learned = [];
-    const seen = new Uint8Array(n);
-    let pathCount = 0;
-    const curLevel = this._decisionLevel;
-
-    // Seed pathCount (current-level vars) + earlier-level literals.
-    for (const vid of conflictReason) {
-      if (vid < 0 || vid >= n || seen[vid]) continue;
-      const value = this._varValue(vid);
-      if (value === 0) continue;
-      seen[vid] = 1;
-      const lvl = this._decisionLevelOf(vid);
-      if (lvl === 0) continue;
-      if (lvl < curLevel) learned.push(value > 0 ? ~vid : vid);
-      else pathCount++;
-    }
-
-    // Walk the assignment trail backward, resolving current-level vars by their
-    // antecedents until exactly one current-level var remains (the first UIP).
-    for (let i = this._assignTrail.length - 1; pathCount > 0 && i >= 0; i--) {
-      const vid = this._assignTrail[i];
-      if (!seen[vid] || this._level[vid] !== curLevel) continue;
-
-      pathCount--;
-      const reason = this._reason[vid];
-
-      if (pathCount === 0 || reason === null) {
-        // vid is the first UIP — assert its negation.
-        const value = this._varValue(vid);
-        learned.push(value > 0 ? ~vid : vid);
-        break;
-      }
-
-      // Resolve vid: replace it with its antecedents.
-      for (const av of reason) {
-        if (av < 0 || av >= n || seen[av]) continue;
-        seen[av] = 1;
-        const aLvl = this._decisionLevelOf(av);
-        if (aLvl === 0) continue;
-        const aVal = this._varValue(av);
-        if (aVal === 0) continue;
-        if (aLvl < curLevel) learned.push(aVal > 0 ? ~av : av);
-        else pathCount++;
-      }
-    }
-
-    return learned;
-  }
-
-  // Second-highest decision level among the learned clause's literals — the
-  // level the clause becomes unit at after rollback. 0 if only one level.
-  _computeBackjumpLevel(learned) {
-    let max = 0, second = 0;
-    for (const lit of learned) {
-      const vid = lit >= 0 ? lit : ~lit;
-      const lvl = this._decisionLevelOf(vid);
-      if (lvl > max) { second = max; max = lvl; }
-      else if (lvl > second && lvl < max) second = lvl;
-    }
-    return second;
-  }
-
-  // Rolls the assignment trail back to `level` (all surviving entries have
-  // _level <= level), then sets _decisionLevel = level. Uses the edge trail's
-  // existing rollback by computing the trail mark of the first edge-write whose
-  // var sits above `level`. The edge trail and _assignTrail advance in lockstep
-  // (setEdge pushes both), so the count of above-level _assignTrail vars equals
-  // the count of edge-writes to undo from the trail tail.
-  _backjumpTo(level) {
-    let above = 0;
-    for (let i = this._assignTrail.length - 1; i >= 0; i--) {
-      if (this._level[this._assignTrail[i]] > level) above++; else break;
-    }
-    // Each setEdge that changed an edge pushed 4 ints onto _trail. Undo `above`
-    // of those by rolling back to the matching mark.
-    const mark = this._trail.length - above * 4;
-    this._rollbackTo(mark < 0 ? 0 : mark);
-    this._decisionLevel = level;
-  }
-
-  // Learned-clause unit propagation. A learned clause is a valid implied
-  // constraint, so unit-forcing from it is sound. Scans every learned clause:
-  //   - satisfied (some literal true)            -> skip
-  //   - all literals false                       -> conflict, return false
-  //   - exactly one literal unassigned (unit)    -> force it (reason = the other
-  //                                                 literals' vars), record change
-  // `onChange()` is called for each force so the caller re-runs the rule
-  // fixpoint. Sets _lastConflictReason on conflict (the clause's vars).
-  _propagateLearned(onChange) {
-    for (const clause of this._learnedClauses) {
-      let unassignedCount = 0, unassignedLit = 0, satisfied = false;
-      for (const lit of clause) {
-        const vid = lit >= 0 ? lit : ~lit;
-        const v = this._varValue(vid);
-        if (v === 0) { unassignedCount++; unassignedLit = lit; }
-        else if ((v > 0) === (lit >= 0)) { satisfied = true; break; }
-      }
-      if (satisfied) continue;
-      if (unassignedCount === 0) {
-        this._lastConflictReason = clause.map(l => (l >= 0 ? l : ~l));
-        return false;
-      }
-      if (unassignedCount === 1) {
-        this._currentReason = clause
-          .filter(l => l !== unassignedLit)
-          .map(l => (l >= 0 ? l : ~l));
-        if (!this._forceLiteral(unassignedLit)) {
-          this._lastConflictReason = clause.map(l => (l >= 0 ? l : ~l));
-          return false;
-        }
-        onChange();
-      }
-    }
-    return true;
-  }
-
-  // Full propagation to a joint fixpoint of the deduction rules (_propagate)
-  // AND learned-clause unit propagation. Alternates the two until neither
-  // changes (or one signals a conflict). Returns false on contradiction.
-  _propagateAll() {
-    for (;;) {
-      if (!this._propagate()) return false;
-      if (this._learnedClauses.length === 0) return true;
-      let changed = false;
-      if (!this._propagateLearned(() => { changed = true; })) return false;
-      if (!changed) return true;
-      // a learned clause forced an edge -> re-run the rules.
-    }
-  }
-
-  // Learning CDCL search with Luby restarts: decide CROSS-first, propagate
-  // (rules + learned clauses), and on conflict run first-UIP analysis to learn
-  // a clause, then non-chronologically backjump and add it. After enough
-  // conflicts (Luby threshold), restart to level 0 to escape bad subtrees.
-  // VSIDS + learned clauses are preserved across restarts so search is sound
-  // and terminates (the clause set prunes the space; Luby counts are finite).
-  //
-  // Conflict sources beyond rule-propagation failure: a complete-but-invalid
-  // leaf, a premature closed sub-loop, or a connectivity-dead partial. None of
-  // these produce a tight var-reason from _propagate, so they BLAME THE CURRENT-
-  // LEVEL DECISION: the learned clause becomes ~decision (chronological-ish, but
-  // routed through the clause/backjump mechanism so it still prunes soundly).
-  // LINE-edge count of a root snapshot (values === 1 in horizontal + vertical).
-  // Monotonic non-decreasing as the search accumulates level-0 facts, so it
-  // drives the stagnation early-exit.
-  _snapshotLineCount(snap) {
-    let n = 0;
-    const { horizontal, vertical } = snap;
-    for (let r = 0; r < horizontal.length; r++) {
-      const row = horizontal[r];
-      for (let c = 0; c < row.length; c++) if (row[c] === 1) n++;
-    }
-    for (let r = 0; r < vertical.length; r++) {
-      const row = vertical[r];
-      for (let c = 0; c < row.length; c++) if (row[c] === 1) n++;
-    }
-    return n;
-  }
-
-  _cdclSearch() {
-    let conflictsSinceRestart = 0;
-    let lubyIdx = 0;
-    const RESTART_UNIT = 100;
-    let restartLimit = this._lubyNext(lubyIdx) * RESTART_UNIT;
-
-    // Stagnation tracking: wall-clock time the level-0 snapshot last GREW (its
-    // line count increased). Seed from the snapshot captured before the search
-    // by _solveCdcl so the first STAGNATION_MS window always allows progress.
-    let lastLines = this._rootSnapshot ? this._snapshotLineCount(this._rootSnapshot) : -1;
-    let lastGrowthAt = Date.now();
-
-    for (;;) {
-      if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) return false;
-
-      // Stagnation early-exit: the level-0 partial has stopped growing for
-      // _stagnationMs. Return the (sound) partial now instead of grinding the
-      // rest of the maxMs budget. Only fires once we actually have a snapshot
-      // to return; _stagnated flags _solveCdcl to take the partial path.
-      if (this._stagnationMs > 0 && this._rootSnapshot &&
-          Date.now() - lastGrowthAt > this._stagnationMs) {
-        this._stagnated = true;
-        return false;
-      }
-
-      // Propagate (rules + learned clauses) and check the structural prunes.
-      let conflict = false;
-      if (!this._propagateAll()) {
-        conflict = true; // _lastConflictReason already set by the failing pass
-      } else if (this._hasPrematureLoop() || this._deadByConnectivity()) {
-        conflict = true;
-        this._lastConflictReason = this._currentLevelDecisionReason();
-      } else {
-        // At level 0, every set edge is a sound level-0 deduction (entailed by
-        // the givens). Refresh the root snapshot here so the partial returned on
-        // timeout reflects the strongest level-0 facts learned so far (a
-        // backjump-to-0 or restart may have derived more via learned clauses).
-        if (this._decisionLevel === 0) {
-          this._rootSnapshot = { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
-          // Track stagnation: bump lastGrowthAt only when the snapshot's line
-          // count actually increased (the count is monotonic non-decreasing).
-          const lines = this._snapshotLineCount(this._rootSnapshot);
-          if (lines > lastLines) {
-            lastLines = lines;
-            lastGrowthAt = Date.now();
-          }
-        }
-        const vid = this._pickDecisionVar();
-        if (vid === -1) {
-          if (this._isValidComplete()) return true; // solved
-          // complete-but-invalid leaf: blame the current decision.
-          conflict = true;
-          this._lastConflictReason = this._currentLevelDecisionReason();
-        } else {
-          // decide: CROSS(2) first (matches solve()'s [2,1] order).
-          const d = this._decodeVar(vid);
-          const ref = { kind: d.kind, r: d.r, c: d.c };
-          this._decisionLevel++;
-          this._currentReason = null; // decision => null reason
-          this.setEdge(ref, 2);
-          continue;
-        }
-      }
-
-      if (conflict) {
-        this._totalConflicts++;
-        if (this._decisionLevel === 0) return false; // UNSAT at root
-
-        const conflictReason = this._lastConflictReason || [];
-        const learned = this._analyzeConflict(conflictReason);
-        const backjumpLevel = this._computeBackjumpLevel(learned);
-        this._backjumpTo(backjumpLevel);
-        if (learned.length > 0) {
-          this._addLearnedClause(learned);
-          this._bumpVsids(learned); // VSIDS: bump vars in the learned clause
-        }
-        // After backjump the learned clause is unit (or empty -> level 0); the
-        // next loop's _propagateAll picks it up and forces the asserting literal.
-        if (learned.length === 0) {
-          // No antecedents (e.g. a connectivity conflict that blamed a decision
-          // already at level 0 after the walk). Defensive: cannot make progress.
-          return false;
-        }
-
-        conflictsSinceRestart++;
-        if (conflictsSinceRestart >= restartLimit) {
-          this._restart();
-          conflictsSinceRestart = 0;
-          lubyIdx++;
-          restartLimit = this._lubyNext(lubyIdx) * RESTART_UNIT;
-        }
-      }
-    }
-  }
-
-  // Conflict reason for a STRUCTURAL conflict (connectivity-dead / premature
-  // loop / complete-but-invalid leaf). Unlike a rule conflict, these have no
-  // tight var-antecedent — the invalidity depends on the WHOLE decision path,
-  // not a single edge. So the reason is the conjunction of ALL current decisions
-  // (the decision var at each level 1.._decisionLevel). _analyzeConflict then
-  // learns ~d1 v ~d2 v ... v ~dk; its second-highest level is k-1, so the
-  // backjump pops one level and the clause forces ~d_k — i.e. it flips the
-  // deepest decision (chronological-backtrack semantics) but routed through the
-  // sound learned-clause/backjump mechanism. Using only the deepest decision
-  // here would be UNSOUND: asserting ~d_k at root discards d1..d_{k-1}, which
-  // were not refuted, and can prune the real solution -> spurious UNSAT.
-  _currentLevelDecisionReason() {
-    const out = [];
-    const seenLevel = new Set();
-    for (let i = this._assignTrail.length - 1; i >= 0; i--) {
-      const v = this._assignTrail[i];
-      const lv = this._level[v];
-      if (lv >= 1 && this._reason[v] === null && !seenLevel.has(lv)) {
-        seenLevel.add(lv);
-        out.push(v);
-      }
-    }
-    return out;
   }
 
   _firstUnassignedEdge() {
