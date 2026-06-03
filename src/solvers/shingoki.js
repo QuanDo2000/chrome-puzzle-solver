@@ -374,6 +374,16 @@ class ShingokiSolver {
       const run = this._runEdges(r, c, arm.dr, arm.dc, arm.len);
       if (!run) return null;                       // off-board -> impossible
       for (const e of run.edges) if (!addLine(e)) return null;
+      // Intermediate-clue consistency: vertices strictly inside the run (i=1..len-1)
+      // are passed straight through. A black clue there is impossible (it must turn);
+      // a white clue there must share this segment's length (arm.segLen).
+      for (let i = 1; i < arm.len; i++) {
+        const ir = r + i * arm.dr, ic = c + i * arm.dc;
+        const ivClue = ShingokiSolver.decodeClue(this.task[ir][ic]);
+        if (!ivClue) continue;
+        if (ivClue.color === 'black') return null;          // can't turn on a straight pass
+        if (ivClue.n !== arm.segLen) return null;           // same segment -> same number
+      }
       const cap = this._capEdge(run.endR, run.endC, arm.dr, arm.dc);
       if (cap && !addCross(cap)) return null;       // run must stop -> cap is CROSS
     }
@@ -394,12 +404,12 @@ class ShingokiSolver {
     if (clue.color === 'white') {
       // horizontal axis: arms left(0,-1) + right(0,1); perp V pair CROSS.
       for (let a = 1; a <= N - 1; a++) {
-        const cand = this._buildCandidate(r, c, [{ dr: 0, dc: -1, len: a }, { dr: 0, dc: 1, len: N - a }], [Nr, S]);
+        const cand = this._buildCandidate(r, c, [{ dr: 0, dc: -1, len: a, segLen: N }, { dr: 0, dc: 1, len: N - a, segLen: N }], [Nr, S]);
         if (cand) out.push(cand);
       }
       // vertical axis: arms up + down; perp H pair CROSS.
       for (let a = 1; a <= N - 1; a++) {
-        const cand = this._buildCandidate(r, c, [{ dr: -1, dc: 0, len: a }, { dr: 1, dc: 0, len: N - a }], [W, E]);
+        const cand = this._buildCandidate(r, c, [{ dr: -1, dc: 0, len: a, segLen: N }, { dr: 1, dc: 0, len: N - a, segLen: N }], [W, E]);
         if (cand) out.push(cand);
       }
     } else {
@@ -409,7 +419,7 @@ class ShingokiSolver {
       const vDirs = [{ dr: -1, dc: 0, partner: S }, { dr: 1, dc: 0, partner: Nr }];
       for (const h of hDirs) for (const v of vDirs) {
         for (let a = 1; a <= N - 1; a++) {
-          const cand = this._buildCandidate(r, c, [{ dr: h.dr, dc: h.dc, len: a }, { dr: v.dr, dc: v.dc, len: N - a }], [h.partner, v.partner]);
+          const cand = this._buildCandidate(r, c, [{ dr: h.dr, dc: h.dc, len: a, segLen: a }, { dr: v.dr, dc: v.dc, len: N - a, segLen: N - a }], [h.partner, v.partner]);
           if (cand) out.push(cand);
         }
       }

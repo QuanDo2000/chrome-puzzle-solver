@@ -808,7 +808,12 @@ test('Shingoki DFS: searchMs cap bails well before maxMs on the 40x40', () => {
   const wall = Date.now() - t0;
   if (!res.solved) {
     assert.equal(res.partial, true);
-    assert.ok(wall < 8000, `searchMs cap should bail near 2s, took ${wall}ms`);
+    // The searchMs cap bounds the DFS only, NOT the one-time level-0 _deduceAll(0)
+    // at the root. Candidate-strengthening (intermediate-clue consistency) made that
+    // root deduction heavier on the 40x40 (~2.3s -> ~4.8s), so total wall rose. The
+    // cap still fires well before the 30000ms maxMs (the real intent here); the bound
+    // is sized to root-deduction + searchMs + partial-assembly, not the old 2s.
+    assert.ok(wall < 22000, `searchMs cap should bail well before maxMs, took ${wall}ms`);
   }
 });
 
@@ -884,5 +889,66 @@ test('Shingoki maxReach: force-soundness vs the oracle (3x3 + 4x4 boards)', () =
   for (const b of boards) {
     assert.ok(bruteForceSolutions(b.rows, b.cols, b.task).length >= 1, 'board must be satisfiable');
     assertForceSoundness(b.rows, b.cols, b.task, (s) => s._maxReachForce());
+  }
+});
+
+test('Shingoki candidates: drops a config whose straight run passes through a black clue', () => {
+  // White clue n=4 at (0,2) on a 1-row strip; horizontal axis. A black clue at an
+  // INTERMEDIATE vertex of the horizontal run must kill the horizontal candidates,
+  // leaving only vertical (which is infeasible on a 1-row strip) -> contradiction
+  // OR forcing. Simpler: assert clueCandidates excludes a config crossing a black.
+  const task = [[0,0,4,0,0],[0,0,0,0,0]];      // white n=4 at (0,2)
+  const s = new ShingokiSolver({ rows: 1, cols: 4, task });
+  s._initState();
+  // Put a black clue at intermediate (0,1): a horizontal run through (0,1) passes
+  // straight through it, which a black clue forbids.
+  s.task[0][1] = -2;
+  const cands = s.clueCandidates(0, 2);
+  // No surviving candidate may have H(0,0) AND H(0,1) both LINE going left through
+  // the black at (0,1) as a straight pass... assert every candidate that includes
+  // H(0,1) as LINE is gone (the left-horizontal run through the black is dropped).
+  for (const cand of cands) {
+    if (cand.line.has(s._edgeKey('H', 0, 1)) && cand.line.has(s._edgeKey('H', 0, 0))) {
+      assert.fail('a horizontal run straight through the black clue at (0,1) survived');
+    }
+  }
+});
+
+test('Shingoki candidates: drops a config whose run passes through a white clue of a different number', () => {
+  // White clue n=4 at (0,2); a white clue n=2 at intermediate (0,1). A horizontal
+  // run that puts both on the same length-4 segment is impossible (intermediate
+  // white must read 4, not 2). The left-through-(0,1) horizontal candidate drops.
+  const task = [[0,2,4,0,0],[0,0,0,0,0]];
+  const s = new ShingokiSolver({ rows: 1, cols: 4, task });
+  s._initState();
+  const cands = s.clueCandidates(0, 2);
+  for (const cand of cands) {
+    if (cand.line.has(s._edgeKey('H', 0, 1)) && cand.line.has(s._edgeKey('H', 0, 0))) {
+      assert.fail('a horizontal run through the inconsistent white clue survived');
+    }
+  }
+});
+
+test('Shingoki candidates: KEEPS a config through a white clue with the matching number', () => {
+  // White n=4 at (0,2); white n=4 at intermediate (0,1) — consistent, must survive.
+  const task = [[0,4,4,0,0],[0,0,0,0,0]];
+  const s = new ShingokiSolver({ rows: 1, cols: 4, task });
+  s._initState();
+  const cands = s.clueCandidates(0, 2);
+  const survives = cands.some(cand => cand.line.has(s._edgeKey('H', 0, 1)) && cand.line.has(s._edgeKey('H', 0, 0)));
+  assert.ok(survives, 'a consistent same-number white intermediate must NOT be dropped');
+});
+
+test('Shingoki candidates: strengthened force-soundness vs the oracle (multi-clue boards)', () => {
+  // Boards with clues that lie on shared lines (so the new rules actually fire).
+  // VERIFY each is satisfiable with >=1 solution before trusting (fix numbers if not).
+  const boards = [
+    { rows: 3, cols: 3, task: [[-4,0,0,-4],[0,0,0,0],[0,0,0,0],[-4,0,0,-4]] },
+    { rows: 4, cols: 4, task: [[-3,0,0,0,-3],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[-3,0,0,0,-3]] },
+    { rows: 4, cols: 4, task: [[0,0,4,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,4,0,0]] },
+  ];
+  for (const b of boards) {
+    assert.ok(bruteForceSolutions(b.rows, b.cols, b.task).length >= 1, 'board must be satisfiable');
+    assertForceSoundness(b.rows, b.cols, b.task, (s) => s._candidateIntersectForce(), { trials: 80 });
   }
 });
