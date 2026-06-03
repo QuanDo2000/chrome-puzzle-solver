@@ -233,10 +233,129 @@ class ShingokiSolver {
   // tasks). Returns false on contradiction, and sets `this._heavyChanged = true`
   // if it forced any edge. `budgetMs` (0 = unbounded) caps the pass; on expiry it
   // returns true without finishing (sound: it only ever FORCES, never relaxes).
-  _deduceHeavy(_budgetMs) {
+  _deduceHeavy(budgetMs) {
     this._heavyChanged = false;
-    // (techniques appended here in later tasks; each sets _heavyChanged and may
-    //  return false on contradiction)
+    if (budgetMs > 0 && timeUp(budgetMs, this._startedAt)) return true; // interactive cap
+    if (!this._candidateIntersectForce()) return false;
+    return true;
+  }
+
+  _edgeKey(kind, r, c) { return kind + r + ',' + c; }
+
+  // Walk `len` edges from (r,c) in (dr,dc); return the list of edge refs, or null
+  // if it runs off-board.
+  _runEdges(r, c, dr, dc, len) {
+    const { rows, cols } = this;
+    const out = []; let cr = r, cc = c;
+    for (let i = 0; i < len; i++) {
+      const nr = cr + dr, nc = cc + dc; let ref;
+      if (dr === 0) { const ec = Math.min(cc, nc); if (ec < 0 || ec >= cols || cr < 0 || cr > rows) return null; ref = { kind: 'H', r: cr, c: ec }; }
+      else { const er = Math.min(cr, nr); if (er < 0 || er >= rows || cc < 0 || cc > cols) return null; ref = { kind: 'V', r: er, c: cc }; }
+      out.push(ref); cr = nr; cc = nc;
+    }
+    return { edges: out, endR: cr, endC: cc };
+  }
+
+  // The straight-continuation edge just past the vertex (er,ec) heading (dr,dc),
+  // or null if off-board. Used to CROSS-cap a run end (the run stops -> turn).
+  _capEdge(er, ec, dr, dc) {
+    const { rows, cols } = this;
+    const nr = er + dr, nc = ec + dc;
+    if (dr === 0) { const c2 = Math.min(ec, nc); if (c2 < 0 || c2 >= cols || er < 0 || er > rows) return null; return { kind: 'H', r: er, c: c2 }; }
+    const r2 = Math.min(er, nr); if (r2 < 0 || r2 >= rows || ec < 0 || ec > cols) return null; return { kind: 'V', r: r2, c: ec };
+  }
+
+  // Build a candidate from two arms (each {dr,dc,len}). Returns the candidate
+  // {line,cross} or null if it does not fit the board (off-board, or a required
+  // LINE edge is CROSS / required CROSS edge is LINE). Conservative: when a check
+  // is ambiguous we KEEP the candidate (return it), never drop it.
+  _buildCandidate(r, c, arms, perpCrossAtCentre) {
+    const { rows, cols } = this;
+    // An off-board edge ref simply does not exist (it is an implicit board wall,
+    // never LINE). Skipping it from the cross-set only weakens this candidate's
+    // forcing — it never under-approximates the candidate SET — so it is sound.
+    const inBoard = (e) => e.kind === 'H'
+      ? (e.r >= 0 && e.r <= rows && e.c >= 0 && e.c < cols)
+      : (e.r >= 0 && e.r < rows && e.c >= 0 && e.c <= cols);
+    const line = new Set(), cross = new Set();
+    const addLine = (e) => { if (this.getEdge(e) === 2) return false; line.add(this._edgeKey(e.kind, e.r, e.c)); return true; };
+    const addCross = (e) => { if (this.getEdge(e) === 1) return false; cross.add(this._edgeKey(e.kind, e.r, e.c)); return true; };
+    for (const arm of arms) {
+      const run = this._runEdges(r, c, arm.dr, arm.dc, arm.len);
+      if (!run) return null;                       // off-board -> impossible
+      for (const e of run.edges) if (!addLine(e)) return null;
+      const cap = this._capEdge(run.endR, run.endC, arm.dr, arm.dc);
+      if (cap && !addCross(cap)) return null;       // run must stop -> cap is CROSS
+    }
+    for (const e of perpCrossAtCentre) if (inBoard(e) && !addCross(e)) return null;
+    return { line, cross };
+  }
+
+  // All feasible configurations for the clue at (r,c). White: axis in {H,V} x
+  // split (a,b), a+b=n; the two arms collinear; the perpendicular pair at centre
+  // is CROSS. Black: 4 quadrant orientations x split (a,b); arms perpendicular;
+  // the collinear partners at centre are CROSS.
+  clueCandidates(r, c) {
+    const clue = ShingokiSolver.decodeClue(this.task[r][c]);
+    if (!clue) return [];
+    const N = clue.n, out = [];
+    const W = { kind: 'H', r, c: c - 1 }, E = { kind: 'H', r, c };       // centre H edges
+    const Nr = { kind: 'V', r: r - 1, c }, S = { kind: 'V', r, c };      // centre V edges
+    if (clue.color === 'white') {
+      // horizontal axis: arms left(0,-1) + right(0,1); perp V pair CROSS.
+      for (let a = 1; a <= N - 1; a++) {
+        const cand = this._buildCandidate(r, c, [{ dr: 0, dc: -1, len: a }, { dr: 0, dc: 1, len: N - a }], [Nr, S]);
+        if (cand) out.push(cand);
+      }
+      // vertical axis: arms up + down; perp H pair CROSS.
+      for (let a = 1; a <= N - 1; a++) {
+        const cand = this._buildCandidate(r, c, [{ dr: -1, dc: 0, len: a }, { dr: 1, dc: 0, len: N - a }], [W, E]);
+        if (cand) out.push(cand);
+      }
+    } else {
+      // black: pick one H direction and one V direction (4 combos); collinear
+      // partner of each chosen arm is CROSS at centre.
+      const hDirs = [{ dr: 0, dc: -1, partner: E }, { dr: 0, dc: 1, partner: W }];
+      const vDirs = [{ dr: -1, dc: 0, partner: S }, { dr: 1, dc: 0, partner: Nr }];
+      for (const h of hDirs) for (const v of vDirs) {
+        for (let a = 1; a <= N - 1; a++) {
+          const cand = this._buildCandidate(r, c, [{ dr: h.dr, dc: h.dc, len: a }, { dr: v.dr, dc: v.dc, len: N - a }], [h.partner, v.partner]);
+          if (cand) out.push(cand);
+        }
+      }
+    }
+    return out;
+  }
+
+  // Technique 2: force edges common to ALL feasible candidates of each clue.
+  // Returns false on contradiction (a clue with zero candidates). Tier 2.
+  _candidateIntersectForce() {
+    const { rows, cols } = this;
+    let changed = false;
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      if (!this.task[r][c]) continue;
+      const cands = this.clueCandidates(r, c);
+      if (cands.length === 0) return false;               // no config fits -> dead
+      // intersect: an edge is forced LINE iff every candidate has it LINE; CROSS
+      // iff every candidate has it CROSS.
+      const lineCommon = new Set(cands[0].line), crossCommon = new Set(cands[0].cross);
+      for (let i = 1; i < cands.length; i++) {
+        for (const k of [...lineCommon]) if (!cands[i].line.has(k)) lineCommon.delete(k);
+        for (const k of [...crossCommon]) if (!cands[i].cross.has(k)) crossCommon.delete(k);
+      }
+      const apply = (keySet, val) => {
+        for (const k of keySet) {
+          const kind = k[0]; const [rr, cc] = k.slice(1).split(',').map(Number);
+          const ref = { kind, r: rr, c: cc };
+          if (this.getEdge(ref) === 0) { if (!this.setEdge(ref, val)) return false; changed = true; }
+          else if (this.getEdge(ref) !== val) return false;
+        }
+        return true;
+      };
+      if (!apply(lineCommon, 1)) return false;
+      if (!apply(crossCommon, 2)) return false;
+    }
+    if (changed) this._heavyChanged = true;
     return true;
   }
 

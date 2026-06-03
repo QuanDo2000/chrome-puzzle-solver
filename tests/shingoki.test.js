@@ -409,6 +409,58 @@ test('Shingoki number: run-cap does NOT fire before the run reaches the clue', (
   assert.equal(s.getEdge({ kind: 'H', r: 0, c: 2 }), 0); // not yet capped
 });
 
+test('Shingoki candidates: a black clue n=2 in a corner forces both arms (unique config)', () => {
+  // 3x3 vertices, black clue n=2 at corner (0,0): only arms are H(0,0) east and
+  // V(0,0) south; each must be length 1 -> both forced LINE; the run-caps force
+  // crosses at H(0,1)?... only assert the two arms.
+  const task = [[-2,0,0],[0,0,0],[0,0,0]];
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task });
+  s._initState();
+  s._deduceAll(0);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 0 }), 1);
+  assert.equal(s.getEdge({ kind: 'V', r: 0, c: 0 }), 1);
+});
+
+test('Shingoki candidates: intersection forces the common edge across splits', () => {
+  // A white clue with two feasible splits that AGREE on one edge but differ
+  // elsewhere -> only the agreed edge is forced. (Hand-built; see comment.)
+  // White n=2 at (0,1) on a 1x2-cell strip top row: horizontal axis only; splits
+  // are (a=1 left,b=1 right) the unique config -> both H(0,0),H(0,1) forced.
+  const task = [[0,2,0],[0,0,0]];
+  const s = new ShingokiSolver({ rows: 1, cols: 2, task });
+  s._initState();
+  s._deduceAll(0);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 0 }), 1);
+  assert.equal(s.getEdge({ kind: 'H', r: 0, c: 1 }), 1);
+});
+
+test('Shingoki candidates: force-soundness vs the oracle (3x3 + 4x4, several boards)', () => {
+  // SOUNDNESS GATE for technique 2. Every board MUST be satisfiable with >=2
+  // distinct solutions so the intersection logic is genuinely exercised (an unsat
+  // board makes assertForceSoundness a vacuous no-op).
+  // Board adjustments from the plan's illustrative numbers (verified via
+  // bruteForceSolutions):
+  //   - A (3x3): plan's mixed white/black task was UNSAT (0 sols). Replaced with
+  //     four black corner clues n=4 -> 2 distinct solutions (a diamond and an
+  //     outer-border loop). 3x3 is too tight to admit a satisfiable white/black
+  //     mix here; white+black mixing is covered by board B.
+  //   - B (4x4): plan's task already satisfiable with 3 solutions; kept as-is
+  //     (mixes white + black clues).
+  //   - C (4x4): plan's corners n=2 + center n=5 was UNSAT. Replaced with four
+  //     black corner clues n=3 -> 2 distinct solutions (a black corner's number
+  //     is the SUM of both straight runs; n=3 admits inward turns, n=2/4/6 are
+  //     unsat and n=8 forces the unique outer border).
+  const boards = [
+    { rows: 3, cols: 3, task: [[-4,0,0,-4],[0,0,0,0],[0,0,0,0],[-4,0,0,-4]] },
+    { rows: 4, cols: 4, task: [[0,0,3,0,0],[0,-2,0,0,0],[0,0,0,4,0],[0,0,0,0,0],[0,0,2,0,0]] },
+    { rows: 4, cols: 4, task: [[-3,0,0,0,-3],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[-3,0,0,0,-3]] },
+  ];
+  for (const b of boards) {
+    assert.ok(bruteForceSolutions(b.rows, b.cols, b.task).length >= 2, 'oracle board must have >=2 solutions');
+    assertForceSoundness(b.rows, b.cols, b.task, (s) => s._candidateIntersectForce(), { trials: 60 });
+  }
+});
+
 test('Shingoki getStepwiseHint: returns forced LINE edges from an empty captured 5x5', () => {
   const TASK_5x5 = [
     [0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],
