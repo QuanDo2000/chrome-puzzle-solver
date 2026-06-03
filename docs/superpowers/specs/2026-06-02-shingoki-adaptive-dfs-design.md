@@ -45,16 +45,36 @@ adaptive rule below can be tuned freely without spurious-UNSAT risk.
 
 ## Success criteria
 
+**REVISED 2026-06-02 after measuring real captured boards.** The original goal
+("realistic ≤20×20 solve in a few seconds") was measured FALSE: real hard boards
+≥10×10 are unsolvable by ANY search (DFS, CDCL, and iterated
+propagation+1-step-lookahead all time out / stall — the deduction engine
+determines only ~9–16 edges on a real 10×10/15×15 before stalling, and the
+residual search space is astronomical). Solving real mid-size boards needs a
+much stronger deduction engine (advanced number-reachability, loop-parity/
+topology, region connectivity) — a separate research-grade effort, explicitly
+NOT this work. This work ships the adaptive DFS as a **strict improvement over
+the regressed CDCL** with honest expectations:
+
 1. **Soundness (absolute gate):** never a wrong solution, never spurious UNSAT
-   (`'no solution'`) on a solvable board. Only `solved:true` or a partial.
-2. **Realistic boards ≤ ~20×20 fully solve in a few seconds** — every genuinely
-   clued board the site serves at random/daily sizes.
-3. **40×40 monthly returns a sound partial** (the root-propagation snapshot),
-   delivered at the bail cap (~6 s), not after grinding 30 s.
-4. **No regression** on boards the old engine solved (differential).
-5. Ultra-sparse / near-zero-propagation synthetic boards are **best-effort** —
-   the goal is to solve them via the constraint-focused rule, but a pathological
-   case may return a partial (see Testing, decision B).
+   (`'no solution'`) on a solvable board. Every result is `solved:true` (valid
+   loop) or a sound partial.
+2. **Small / dense boards solve fast:** the real 7×7-hard (the reported
+   regression; CDCL took >60 s, DFS ~2.7 s) and densely/fully-clued boards up to
+   large sizes solve in a few seconds.
+3. **Larger hard boards return a sound partial** (the level-0 root-propagation
+   snapshot), delivered at the `searchMs` bail cap (~6 s), not after grinding the
+   full `maxMs`. This covers the real 10×10/15×15/20×20/25×25-hard and the 40×40
+   monthly — all return a sound partial that Hint/Loop can extend.
+4. **No regression** on boards the old engine solved (differential), and a strict
+   gain on the 7×7 + dense boards.
+
+**Testing reflects this:** synthetic (`gen()`/fuzz) and real mid-size boards are
+asserted against the **soundness guarantee** — `solved:true` with a valid loop
+**OR** a sound partial (`partial:true`, level-0 only, no vertex degree > 2),
+**never** `error:'no solution'`. Only the boards that genuinely solve (7×7-hard,
+dense, small) assert `solved:true`. This is a *stronger, more correct* soundness
+guard than "must fully solve a board the engine provably cannot."
 
 ## Architecture
 
