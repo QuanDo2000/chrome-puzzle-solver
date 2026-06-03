@@ -36,29 +36,26 @@
 // limit — the same situation as SlitherlinkSolver's CDCL on its 50x40 boards.
 const { timeUp } = require('./shared.js');
 
+// Thrown by _dfs to unwind to solve() when the deep-search budget expires.
+// Distinct object identity so solve() can tell a budget bail from a real error.
+const SEARCH_BUDGET = { budget: true };
+
 class ShingokiSolver {
   static decodeClue(v) {
     if (!v) return null;
     return v > 0 ? { color: 'white', n: v } : { color: 'black', n: -v };
   }
 
-  constructor({ rows, cols, task, maxMs = 0, stagnationMs = 8000 }) {
+  constructor({ rows, cols, task, maxMs = 0, searchMs = 6000, stagnationMs = 8000 }) {
     this.rows = rows;
     this.cols = cols;
     this.task = task;
     this.maxMs = maxMs;
-    // Stagnation early-exit budget: if the level-0 root snapshot stops growing
-    // for this many ms, return the (sound) partial instead of grinding the full
-    // maxMs budget. Default 8000 (always on); pass 0 to disable.
-    //
-    // The partial is SOUND (level-0 deductions only), so this never returns a
-    // wrong answer. The tradeoff is COMPLETENESS: a solvable board reaches its
-    // solution by DEEP branching (decision levels > 0), which need not grow the
-    // level-0 snapshot — so a board that solves via a long deep search with a
-    // stable root CAN be cut to a partial here. The window is sized (8 s) above
-    // the deepest solvable searches we have measured (~7 s) so genuine solves
-    // finish first, while the truly-stuck dead tail of an over-budget board
-    // (root plateaus early, then thrashes) is still short-circuited.
+    // Deep-search budget for the adaptive DFS. When exceeded, solve() returns the
+    // sound level-0 propagation partial instead of grinding the full maxMs. The
+    // searchMs cap fires first in practice; maxMs is an outer ceiling. Pass 0 to
+    // disable searchMs (rely on maxMs only).
+    this._searchMs = searchMs;
     this._stagnationMs = stagnationMs;
     this._stagnated = false;
     this._startedAt = 0;
@@ -532,26 +529,59 @@ class ShingokiSolver {
     return true;
   }
 
-  // Public entry: delegates to the learning CDCL engine. On a time-limit
-  // timeout it attaches a SOUND partial — the decision-level-0 snapshot of
-  // edges deduced from the givens alone (no speculative branch), captured and
-  // refreshed by _solveCdcl/_cdclSearch. Every edge in the partial is entailed
-  // by the clues, so the widget can safely apply it and let the user finish a
-  // too-hard board manually. (The old DFS solver was superseded by CDCL —
-  // proven sound by the 385k-conflict harness — and removed.)
+  // Public entry: adaptive DFS. Returns { solved, horizontal, vertical, error? }.
+  // On a deep-search budget bail it attaches a SOUND partial — the level-0
+  // snapshot of edges deduced from the givens alone, captured before any branch.
+  // Genuine UNSAT (full tree exhausted) returns error 'no solution', never a
+  // partial; only a budget bail yields a partial. The flat slitherlink-shaped
+  // partial (top-level horizontal/vertical + partial:true) lets the widget's
+  // type-agnostic {horizontal,vertical} partial arm apply it with no
+  // shingoki-specific dispatch.
   solve() {
-    const res = this._solveCdcl();
-    if (!res.solved && res.error === 'time limit exceeded') {
-      const snap = this._rootSnapshot || { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
-      // Flat slitherlink-shaped partial: a boolean `partial` flag plus
-      // top-level `horizontal`/`vertical` (the level-0 snapshot). This lets the
-      // widget's type-agnostic {horizontal,vertical} partial arm apply it
-      // exactly as it does for slitherlink — no shingoki-specific dispatch.
-      res.partial = true;
-      res.horizontal = snap.horizontal;
-      res.vertical = snap.vertical;
+    this._startedAt = Date.now();
+    this._initState();
+    if (!this._propagate()) {
+      return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
     }
-    return res;
+    const rootPartial = { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
+    this._budgetExceeded = false;
+    let solved = false;
+    try {
+      solved = this._dfs();
+    } catch (err) {
+      if (err !== SEARCH_BUDGET) throw err;
+      this._budgetExceeded = true;
+    }
+    if (solved) {
+      return { solved: true, horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
+    }
+    if (this._budgetExceeded) {
+      return {
+        solved: false, horizontal: rootPartial.horizontal, vertical: rootPartial.vertical,
+        partial: true, error: 'time limit exceeded',
+      };
+    }
+    return { solved: false, horizontal: null, vertical: null, error: 'no solution' };
+  }
+
+  // Recursive adaptive DFS with trail-undo. Returns true if a valid complete
+  // loop was found below this node, false on a dead branch. Throws SEARCH_BUDGET
+  // when the deep-search/maxMs budget expires (unwinds to solve()). The
+  // soundness rests entirely on _propagate + the structural prunes +
+  // _isValidComplete; branch order is sound-neutral.
+  _dfs() {
+    if ((this._searchMs > 0 && timeUp(this._searchMs, this._startedAt)) ||
+        (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt))) throw SEARCH_BUDGET;
+    if (!this._propagate()) return false;
+    if (this._hasPrematureLoop() || this._deadByConnectivity()) return false;
+    const br = this._pickBranch();
+    if (!br) return this._isValidComplete();
+    for (const val of [br.firstVal, this._otherVal(br.firstVal)]) {
+      const mark = this._trailMark();
+      if (this.setEdge(br.ref, val) && this._dfs()) return true;
+      this._rollbackTo(mark);
+    }
+    return false;
   }
 
   // Learning CDCL engine. Returns { solved, horizontal, vertical, error? }:

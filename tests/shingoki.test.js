@@ -832,3 +832,62 @@ test('Shingoki DFS: _pickBranch picks a clued-incident edge when no chain exists
   const eps = s._endpoints(br.ref);
   assert.ok(eps.some(v => s.task[v.r][v.c] !== 0), 'edge must touch a clued vertex');
 });
+
+test('Shingoki DFS: solves the real 7x7-hard board in a few seconds (regression)', { timeout: 15000 }, () => {
+  // The board that motivated replacing CDCL: CDCL timed out (>60s); the DFS
+  // solves it fast. Hardcoded from /shingoki/random/7x7-hard (8x8 vertex clues).
+  const task = [
+    [0,0,-4,0,0,0,0,0],
+    [0,0,0,0,0,0,-2,0],
+    [-2,0,0,0,-4,-3,0,-3],
+    [0,0,0,0,0,0,-4,0],
+    [0,0,0,0,0,0,0,0],
+    [3,0,0,0,-2,0,0,0],
+    [0,-2,0,-3,0,0,0,0],
+    [0,2,0,0,-2,0,0,0],
+  ];
+  const t0 = Date.now();
+  const res = new ShingokiSolver({ rows: 7, cols: 7, task, maxMs: 30000 }).solve();
+  assert.equal(res.solved, true, 'DFS must solve the real 7x7-hard board');
+  assert.ok(Date.now() - t0 < 10000, 'should solve in well under 10s');
+  const chk = new ShingokiSolver({ rows: 7, cols: 7, task });
+  chk.H = res.horizontal; chk.V = res.vertical;
+  assert.equal(chk.numbersSatisfied(), true);
+});
+
+test('Shingoki DFS: genuine UNSAT returns no-solution, not a partial', () => {
+  // A 3x3 white clue with run length 9 is unreachable on a 3-cell line -> UNSAT.
+  const task = [[0,0,0],[0,9,0],[0,0,0]];
+  const res = new ShingokiSolver({ rows: 2, cols: 2, task, maxMs: 5000 }).solve();
+  assert.equal(res.solved, false);
+  assert.equal(res.error, 'no solution');
+  assert.notEqual(res.partial, true);
+});
+
+test('Shingoki DFS: timeout returns a SOUND flat partial (level-0 only)', () => {
+  const fixtures = require('./fixtures/real-puzzles.js');
+  const p = fixtures.shingoki_40x40_monthly;
+  const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, searchMs: 1000, maxMs: 30000 }).solve();
+  if (res.solved) return;
+  assert.equal(res.error, 'time limit exceeded');
+  assert.equal(res.partial, true);
+  assert.ok(res.horizontal && res.vertical);
+  const chk = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task });
+  chk.H = res.horizontal; chk.V = res.vertical;
+  for (let r = 0; r <= p.rows; r++) for (let c = 0; c <= p.cols; c++) {
+    const deg = chk.incidentEdges(r, c).filter(e => chk.getEdge(e) === 1).length;
+    assert.ok(deg <= 2, `partial vertex (${r},${c}) degree ${deg} > 2 (unsound)`);
+  }
+});
+
+test('Shingoki DFS: searchMs cap bails well before maxMs on the 40x40', () => {
+  const fixtures = require('./fixtures/real-puzzles.js');
+  const p = fixtures.shingoki_40x40_monthly;
+  const t0 = Date.now();
+  const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, searchMs: 2000, maxMs: 30000 }).solve();
+  const wall = Date.now() - t0;
+  if (!res.solved) {
+    assert.equal(res.partial, true);
+    assert.ok(wall < 8000, `searchMs cap should bail near 2s, took ${wall}ms`);
+  }
+});
