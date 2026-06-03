@@ -374,6 +374,9 @@ class ShingokiSolver {
       const run = this._runEdges(r, c, arm.dr, arm.dc, arm.len);
       if (!run) return null;                       // off-board -> impossible
       for (const e of run.edges) if (!addLine(e)) return null;
+      // The run TURNS at its end vertex; a white clue can never be a turn -> drop.
+      const endClue = ShingokiSolver.decodeClue(this.task[run.endR][run.endC]);
+      if (endClue && endClue.color === 'white') return null;
       // Intermediate-clue consistency: vertices strictly inside the run (i=1..len-1)
       // are passed straight through. A black clue there is impossible (it must turn);
       // a white clue there must share this segment's length (arm.segLen).

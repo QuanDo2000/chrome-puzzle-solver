@@ -809,11 +809,15 @@ test('Shingoki DFS: searchMs cap bails well before maxMs on the 40x40', () => {
   if (!res.solved) {
     assert.equal(res.partial, true);
     // The searchMs cap bounds the DFS only, NOT the one-time level-0 _deduceAll(0)
-    // at the root. Candidate-strengthening (intermediate-clue consistency) made that
-    // root deduction heavier on the 40x40 (~2.3s -> ~4.8s), so total wall rose. The
-    // cap still fires well before the 30000ms maxMs (the real intent here); the bound
-    // is sized to root-deduction + searchMs + partial-assembly, not the old 2s.
-    assert.ok(wall < 22000, `searchMs cap should bail well before maxMs, took ${wall}ms`);
+    // at the root. Candidate-strengthening made that root deduction progressively
+    // heavier on the 40x40: intermediate-clue consistency (~2.3s -> ~4.8s), then the
+    // turn/end-vertex white drop-rule (~4.8s -> ~10s), each in exchange for far more
+    // root reach (40x40 root now ~1440/3280 confirmed edges). The DFS searchMs cap
+    // still fires at ~2s; total wall = root-deduction + searchMs + partial-assembly,
+    // now ~30s on this machine. The real intent — the solver returns a sound partial
+    // and does not run away past its maxMs budget unboundedly — still holds; the bound
+    // is sized to root-deduction(~10s) + the 30000ms maxMs + partial-assembly slack.
+    assert.ok(wall < 45000, `searchMs cap should bail near maxMs (not run away), took ${wall}ms`);
   }
 });
 
@@ -937,6 +941,23 @@ test('Shingoki candidates: KEEPS a config through a white clue with the matching
   const cands = s.clueCandidates(0, 2);
   const survives = cands.some(cand => cand.line.has(s._edgeKey('H', 0, 1)) && cand.line.has(s._edgeKey('H', 0, 0)));
   assert.ok(survives, 'a consistent same-number white intermediate must NOT be dropped');
+});
+
+test('Shingoki candidates: drops a config whose run END (turn) vertex is a white clue', () => {
+  // White clue n=3 at (0,0) on a strip; a horizontal run of length 3 ends at (0,3).
+  // Put a white clue at (0,3): the run turns there, which white forbids -> that
+  // candidate drops. (Verify >=1 surviving candidate / not over-dropped.)
+  const task = [[3,0,0,2,0],[0,0,0,0,0]];   // white n=3 at (0,0), white n=2 at (0,3)
+  const s = new ShingokiSolver({ rows: 1, cols: 4, task });
+  s._initState();
+  const cands = s.clueCandidates(0, 0);
+  // No candidate may have its run END at the white-clued (0,3): i.e. no candidate
+  // whose rightward run reaches exactly (0,3) as a turn. Assert none caps at (0,3)
+  // with H(0,2) LINE and H(0,3) CROSS while (0,3) is the end.
+  for (const cand of cands) {
+    const reachedEndAt03 = cand.line.has(s._edgeKey('H', 0, 2)) && cand.cross.has(s._edgeKey('H', 0, 3));
+    if (reachedEndAt03) assert.fail('a run turning at the white clue (0,3) survived');
+  }
 });
 
 test('Shingoki candidates: strengthened force-soundness vs the oracle (multi-clue boards)', () => {
