@@ -62,6 +62,8 @@ class ShingokiSolver {
     // searchMs cap fires first in practice; maxMs is an outer ceiling. Pass 0 to
     // disable searchMs (rely on maxMs only).
     this._searchMs = searchMs;
+    this._heavyBudgetMs = 0;
+    this._hintBudgetMs = 800;
     this._startedAt = 0;
   }
 
@@ -227,6 +229,29 @@ class ShingokiSolver {
     return true;
   }
 
+  // Tier 2 heavy deduction: runs one pass of the expensive rules (added in later
+  // tasks). Returns false on contradiction, and sets `this._heavyChanged = true`
+  // if it forced any edge. `budgetMs` (0 = unbounded) caps the pass; on expiry it
+  // returns true without finishing (sound: it only ever FORCES, never relaxes).
+  _deduceHeavy(_budgetMs) {
+    this._heavyChanged = false;
+    // (techniques appended here in later tasks; each sets _heavyChanged and may
+    //  return false on contradiction)
+    return true;
+  }
+
+  // Joint Tier1+Tier2 fixpoint. Runs _propagate to fixpoint, then one
+  // _deduceHeavy pass; repeats while the heavy pass changed anything. Returns
+  // false on any contradiction. `budgetMs` (0 = unbounded) bounds the heavy
+  // passes for interactive callers; Tier 1 always runs fully (it is cheap).
+  _deduceAll(budgetMs) {
+    for (;;) {
+      if (!this._propagate()) return false;
+      if (!this._deduceHeavy(budgetMs)) return false;
+      if (!this._heavyChanged) return true;
+    }
+  }
+
   // Length (in line-edges) of the maximal straight runs through vertex (r,c),
   // summed over its two loop directions. Assumes the vertex is on the loop with
   // a definite shape (used at a complete assignment / when edges are set).
@@ -338,7 +363,7 @@ class ShingokiSolver {
   solve() {
     this._startedAt = Date.now();
     this._initState();
-    if (!this._propagate()) {
+    if (!this._deduceAll(0)) {
       return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
     }
     const rootPartial = { horizontal: this.H.map(r => r.slice()), vertical: this.V.map(r => r.slice()) };
@@ -370,7 +395,7 @@ class ShingokiSolver {
   _dfs() {
     if ((this._searchMs > 0 && timeUp(this._searchMs, this._startedAt)) ||
         (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt))) throw SEARCH_BUDGET;
-    if (!this._propagate()) return false;
+    if (!this._deduceAll(this._heavyBudgetMs ?? 0)) return false;
     if (this._hasPrematureLoop() || this._deadByConnectivity()) return false;
     const br = this._pickBranch();
     if (!br) return this._isValidComplete();
@@ -490,6 +515,7 @@ class ShingokiSolver {
     this._startedAt = Date.now();
     this.H = curH.map(row => row.slice());
     this.V = curV.map(row => row.slice());
+    this._trail = [];
     const collect = () => {
       const out = [];
       for (let r = 0; r < this.H.length; r++) for (let c = 0; c < this.H[r].length; c++) {
@@ -500,7 +526,7 @@ class ShingokiSolver {
       }
       return out;
     };
-    if (!this._propagate()) return null; // contradictory board state; let caller fall back
+    if (!this._deduceAll(this._hintBudgetMs ?? 0)) return null; // contradictory board state; let caller fall back
     let edges = collect();
     if (edges.length === 0) {
       if (!this._lookahead1()) return null;

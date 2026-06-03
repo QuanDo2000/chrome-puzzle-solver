@@ -134,6 +134,14 @@ test('Shingoki oracle: harness passes for the existing _propagate (sound baselin
   }
 });
 
+test('Shingoki _deduceAll: behaves like _propagate when Tier 2 is empty', () => {
+  const task = [[-4,0,0,-4],[0,0,0,0],[0,0,0,0],[-4,0,0,-4]];
+  const a = new ShingokiSolver({ rows: 3, cols: 3, task }); a._initState(); const ra = a._propagate();
+  const b = new ShingokiSolver({ rows: 3, cols: 3, task }); b._initState(); const rb = b._deduceAll(0);
+  assert.equal(ra, rb);
+  assert.deepEqual(a.H, b.H); assert.deepEqual(a.V, b.V);
+});
+
 test('ShingokiSolver: decodeClue splits sign into color + number', () => {
   assert.deepEqual(ShingokiSolver.decodeClue(0), null);
   assert.deepEqual(ShingokiSolver.decodeClue(3), { color: 'white', n: 3 });
