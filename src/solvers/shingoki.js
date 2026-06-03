@@ -25,21 +25,42 @@
 // useless AND bloated propagation, regressing small boards (see the
 // adaptive-DFS design spec).
 //
+// Two-tier deduction engine (_deduceAll):
+//   Tier 1 (always runs, cheap): _propagate (degree/shape/axis/run-cap) +
+//     _maxReachForce (max-reach number forcing — bounds achievable straight-run
+//     lengths, forces axis and minimum extension when the number arithmetic
+//     leaves no alternative). Runs to a joint Tier-1 fixpoint.
+//   Tier 2 (_deduceHeavy, conditional budget for interactive Hint):
+//     _candidateIntersectForce — enumerates all feasible clue configurations
+//       (white: collinear split; black: one H arm + one V arm), intersects LINE
+//       and CROSS sets across all survivors; forces edges common to every
+//       feasible candidate. Over-approximates the candidate set (SOUND).
+//     _connectivityForce — structural 1-ply probe: each unknown edge is
+//       tentatively set LINE or CROSS; if one value immediately creates a
+//       premature loop or kills connectivity, force the other.
+//     _bifurcateForce — bounded 1-ply bifurcation on frontier edges: probe each
+//       value with full _deduceAllNoBif (Tier 1 + candidate/connectivity, no
+//       recursion); force the surviving value when the other proves a
+//       contradiction. Disabled inside probes to prevent unbounded recursion.
+//   _deduceAll alternates Tier 1 ↔ Tier 2 to a joint fixpoint. solve()/_dfs
+//   call _deduceAll(0) (unbounded Tier 2); getStepwiseHint caps Tier 2 at
+//   _hintBudgetMs=800ms so Hint stays interactive.
+//
 // Partial-on-timeout: a searchMs deep-search cap (~6 s; maxMs is the outer
 // ceiling) unwinds via a thrown SEARCH_BUDGET sentinel, and solve() returns the
 // level-0 propagation snapshot captured before the first branch — a SOUND
 // partial (every edge entailed by the clues, no vertex degree > 2). Only a
 // budget bail yields a partial; an exhausted tree returns 'no solution'.
 //
-// Measured reality (real captured boards): the 7x7-hard and dense/fully-clued
-// boards solve in a few seconds. Real HARD boards >=10x10 do NOT fully solve in
-// budget — the deduction engine stalls at ~9-16 edges and the residual search
-// space is astronomical (CDCL and iterated lookahead also fail them) — so they
-// return a sound partial at the searchMs cap (the 'finish manually' widget
-// path). Solving real mid-size hard boards needs a much stronger deduction
-// engine (advanced number-reachability / loop-parity / region connectivity),
-// which is out of scope here. See the adaptive-DFS design spec's revised
-// success criteria.
+// Measured reality (real captured boards):
+//   7x7-hard:  root-deduction reach 39/112; solves ~0.4s
+//   10x10-hard: root-deduction reach 11/220; solves ~1.7s
+//   15x15-hard: root-deduction reach 66/480; solves ~25s (needs ~25s budget;
+//     returns a sound partial at the 6s default searchMs cap)
+//   25x25-hard: root-deduction reach 79/1300; returns a sound partial even at
+//     30s — search space too large for the current engine
+// CDCL was tried and removed: clause-learning is useless+harmful on
+// connectivity-dominated boards (see the adaptive-DFS design spec).
 const { timeUp } = require('./shared.js');
 
 // Thrown by _dfs to unwind to solve() when the deep-search budget expires.
@@ -65,6 +86,7 @@ class ShingokiSolver {
     this._heavyBudgetMs = 0;
     this._hintBudgetMs = 800;
     this._startedAt = 0;
+    this._bifurcationDisabled = false;
   }
 
   // Four incident edges of vertex (r,c), in-range only.

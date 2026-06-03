@@ -41,3 +41,15 @@ const MAXMS = Number(process.env.MAXMS || 15000);
 for (const n of [10, 15, 20, 25]) run(`constructive ${n}x${n}`, n, n, genBoard(n, n*97), MAXMS);
 const p = fixtures.shingoki_40x40_monthly;
 run('real 40x40 monthly', p.rows, p.cols, p.task, Number(process.env.MAXMS40 || 30000));
+
+function runReach(label, rows, cols, task) {
+  const s = new ShingokiSolver({ rows, cols, task });
+  s._initState(); s._deduceAll(0);
+  let det = 0, tot = 0;
+  for (const e of s._allEdgeRefs()) { tot++; if (s.getEdge(e) !== 0) det++; }
+  console.log(`${label}: root-deduction reach=${det}/${tot}`);
+}
+const fx = require('./fixtures/real-puzzles.js');
+for (const k of ['shingoki_7x7_hard','shingoki_10x10_hard','shingoki_15x15_hard','shingoki_25x25_hard']) {
+  const p2 = fx[k]; runReach(k, p2.rows, p2.cols, p2.task);
+}
