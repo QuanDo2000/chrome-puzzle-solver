@@ -24,6 +24,116 @@ function assertSolvedOrSoundPartial(res, rows, cols, task, label) {
   }
 }
 
+// --- Brute-force reference oracle (independent of the deduction techniques) ---
+// Enumerates EVERY valid Shingoki loop on a small board by exhaustive edge
+// assignment with degree pruning. Acceptance uses only the base checkers
+// (_isValidComplete = degree + single-loop + shapes + numbers), NOT the new
+// techniques, so it is an independent oracle. Use on boards <= 4x4 (cells).
+function bruteForceSolutions(rows, cols, task) {
+  const s = new ShingokiSolver({ rows, cols, task });
+  s._initState();
+  const edges = s._allEdgeRefs();
+  const sols = [];
+  const okSoFar = () => {
+    for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+      const inc = s.incidentEdges(r, c);
+      let ln = 0, unk = 0;
+      for (const e of inc) { const g = s.getEdge(e); if (g === 1) ln++; else if (g === 0) unk++; }
+      if (ln > 2) return false;                 // degree can't exceed 2
+      if (ln === 1 && unk === 0) return false;  // stuck at degree 1
+      if (task[r][c] && ln + unk < 2) return false; // clued vertex can't reach degree 2
+    }
+    return true;
+  };
+  const rec = (i) => {
+    if (i === edges.length) { if (s._isValidComplete()) sols.push({ H: s.H.map(r => r.slice()), V: s.V.map(r => r.slice()) }); return; }
+    const e = edges[i];
+    for (const v of [1, 2]) {
+      if (e.kind === 'H') s.H[e.r][e.c] = v; else s.V[e.r][e.c] = v;
+      if (okSoFar()) rec(i + 1);
+    }
+    if (e.kind === 'H') s.H[e.r][e.c] = 0; else s.V[e.r][e.c] = 0;
+  };
+  rec(0);
+  return sols;
+}
+
+// --- Force-soundness harness ---
+// Verifies a deduction step never forces an edge that some valid completion
+// contradicts. For a satisfiable small board, take random partial states drawn
+// from real solutions, run the step, and assert every edge it forces matches
+// ALL solutions consistent with that partial state (and it signals contradiction
+// only when zero completions are consistent). `applyStep(solver)` runs the
+// technique under test on the seeded solver and returns false on contradiction.
+function assertForceSoundness(rows, cols, task, applyStep, opts = {}) {
+  const trials = opts.trials ?? 40;
+  const all = bruteForceSolutions(rows, cols, task);
+  if (all.length === 0) return; // unsat board: nothing to check here
+  const edges = new ShingokiSolver({ rows, cols, task });
+  edges._initState();
+  const allEdges = edges._allEdgeRefs();
+  // deterministic PRNG (no Math.random in this repo's tests by convention)
+  let seed = (rows * 131 + cols * 17 + 9001) >>> 0;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
+  const valAt = (sol, e) => (e.kind === 'H' ? sol.H[e.r][e.c] : sol.V[e.r][e.c]);
+  for (let t = 0; t < trials; t++) {
+    const base = all[Math.floor(rnd() * all.length)];
+    // random partial: each edge independently included with prob ~0.5, set to base's value
+    const s = new ShingokiSolver({ rows, cols, task });
+    s._initState();
+    for (const e of allEdges) {
+      if (rnd() < 0.5) { const v = valAt(base, e); if (e.kind === 'H') s.H[e.r][e.c] = v; else s.V[e.r][e.c] = v; }
+    }
+    const consistent = all.filter(sol => allEdges.every(e => {
+      const cur = s.getEdge(e); return cur === 0 || cur === valAt(sol, e);
+    }));
+    const before = allEdges.map(e => s.getEdge(e));
+    const ok = applyStep(s);
+    if (!ok) { assert.equal(consistent.length, 0, `step signalled contradiction but ${consistent.length} completion(s) exist`); continue; }
+    allEdges.forEach((e, i) => {
+      const after = s.getEdge(e);
+      if (after !== 0 && before[i] === 0) {
+        for (const sol of consistent) {
+          assert.equal(after, valAt(sol, e), `forced ${e.kind}(${e.r},${e.c})=${after} but a valid completion has ${valAt(sol, e)}`);
+        }
+      }
+    });
+  }
+}
+
+test('Shingoki oracle: enumerates the unique loop of a fully-determined 2x2', () => {
+  // 2x2 cells = 3x3 vertices. The only loop is the full border (8 edges).
+  // White clue at center is impossible (center not reachable by a border loop),
+  // so use border-corner black clues. Each corner turns; on a 2x2 the midpoint
+  // border vertices are straight pass-throughs, so each corner's two straight
+  // runs reach the opposite corners: 2 + 2 = 4. (n=2 here would be UNSAT.)
+  const task = [[ -4,0,-4],[0,0,0],[-4,0,-4]];
+  const sols = bruteForceSolutions(2, 2, task);
+  assert.equal(sols.length, 1, 'border loop is the unique solution');
+  // every border edge is LINE, no interior edge exists on 2x2 besides border
+  const s = new ShingokiSolver({ rows: 2, cols: 2, task });
+  s.H = sols[0].H; s.V = sols[0].V;
+  assert.equal(s._isValidComplete(), true);
+  assert.equal(s.numbersSatisfied(), true);
+});
+
+test('Shingoki oracle: harness passes for the existing _propagate (sound baseline)', () => {
+  // The existing propagation is sound, so the harness must accept it on several
+  // small satisfiable boards. This also self-tests the harness.
+  // NOTE: black-corner clue numbers must be satisfiable. n=2 leaves both boards
+  // UNSAT (the corner's two straight runs reach past the midpoint vertices),
+  // which would make the harness a no-op. n=4 is satisfiable: the 2x2 has the
+  // unique border loop and the 3x3 has 2 distinct solutions, so the harness's
+  // "forced edge matches ALL consistent solutions" check is genuinely exercised.
+  const boards = [
+    { rows: 2, cols: 2, task: [[-4,0,-4],[0,0,0],[-4,0,-4]] },
+    { rows: 3, cols: 3, task: [[-4,0,0,-4],[0,0,0,0],[0,0,0,0],[-4,0,0,-4]] },
+  ];
+  for (const b of boards) {
+    assertForceSoundness(b.rows, b.cols, b.task, (s) => s._propagate());
+  }
+});
+
 test('ShingokiSolver: decodeClue splits sign into color + number', () => {
   assert.deepEqual(ShingokiSolver.decodeClue(0), null);
   assert.deepEqual(ShingokiSolver.decodeClue(3), { color: 'white', n: 3 });
