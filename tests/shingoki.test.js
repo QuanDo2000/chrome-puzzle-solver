@@ -405,7 +405,7 @@ test('ShingokiSolver: trail records and rolls back edge writes', () => {
   assert.equal(s.getEdge({ kind: 'V', r: 1, c: 1 }), 0);
 });
 
-test('Shingoki solve: small boards still solve correctly via CDCL', () => {
+test('Shingoki solve: small boards still solve correctly', () => {
   const TASK = [[0,-5,0,0,0,0],[0,0,0,-4,0,0],[0,0,2,0,0,0],[-3,2,0,0,2,-4],[-3,0,0,-2,0,0],[0,0,0,-2,0,0]];
   const res = new ShingokiSolver({ rows: 5, cols: 5, task: TASK, maxMs: 10000 }).solve();
   assert.equal(res.solved, true);
@@ -462,7 +462,7 @@ test('Shingoki solve: never spurious-UNSAT via the public entry (constructive)',
   }
 });
 
-test('Shingoki CDCL: 40x40 monthly never spurious-UNSAT; returns solved or sound partial', { timeout: 10000 }, () => {
+test('Shingoki solve: 40x40 monthly never spurious-UNSAT; returns solved or sound partial', { timeout: 10000 }, () => {
   const fixtures = require('./fixtures/real-puzzles.js');
   const p = fixtures.shingoki_40x40_monthly;
   const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, maxMs: 6000 }).solve();
@@ -542,23 +542,12 @@ test('Shingoki DFS: _pickBranch picks a clued-incident edge when no chain exists
 });
 
 test('Shingoki DFS: solves the real 7x7-hard board in a few seconds (regression)', { timeout: 15000 }, () => {
-  // The board that motivated replacing CDCL: CDCL timed out (>60s); the DFS
-  // solves it fast. Hardcoded from /shingoki/random/7x7-hard (8x8 vertex clues).
-  const task = [
-    [0,0,-4,0,0,0,0,0],
-    [0,0,0,0,0,0,-2,0],
-    [-2,0,0,0,-4,-3,0,-3],
-    [0,0,0,0,0,0,-4,0],
-    [0,0,0,0,0,0,0,0],
-    [3,0,0,0,-2,0,0,0],
-    [0,-2,0,-3,0,0,0,0],
-    [0,2,0,0,-2,0,0,0],
-  ];
+  const p = require('./fixtures/real-puzzles.js').shingoki_7x7_hard;
   const t0 = Date.now();
-  const res = new ShingokiSolver({ rows: 7, cols: 7, task, maxMs: 30000 }).solve();
+  const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, maxMs: 30000 }).solve();
   assert.equal(res.solved, true, 'DFS must solve the real 7x7-hard board');
   assert.ok(Date.now() - t0 < 10000, 'should solve in well under 10s');
-  const chk = new ShingokiSolver({ rows: 7, cols: 7, task });
+  const chk = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task });
   chk.H = res.horizontal; chk.V = res.vertical;
   assert.equal(chk.numbersSatisfied(), true);
 });
@@ -597,5 +586,35 @@ test('Shingoki DFS: searchMs cap bails well before maxMs on the 40x40', () => {
   if (!res.solved) {
     assert.equal(res.partial, true);
     assert.ok(wall < 8000, `searchMs cap should bail near 2s, took ${wall}ms`);
+  }
+});
+
+test('Shingoki DFS: solves a deep-search sparse board (4 clues) fast', { timeout: 15000 }, () => {
+  // A sparse 8x8 (4 clues) whose root propagation deduces almost nothing; the
+  // loop is found by chain-building DFS. CDCL needed ~7s here; the DFS is fast.
+  const task = [
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,4,0,0],
+    [0,0,0,0,0,4,4,0,0],
+    [0,0,0,0,0,4,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+  ];
+  const res = new ShingokiSolver({ rows: 8, cols: 8, task, maxMs: 30000 }).solve();
+  assert.equal(res.solved, true);
+  const chk = new ShingokiSolver({ rows: 8, cols: 8, task });
+  chk.H = res.horizontal; chk.V = res.vertical;
+  assert.equal(chk.numbersSatisfied(), true);
+});
+
+test('Shingoki solve: real mid-size hard boards return a sound partial (never spurious-UNSAT)', { timeout: 30000 }, () => {
+  const fx = require('./fixtures/real-puzzles.js');
+  for (const key of ['shingoki_10x10_hard', 'shingoki_15x15_hard', 'shingoki_25x25_hard']) {
+    const p = fx[key];
+    const res = new ShingokiSolver({ rows: p.rows, cols: p.cols, task: p.task, searchMs: 6000, maxMs: 30000 }).solve();
+    assertSolvedOrSoundPartial(res, p.rows, p.cols, p.task, key);
   }
 });
