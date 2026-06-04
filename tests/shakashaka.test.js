@@ -67,3 +67,88 @@ test('Shakashaka brute-force: a tiny board has a known solution count', () => {
   assert.ok(sols.length >= 1);
   assert.ok(sols.some(b => b[0][0]===1 && b[0][1]===2 && b[1][0]===4 && b[1][1]===3));
 });
+
+test('Shakashaka solve: solves a tiny board to a valid board', () => {
+  const task = [[-1,-1],[-1,-1]];
+  const res = new ShakashakaSolver({ task, maxMs: 5000 }).solve();
+  assert.equal(res.solved, true);
+  const chk = new ShakashakaSolver({ task });
+  assert.equal(chk._isValid(res.cells), true);
+});
+
+test('Shakashaka solve: never spurious-UNSAT + matches brute-force on small boards', () => {
+  // Several small satisfiable boards (mix of open + numbered/black).
+  const boards = [
+    [[-1,-1],[-1,-1]],
+    [[-1,-1,-1],[-1,-2,-1],[-1,-1,-1]],
+    [[-1,0,-1],[-1,-1,-1]],
+    [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+  ];
+  for (const task of boards) {
+    const all = bruteForce(task);
+    const res = new ShakashakaSolver({ task, maxMs: 10000 }).solve();
+    if (all.length === 0) { assert.notEqual(res.solved, true); continue; }
+    assert.equal(res.solved, true, 'solvable board must solve');
+    const chk = new ShakashakaSolver({ task });
+    assert.equal(chk._isValid(res.cells), true, 'solver output must be valid');
+  }
+});
+
+test('Shakashaka solve: random small-board fuzz cross-check vs brute-force', () => {
+  // Deterministic LCG so failures reproduce.
+  let seed = 0x12345678;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const pick = (rows, cols) => {
+    const task = [];
+    for (let r = 0; r < rows; r++) {
+      const row = [];
+      for (let c = 0; c < cols; c++) {
+        const u = rnd();
+        if (u < 0.6) row.push(-1);          // open
+        else if (u < 0.8) row.push(-2);     // black no-number
+        else row.push(Math.floor(rnd() * 5)); // numbered 0..4
+      }
+      task.push(row);
+    }
+    return task;
+  };
+  const dims = [[3,3],[3,4],[4,3]];
+  for (let iter = 0; iter < 40; iter++) {
+    const [rows, cols] = dims[iter % dims.length];
+    const task = pick(rows, cols);
+    const all = bruteForce(task);
+    const res = new ShakashakaSolver({ task, maxMs: 10000 }).solve();
+    if (all.length === 0) {
+      assert.notEqual(res.solved, true, `iter ${iter}: solver must not claim solve when UNSAT`);
+    } else {
+      assert.equal(res.solved, true, `iter ${iter}: solvable board must solve`);
+      const chk = new ShakashakaSolver({ task });
+      assert.equal(chk._isValid(res.cells), true, `iter ${iter}: solver output must be valid`);
+    }
+    // forced-cell soundness: deduced singletons must hold in every solution
+    const det = new ShakashakaSolver({ task })._deduceOnly();
+    if (det.ok && all.length > 0) {
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        if (task[r][c] !== -1) continue;
+        if (det.cells[r][c] !== 9) {
+          for (const sol of all) assert.equal(sol[r][c], det.cells[r][c], `iter ${iter}: forced (${r},${c}) must hold in all solutions`);
+        }
+      }
+    }
+  }
+});
+
+test('Shakashaka solve: forced cells hold in every solution (propagation soundness)', () => {
+  // For a board, the cells the solver decides BEFORE any branch (pure propagation)
+  // must match all brute-force solutions. Exposed via solveDeduce() (propagation
+  // to fixpoint, no search) returning the determined board.
+  const task = [[-1,-1,-1],[-1,-2,-1],[-1,-1,-1]];
+  const all = bruteForce(task);
+  const det = new ShakashakaSolver({ task })._deduceOnly(); // {cells, ok}
+  if (det.ok) for (let r=0;r<task.length;r++) for (let c=0;c<task[0].length;c++) {
+    if (task[r][c] !== -1) continue;
+    if (det.cells[r][c] !== 9) { // decided
+      for (const sol of all) assert.equal(sol[r][c], det.cells[r][c], `forced (${r},${c}) must hold in all solutions`);
+    }
+  }
+});

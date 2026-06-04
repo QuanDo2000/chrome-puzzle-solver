@@ -3,6 +3,8 @@ const { timeUp } = require('./shared.js');
 
 const UNK = 9; // undecided open cell
 
+function popcount(x) { let n = 0; while (x) { x &= x - 1; n++; } return n; }
+
 class ShakashakaSolver {
   constructor({ task, maxMs = 0 }) {
     this.task = task;
@@ -89,6 +91,133 @@ class ShakashakaSolver {
       if (k >= 0 && this._taskMarkedCount(board, t, e) !== k) return false;
     }
     return true;
+  }
+
+  _initDomains() {
+    const full = 0b11111; // values 0,1,2,3,4
+    this._dom = this.task.map(row => row.map(v => (v === -1 ? full : 0)));
+  }
+  _boardFromDomains() {
+    // singleton domains -> value; else UNK; black -> -1
+    return this.task.map((row, r) => row.map((v, c) => {
+      if (v !== -1) return -1;
+      const d = this._dom[r][c];
+      if (d && (d & (d - 1)) === 0) { let x = 0, m = d; while (m > 1) { m >>= 1; x++; } return x; }
+      return UNK;
+    }));
+  }
+  // Is value v at (r,c) locally consistent? Tentatively place it and check that no
+  // open cell whose neighbourhood is now fully decided violates _hasNonRectAt, and
+  // that no number clue is exceeded / made unreachable. Returns false if v is
+  // provably impossible. Conservative: when a neighbourhood is not fully decided,
+  // do NOT flag (sound — only prunes certain impossibilities).
+  _consistent(board, r, c, v) {
+    board[r][c] = v;
+    let ok = true;
+    // check this cell + 8 neighbours' rectangle predicate, only where fully decided
+    for (let dr = -1; dr <= 1 && ok; dr++) for (let dc = -1; dc <= 1 && ok; dc++) {
+      const t = r + dr, e = c + dc;
+      if (t < 0 || e < 0 || t >= this.rows || e >= this.cols) continue;
+      if (this.task[t][e] !== -1) continue;
+      if (this._neighbourhoodDecided(board, t, e) && this._hasNonRectAt(board, t, e)) ok = false;
+    }
+    // number-clue feasibility around (r,c)
+    if (ok) ok = this._clueFeasibleAround(board, r, c);
+    board[r][c] = UNK;
+    return ok;
+  }
+  _neighbourhoodDecided(board, t, e) {
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const r = t + dr, c = e + dc;
+      if (r < 0 || c < 0 || r >= this.rows || c >= this.cols) continue;
+      if (this.task[r][c] === -1 && board[r][c] === UNK) return false;
+    }
+    return true;
+  }
+  // For each numbered clue adjacent to (r,c): current triangle count must be <= k,
+  // and k must be reachable given still-UNK neighbours (each can be a triangle).
+  _clueFeasibleAround(board, r, c) {
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      if (Math.abs(dr) + Math.abs(dc) !== 1 && !(dr === 0 && dc === 0)) continue;
+      const t = r + dr, e = c + dc;
+      if (t < 0 || e < 0 || t >= this.rows || e >= this.cols) continue;
+      const k = this.task[t][e];
+      if (k < 0 || k > 4) continue;
+      let tri = 0, unk = 0;
+      for (const [nr, nc] of [[t,e-1],[t,e+1],[t-1,e],[t+1,e]]) {
+        if (nr < 0 || nc < 0 || nr >= this.rows || nc >= this.cols) continue;
+        if (this.task[nr][nc] !== -1) continue;
+        const b = board[nr][nc];
+        if (b === UNK) unk++; else if (b >= 1 && b <= 4) tri++;
+      }
+      if (tri > k || tri + unk < k) return false;
+    }
+    return true;
+  }
+  // Propagate domains to a fixpoint: drop any value that is not _consistent.
+  // Returns false on a wipeout (some open cell's domain becomes empty).
+  _propagate(board) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        if (this.task[r][c] !== -1) continue;
+        const d = this._dom[r][c];
+        if (d && (d & (d - 1)) === 0) continue; // already singleton
+        let nd = 0;
+        for (let v = 0; v <= 4; v++) if (d & (1 << v)) { if (this._consistent(board, r, c, v)) nd |= (1 << v); }
+        if (nd === 0) return false;
+        if (nd !== d) { this._dom[r][c] = nd; changed = true;
+          // reflect singleton into board for subsequent checks
+          if ((nd & (nd - 1)) === 0) { let x=0,m=nd; while(m>1){m>>=1;x++;} board[r][c]=x; }
+        }
+      }
+    }
+    return true;
+  }
+  // Propagation-only result (no search): the determined board (UNK where open).
+  _deduceOnly() {
+    this._initDomains();
+    const board = this._boardFromDomains();
+    const ok = this._propagate(board);
+    return { ok, cells: this._boardFromDomains() };
+  }
+
+  solve() {
+    this._startedAt = Date.now();
+    this._initDomains();
+    const board = this._boardFromDomains();
+    if (!this._propagate(board)) return { solved: false, cells: null, error: 'no solution' };
+    const partial = () => ({ solved: false, cells: this._boardFromDomains(), partial: true, error: 'time limit exceeded' });
+    const search = () => {
+      if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) throw 'BUDGET';
+      // pick most-constrained open cell (smallest domain > 1)
+      let best = null, bestN = 99;
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        if (this.task[r][c] !== -1) continue;
+        const d = this._dom[r][c], n = popcount(d);
+        if (n > 1 && n < bestN) { bestN = n; best = [r, c]; }
+      }
+      if (!best) { const b = this._boardFromDomains(); return this._isValid(b) ? b : null; }
+      const [r, c] = best; const dom = this._dom[r][c];
+      const snapshot = this._dom.map(row => row.slice());
+      for (let v = 0; v <= 4; v++) if (dom & (1 << v)) {
+        this._dom = snapshot.map(row => row.slice());
+        this._dom[r][c] = (1 << v);
+        const b = this._boardFromDomains();
+        if (this._propagate(b)) { const sol = search(); if (sol) return sol; }
+      }
+      this._dom = snapshot;
+      return null;
+    };
+    try {
+      const sol = search();
+      if (sol) return { solved: true, cells: sol };
+      return { solved: false, cells: null, error: 'no solution' };
+    } catch (e) {
+      if (e === 'BUDGET') return partial();
+      throw e;
+    }
   }
 }
 
