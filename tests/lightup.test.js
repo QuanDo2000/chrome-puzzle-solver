@@ -81,3 +81,77 @@ test('LightUp propagation: detects collision contradiction', () => {
   s._dom[0][0] = 2; s._dom[0][2] = 2; // two bulbs in one segment
   assert.equal(s._propagate(), false);
 });
+
+// Brute-force ALL valid bulb placements over the white cells (2^open).
+function bruteForce(task) {
+  const s = new LightUpSolver({ task });
+  const H = task.length, W = task[0].length;
+  const open = [];
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (task[r][c] === -1) open.push([r, c]);
+  const cells = task.map(row => row.map(v => (v === -1 ? 0 : -1)));
+  const sols = [];
+  const rec = (i) => {
+    if (i === open.length) { if (s._isValid(cells)) sols.push(cells.map(row => row.slice())); return; }
+    const [r, c] = open[i];
+    cells[r][c] = 0; rec(i + 1);
+    cells[r][c] = 1; rec(i + 1);
+    cells[r][c] = 0;
+  };
+  rec(0);
+  return sols;
+}
+
+const SOUNDNESS_BOARDS = [
+  [[-1, 2, -1]],
+  [[-1, -1, -1]],
+  [[-1, -1], [-1, -1]],
+  [[-2, -1, -2], [-1, 0, -1], [-2, -1, -2]],
+  [[-1, -1, -1], [-1, -2, -1], [-1, -1, -1]],
+  [[-1, -1, -1], [-1, 1, -1], [-1, -1, -1]],
+];
+
+test('LightUp soundness: root propagation never contradicts a real solution', () => {
+  for (const task of SOUNDNESS_BOARDS) {
+    const sols = bruteForce(task);
+    const s = new LightUpSolver({ task });
+    s._initDomains(); s._buildSegments();
+    const ok = s._propagate();
+    if (sols.length === 0) continue; // UNSAT boards may or may not detect here; solve() handles it
+    assert.ok(ok, `propagation wrongly contradicted a solvable board: ${JSON.stringify(task)}`);
+    // Every singleton domain must agree with EVERY brute-force solution.
+    for (let r = 0; r < task.length; r++) for (let c = 0; c < task[0].length; c++) {
+      if (task[r][c] !== -1) continue;
+      const d = s._dom[r][c];
+      if (d === 1 || d === 2) {
+        const forced = d === 2 ? 1 : 0;
+        for (const sol of sols) {
+          assert.equal(sol[r][c], forced,
+            `forced (${r},${c})=${forced} but a solution has ${sol[r][c]}: ${JSON.stringify(task)}`);
+        }
+      }
+      // Pruned values must be used by NO solution.
+      if ((d & 1) === 0) for (const sol of sols) assert.notEqual(sol[r][c], 0, `pruned no-bulb but a sol uses it (${r},${c})`);
+      if ((d & 2) === 0) for (const sol of sols) assert.notEqual(sol[r][c], 1, `pruned bulb but a sol uses it (${r},${c})`);
+    }
+  }
+});
+
+test('LightUp solve: solver-solved iff brute-force has a solution, and output is valid', () => {
+  for (const task of SOUNDNESS_BOARDS) {
+    const sols = bruteForce(task);
+    const res = new LightUpSolver({ task, maxMs: 5000 }).solve();
+    if (sols.length === 0) {
+      assert.equal(res.solved, false, `solver claimed solve on UNSAT: ${JSON.stringify(task)}`);
+    } else {
+      assert.equal(res.solved, true, `solver failed a solvable board: ${JSON.stringify(task)}`);
+      assert.ok(new LightUpSolver({ task })._isValid(res.cells), 'solver output failed the oracle');
+    }
+  }
+});
+
+test('LightUp solve: a uniquely-solved board returns the unique solution', () => {
+  const task = [[-1, 2, -1]];
+  const res = new LightUpSolver({ task }).solve();
+  assert.equal(res.solved, true);
+  assert.deepEqual(res.cells, [[1, -1, 1]]);
+});

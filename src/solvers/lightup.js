@@ -16,9 +16,13 @@
 //   (3) every cell is lit (a bulb, in a bulb's segment up to the first black, or black).
 //
 // METHOD: domain propagation (clue forcing + no-collision + coverage forcing) to a
-// fixpoint, then MRV backtracking with snapshot undo. On maxMs timeout returns the
-// SOUND root-propagation snapshot (UNK=9 where still undecided) — never a speculative
-// mid-search branch. Soundness is brute-force-gated in tests/lightup.test.js.
+// fixpoint, then first-undecided backtracking with snapshot undo. (Variable order is
+// just first-undecided, not MRV — every branchable cell is a binary {bulb,no-bulb}
+// domain, so MRV would be degenerate. Snapshot-undo rather than trailing because
+// propagation is strong enough that search node-count stays tiny on real boards.)
+// On maxMs timeout returns the SOUND root-propagation snapshot (UNK=9 where still
+// undecided) — never a speculative mid-search branch. Soundness is brute-force-gated
+// in tests/lightup.test.js.
 
 class LightUpSolver {
   constructor({ task, maxMs = 30000 } = {}) {
@@ -171,6 +175,42 @@ class LightUpSolver {
       }
     }
     return true;
+  }
+
+  _snapshot() { return this._dom.map(row => row.slice()); }
+  _restore(snap) { this._dom = snap.map(row => row.slice()); }
+
+  // Recursive first-undecided backtracking. Returns a solved cells grid, or null (dead end / timeout).
+  _search() {
+    if (Date.now() > this._deadline) { this._timedOut = true; return null; }
+    // pick first undecided white cell (dom===3)
+    let pr = -1, pc = -1;
+    for (let r = 0; r < this.rows && pr < 0; r++) for (let c = 0; c < this.cols; c++) {
+      if (this._dom[r][c] === 3) { pr = r; pc = c; break; }
+    }
+    if (pr < 0) { const cells = this._cellsFromDom(); return this._isValid(cells) ? cells : null; }
+    const snap = this._snapshot();
+    // Branch bulb first (more constraining), then no-bulb.
+    this._dom[pr][pc] = 2;
+    if (this._propagate()) { const res = this._search(); if (res) return res; }
+    this._restore(snap);
+    this._dom[pr][pc] = 1;
+    if (this._propagate()) { const res = this._search(); if (res) return res; }
+    this._restore(snap);
+    return null;
+  }
+
+  solve() {
+    this._initDomains();
+    this._buildSegments();
+    this._deadline = Date.now() + this.maxMs;
+    this._timedOut = false;
+    if (!this._propagate()) return { solved: false, error: 'No solution (contradiction in givens)' };
+    const rootCells = this._cellsFromDom();   // sound root snapshot for partial (UNK=9)
+    const result = this._search();
+    if (result) return { solved: true, cells: result };
+    if (this._timedOut) return { solved: false, partial: true, cells: rootCells };
+    return { solved: false, error: 'No solution found' };
   }
 }
 
