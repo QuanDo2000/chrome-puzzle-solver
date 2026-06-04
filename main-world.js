@@ -871,6 +871,43 @@ function applyShingokiState(state) {
   }
 }
 
+function readShakashakaData() {
+  try {
+    var G = window.Game;
+    var task = G.task;
+    if (!task || !task.length) return null;
+    return { task: task, rows: task.length, cols: task[0].length };
+  } catch (e) { return null; }
+}
+
+function readShakashakaState() {
+  try {
+    var s = window.Game.currentState.cellStatus;
+    return { cellStatus: s.map(function (row) { return row.slice(); }) };
+  } catch (e) { return null; }
+}
+
+function applyShakashakaState(solution) {
+  try {
+    var G = window.Game;
+    if (G.saveState) G.saveState(true);
+    var cells = solution.cells; // board-state grid: -1 black, 0 white, 1..4 triangle
+    for (var r = 0; r < cells.length; r++) for (var c = 0; c < cells[r].length; c++) {
+      if (G.task[r][c] !== -1) continue;            // skip black cells
+      var v = cells[r][c];
+      G.currentState.cellStatus[r][c] = (v >= 1 && v <= 4) ? v : 5; // triangle or explicit white
+    }
+    // canonical render ladder
+    if (G.drawCurrentState) G.drawCurrentState();
+    else if (G.render) G.render();
+    else if (G.redraw) G.redraw();
+    else if (G.redrawGrid) G.redrawGrid();
+    else if (G.draw) G.draw();
+    else { var saved = G.getSaved && G.getSaved(); if (saved && G.loadGame) G.loadGame(saved); }
+    return true;
+  } catch (e) { return false; }
+}
+
 function readShikakuData() {
   var maxAttempts = 20;
   var pollMs = 250;
@@ -2128,6 +2165,11 @@ function dumpPuzzleForBench() {
         ptask.push(parr);
       }
       return { type: 'pipes', rows: height, cols: width, task: ptask, path: path };
+    }
+
+    if (path.indexOf('/shakashaka/') !== -1) {
+      var t = window.Game.task;
+      return { type: 'shakashaka', rows: t.length, cols: t[0].length, task: t, path: path };
     }
 
     if (path.indexOf('/shingoki/') !== -1) {
