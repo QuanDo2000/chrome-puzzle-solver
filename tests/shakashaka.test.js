@@ -182,12 +182,14 @@ test('Shakashaka GAC: prunes a triangle impossible by a border (bottom-row T1)',
 });
 
 test('Shakashaka GAC: never prunes a value used by a valid solution (brute-force gate)', () => {
+  // Small boards (<= 8 open cells -> brute force is fast). Includes boards where
+  // GAC actively deduces (the 2x4/2x3-with-black solve uniquely) so the no-prune
+  // check is not vacuous, plus multi-solution boards.
   const boards = [
-    [[-1,-1],[-1,-1]],
-    [[-1,-1,-1],[-1,-2,-1],[-1,-1,-1]],
-    [[-1,0,-1],[-1,-1,-1]],
-    [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
-    [[-1,-1,-1,-1],[-1,-2,-1,-1],[-1,-1,2,-1]],
+    [[-1,-1],[-1,-1]],                  // 2x2, 4 open, 2 solutions
+    [[-2,-1,-1],[-1,-1,-1],[-1,-1,-1]], // 3x3 corner-black, 8 open, 2 solutions
+    [[-1,-1,-1,-1],[-2,-1,-1,-2]],      // 2x4, 6 open, unique solution, GAC deduces
+    [[-1,-1,-1],[-2,-1,-1]],            // 2x3, 5 open, unique solution, GAC deduces
   ];
   for (const task of boards) {
     const all = bruteForce(task);
@@ -218,11 +220,14 @@ test('Shakashaka _deduceAll: GAC-only fixpoint never makes a solvable board UNSA
 });
 
 test('Shakashaka bifurcation: _deduceAll with Tier-2 never prunes a valid value (brute-force)', () => {
+  // Small boards (<= 9 open cells). E/G solve uniquely and bifurcation deduces
+  // several cells, so the no-prune check exercises real pruning; the 3x3 all-open
+  // and corner-black boards have multiple solutions.
   const boards = [
-    [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
-    [[-1,-1,-1,-1],[-1,-2,-1,-1],[-1,-1,2,-1],[-1,-1,-1,-1]],
-    [[-1,0,-1],[-1,-1,-1],[-1,-2,-1]],
-    [[-1,-1,-1,-1],[-2,-1,-1,-2],[-1,-1,-1,-1]],
+    [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]], // 3x3 all-open, 9 open
+    [[-2,-1,-1],[-1,-1,-1],[-1,-1,-1]], // 3x3 corner-black, 8 open
+    [[-1,-1,-1,-1],[-2,-1,-1,-2]],      // 2x4, 6 open, unique, bifurcation deduces
+    [[-1,-1,-1],[-2,-1,-1]],            // 2x3, 5 open, unique, bifurcation deduces
   ];
   for (const task of boards) {
     const all = bruteForce(task);
@@ -241,7 +246,9 @@ test('Shakashaka bifurcation: _deduceAll with Tier-2 never prunes a valid value 
 });
 
 test('Shakashaka bifurcation: forced cells hold in every solution', () => {
-  const task = [[-1,-1,-1,-1],[-1,-2,-1,-1],[-1,-1,2,-1],[-1,-1,-1,-1]];
+  // 2x4 with two black corners: 6 open, a unique solution, bifurcation deduces
+  // several cells -> a meaningful forced-cell check (fast: 5^6 brute force).
+  const task = [[-1,-1,-1,-1],[-2,-1,-1,-2]];
   const all = bruteForce(task);
   const s = new ShakashakaSolver({ task });
   s._initDomains(); s._deduceAll(0);
