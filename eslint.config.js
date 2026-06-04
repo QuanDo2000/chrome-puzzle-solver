@@ -67,6 +67,7 @@ const solverClasses = {
   NurikabeSolver: 'readonly',
   ShingokiSolver: 'readonly',
   ShakashakaSolver: 'readonly',
+  LightUpSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js
@@ -327,6 +328,9 @@ module.exports = [
         // src/widget/puzzles/shakashaka.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         shakashaka: 'readonly',
+        // src/widget/puzzles/lightup.js — bundle-scope const consumed
+        // by puzzles/index.js when assembling the registry.
+        lightup: 'readonly',
         // src/widget/state.js — widget storage prefs.
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',

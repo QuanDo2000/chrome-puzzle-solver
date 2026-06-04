@@ -25,6 +25,7 @@ if (typeof galaxies !== 'undefined') PUZZLES[galaxies.type] = galaxies;
 if (typeof pipes !== 'undefined') PUZZLES[pipes.type] = pipes;
 if (typeof shingoki !== 'undefined') PUZZLES[shingoki.type] = shingoki;
 if (typeof shakashaka !== 'undefined') PUZZLES[shakashaka.type] = shakashaka;
+if (typeof lightup !== 'undefined') PUZZLES[lightup.type] = lightup;
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { PUZZLES };
