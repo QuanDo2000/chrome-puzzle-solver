@@ -540,17 +540,40 @@ const shakashakaHandler = {
     };
   },
 
-  async readState() {
+  // Returns a bare 2-D board-state grid (the same shape solutionFromResult /
+  // the solver emit): black cells (task != -1) -> -1, cellStatus 1..4 ->
+  // triangle, cellStatus 0 or 5 -> 0 (white). This keeps the preview cell-loop,
+  // the mistake-diff (default per-cell arm) and the undo/redo round-trip on one
+  // uniform shape, matching the other cell-state puzzles. The raw {cellStatus}
+  // is read directly by the widget module's hintDispatch for deduction.
+  async readState(ctx) {
     const state = await callMainWorld('readShakashakaState', []);
-    if (state) return state;
-    return { cellStatus: [] };
+    const cs = state && state.cellStatus;
+    const task = ctx && ctx.task;
+    const rows = (ctx && ctx.rows) || (task ? task.length : 0);
+    const cols = (ctx && ctx.cols) || (task && task[0] ? task[0].length : 0);
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+      const row = new Array(cols).fill(0);
+      for (let c = 0; c < cols; c++) {
+        if (task && task[r] && task[r][c] !== -1) { row[c] = -1; continue; }
+        const v = cs && cs[r] ? cs[r][c] : 0;
+        row[c] = (v >= 1 && v <= 4) ? v : 0;
+      }
+      grid.push(row);
+    }
+    return grid;
   },
 
+  // The widget passes the bare board-state grid (solutionFromResult returns it
+  // directly); wrap it as { cells } for the MAIN-world writer, which maps
+  // triangles -> cellStatus 1..4 and white -> 5.
   async applySolution(solution, _ctx) {
-    if (!solution || !solution.cells) {
+    const cells = Array.isArray(solution) ? solution : (solution && solution.cells);
+    if (!Array.isArray(cells)) {
       return { success: false, error: 'Shakashaka applySolution: missing cells' };
     }
-    const ok = await callMainWorld('applyShakashakaState', [solution]);
+    const ok = await callMainWorld('applyShakashakaState', [{ cells }]);
     return ok
       ? { success: true }
       : { success: false, error: 'Shakashaka apply failed (no window.Game or MAIN-world timeout)' };

@@ -42,6 +42,7 @@ const WIDGET_FILES = [
   'puzzles/hashi.js',
   'puzzles/slitherlink.js',
   'puzzles/shingoki.js',
+  'puzzles/shakashaka.js',
   'puzzles/galaxies.js',
   'puzzles/pipes.js',
   // Aggregates the per-puzzle const declarations into the PUZZLES map.
