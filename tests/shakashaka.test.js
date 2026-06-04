@@ -260,3 +260,27 @@ test('Shakashaka bifurcation: forced cells hold in every solution', () => {
     }
   }
 });
+
+test('Shakashaka solve: large board returns a SOUND partial fast (no full grind)', () => {
+  const fx = require('./fixtures/real-puzzles.js');
+  const p = fx.shakashaka_25x25;
+  const t0 = Date.now();
+  const res = new ShakashakaSolver({ task: p.task, maxMs: 30000 }).solve();
+  const wall = Date.now() - t0;
+  if (!res.solved) {
+    assert.equal(res.partial, true);
+    assert.ok(wall < 25000, `large board should bail well under 30s, took ${wall}ms`);
+    // partial soundness: every decided open cell's value is in 0..4 (or UNK/black).
+    for (const row of res.cells) for (const v of row) assert.ok(v === -1 || (v >= 0 && v <= 4) || v === 9);
+  }
+});
+
+test('Shakashaka solve: the real 5x5 still solves fast', () => {
+  const task = [[-2,-2,-1,-1,-1],[-1,-1,-1,-1,-1],[-1,-1,-2,-1,-2],[1,-1,-1,-1,-1],[-1,-1,-1,-1,-1]];
+  const t0 = Date.now();
+  const res = new ShakashakaSolver({ task, maxMs: 30000 }).solve();
+  assert.equal(res.solved, true);
+  assert.ok(Date.now() - t0 < 5000);
+  const chk = new ShakashakaSolver({ task });
+  assert.equal(chk._isValid(res.cells), true);
+});

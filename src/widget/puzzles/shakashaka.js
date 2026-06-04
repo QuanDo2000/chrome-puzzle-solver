@@ -362,8 +362,10 @@ function _deduceForced(solver, task, decided) {
       if (v >= 0 && v <= 4) solver._dom[r][c] = (1 << v); // pin committed cell
     }
   }
-  const board = solver._boardFromDomains();
-  if (!solver._propagate(board)) return []; // contradiction from the live board
+  // Large boards: GAC-only (no Tier-2 bifurcation) keeps a single Hint fast.
+  if (task.length * (task[0] ? task[0].length : 0) > 200) solver._bifurcationDisabled = true;
+  // 800ms interactive deadline; _deduceAll runs GAC (+ bounded bifurcation when enabled).
+  if (!solver._deduceAll(800)) return []; // contradiction from the live board
   const forced = [];
   for (let r = 0; r < task.length; r++) {
     const row = task[r] || [];

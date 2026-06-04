@@ -13,6 +13,10 @@ class ShakashakaSolver {
     this.cols = task[0].length;
     this.maxMs = maxMs;
     this._startedAt = 0;
+    this._heavyMaxCells = 200; // > this (~14x14) => large: bounded bifurcation + fast partial
+    this._lightBudgetMs = 4000; // large-board deduction/search wall budget
+    this._deadline = 0; // 0 = no deadline; set by budget>0 (ms epoch)
+    this._bifurcationDisabled = false; // GAC-only mode (set for large-board Hint)
   }
 
   // Board-state of a cell for the rule functions: black cells (task!=-1) -> -1;
@@ -293,10 +297,18 @@ class ShakashakaSolver {
   solve() {
     this._startedAt = Date.now();
     this._initDomains();
+    // Size-gate: large boards get a short budget so they return a strong GAC+bounded-
+    // bifurcation partial fast; small/medium boards get the full maxMs and solve.
+    const cells = this.rows * this.cols;
+    const big = cells > this._heavyMaxCells;
+    const budget = big ? Math.min(this.maxMs || this._lightBudgetMs, this._lightBudgetMs) : (this.maxMs || 0);
+    this._deadline = budget > 0 ? Date.now() + budget : 0;
+    // _deadline set BEFORE _deduceAll(0) so the root bifurcation is itself bounded.
     if (!this._deduceAll(0)) return { solved: false, cells: null, error: 'no solution' };
     const partial = () => ({ solved: false, cells: this._boardFromDomains(), partial: true, error: 'time limit exceeded' });
     const search = () => {
-      if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) throw 'BUDGET';
+      if ((this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) ||
+          (this._deadline && Date.now() > this._deadline)) throw 'BUDGET';
       // pick most-constrained open cell (smallest domain > 1)
       let best = null, bestN = 99;
       for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
