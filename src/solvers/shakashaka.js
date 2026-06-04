@@ -15,6 +15,11 @@ class ShakashakaSolver {
     this._startedAt = 0;
     this._heavyMaxCells = 200; // > this (~14x14) => large: bounded bifurcation + fast partial
     this._lightBudgetMs = 4000; // large-board deduction/search wall budget
+    // Search-time cap for small/medium boards. A genuinely hard clued board (e.g.
+    // a real 10x10 with a unique solution) does NOT solve even in 30s and its
+    // search explodes, so cap the wall so it returns its strong partial fast
+    // instead of grinding the full maxMs. Easy/small boards solve well under this.
+    this._searchMs = 6000;
     this._deadline = 0; // 0 = no deadline; set by budget>0 (ms epoch)
     this._bifurcationDisabled = false; // GAC-only mode (set for large-board Hint)
   }
@@ -301,11 +306,18 @@ class ShakashakaSolver {
     // bifurcation partial fast; small/medium boards get the full maxMs and solve.
     const cells = this.rows * this.cols;
     const big = cells > this._heavyMaxCells;
-    const budget = big ? Math.min(this.maxMs || this._lightBudgetMs, this._lightBudgetMs) : (this.maxMs || 0);
+    const budget = big
+      ? Math.min(this.maxMs || this._lightBudgetMs, this._lightBudgetMs)
+      : Math.min(this.maxMs || this._searchMs, this._searchMs);
     this._deadline = budget > 0 ? Date.now() + budget : 0;
     // _deadline set BEFORE _deduceAll(0) so the root bifurcation is itself bounded.
     if (!this._deduceAll(0)) return { solved: false, cells: null, error: 'no solution' };
-    const partial = () => ({ solved: false, cells: this._boardFromDomains(), partial: true, error: 'time limit exceeded' });
+    // SOUND partial = the root-deduction snapshot (cells determined BEFORE any
+    // branch). The search below mutates this._dom with SPECULATIVE branch pins, so
+    // returning the live this._dom on a timeout would surface wrong, un-validated
+    // cells (a deep unsolved branch can pin most of the board incorrectly).
+    const rootCells = this._boardFromDomains();
+    const partial = () => ({ solved: false, cells: rootCells, partial: true, error: 'time limit exceeded' });
     const search = () => {
       if ((this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) ||
           (this._deadline && Date.now() > this._deadline)) throw 'BUDGET';
