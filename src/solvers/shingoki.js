@@ -42,27 +42,39 @@
 //       value with full _deduceAllNoBif (Tier 1 + candidate/connectivity, no
 //       recursion); force the surviving value when the other proves a
 //       contradiction. Disabled inside probes to prevent unbounded recursion.
-//   _deduceAll alternates Tier 1 ↔ Tier 2 to a joint fixpoint. solve()/_dfs
-//   call _deduceAll(0) (unbounded Tier 2); getStepwiseHint caps Tier 2 at
-//   _hintBudgetMs=800ms so Hint stays interactive. The cap is enforced as an
-//   absolute wall-clock deadline (_deduceDeadline) threaded into the heavy
-//   per-edge loops (_connectivityForce/_bifurcateForce break mid-pass at the
-//   deadline; _candidateIntersectForce is cheap and runs unbounded), so a single
-//   heavy pass can't overrun the Hint budget. solve() resets _deduceDeadline=0.
+//   _deduceAll alternates Tier 1 ↔ Tier 2 to a joint fixpoint. The expensive
+//   Tier-2 rules are SIZE-GATED: _candidateIntersectForce ALWAYS runs (big reach
+//   driver, moderate cost), but _connectivityForce (probes every edge) and
+//   _bifurcateForce (clones+deduces per frontier edge) run ONLY when
+//   rows*cols <= _heavyMaxCells (=300). 15x15=225 keeps them and solves;
+//   25x25=625 / 40x40=1600 skip them and return a fast strong partial from
+//   Tier-1 + candidate-intersect.
+//   getStepwiseHint caps Tier 2 at _hintBudgetMs=800ms so Hint stays interactive.
+//   The cap is enforced as an absolute wall-clock deadline (_deduceDeadline)
+//   threaded into the heavy per-edge loops (_connectivityForce/_bifurcateForce
+//   break mid-pass; _candidateIntersectForce bails periodically; _deduceAll's loop
+//   checks it too), so a single pass can't overrun the budget. solve() ALSO sets
+//   _deduceDeadline (= now + effective search budget) so root and per-node
+//   deduction can't run away on large boards. Bifurcation PROBE clones default
+//   _deduceDeadline=0 (no leak).
 //
-// Partial-on-timeout: a searchMs deep-search cap (~6 s; maxMs is the outer
-// ceiling) unwinds via a thrown SEARCH_BUDGET sentinel, and solve() returns the
-// level-0 propagation snapshot captured before the first branch — a SOUND
-// partial (every edge entailed by the clues, no vertex degree > 2). Only a
-// budget bail yields a partial; an exhausted tree returns 'no solution'.
+// Partial-on-timeout + size-gated budget: solve() computes an effective budget by
+// size — small/mid boards (<= _heavyMaxCells) get the full searchMs (default
+// 25 s, enough for 15x15 to solve); large boards are capped to _lightSearchMs
+// (=5 s). A deep-search cap unwinds via a thrown SEARCH_BUDGET sentinel, and
+// solve() returns the level-0 propagation snapshot captured before the first
+// branch — a SOUND partial (every edge entailed by the clues, no vertex degree
+// > 2). Only a budget bail yields a partial; an exhausted tree returns
+// 'no solution'.
 //
-// Measured reality (real captured boards):
-//   7x7-hard:  root-deduction reach 39/112; solves ~0.4s
-//   10x10-hard: root-deduction reach 11/220; solves ~1.7s
-//   15x15-hard: root-deduction reach 66/480; solves ~25s (needs ~25s budget;
-//     returns a sound partial at the 6s default searchMs cap)
-//   25x25-hard: root-deduction reach 79/1300; returns a sound partial even at
-//     30s — search space too large for the current engine
+// Measured reality (real captured boards, maxMs:30000, default searchMs:25000):
+//   7x7-hard:   SOLVES ~0.4s (reach 112/112)
+//   10x10-hard: SOLVES ~1.6s (reach 220/220)
+//   15x15-hard: SOLVES ~21s  (reach 480/480; needs the full searchMs budget,
+//     and the heavy Tier-2 rules — 225 <= _heavyMaxCells keeps them)
+//   25x25-hard: SOUND PARTIAL ~5s (reach ~292/1300; heavy rules size-gated off,
+//     search capped at _lightSearchMs) — search space too large to solve
+//   40x40-monthly: SOUND PARTIAL ~5s (reach ~1116/3280; same size-gate path)
 // CDCL was tried and removed: clause-learning is useless+harmful on
 // connectivity-dominated boards (see the adaptive-DFS design spec).
 const { timeUp } = require('./shared.js');
@@ -77,7 +89,7 @@ class ShingokiSolver {
     return v > 0 ? { color: 'white', n: v } : { color: 'black', n: -v };
   }
 
-  constructor({ rows, cols, task, maxMs = 0, searchMs = 6000 }) {
+  constructor({ rows, cols, task, maxMs = 0, searchMs = 25000 }) {
     this.rows = rows;
     this.cols = cols;
     this.task = task;
@@ -85,8 +97,19 @@ class ShingokiSolver {
     // Deep-search budget for the adaptive DFS. When exceeded, solve() returns the
     // sound level-0 propagation partial instead of grinding the full maxMs. The
     // searchMs cap fires first in practice; maxMs is an outer ceiling. Pass 0 to
-    // disable searchMs (rely on maxMs only).
+    // disable searchMs (rely on maxMs only). Small/mid boards (<= _heavyMaxCells)
+    // use this full budget (15x15 needs ~20s to solve); large boards are capped to
+    // _lightSearchMs (see solve()).
     this._searchMs = searchMs;
+    // Size gate (vertices = (rows+1)*(cols+1) but we gate on rows*cols cells).
+    // Boards with rows*cols <= _heavyMaxCells run the expensive Tier-2 rules
+    // (_connectivityForce + _bifurcateForce) and get the full searchMs; larger
+    // boards skip those rules and cap their search at _lightSearchMs so they return
+    // a sound Tier-1 + candidate-intersect partial FAST. 15x15=225 keeps the heavy
+    // rules and solves; 25x25=625 / 40x40=1600 skip them.
+    this._heavyMaxCells = 300;
+    this._lightSearchMs = 5000;
+    this._effSearchMs = searchMs; // set per-size in solve(); _dfs reads this
     this._heavyBudgetMs = 0;
     this._hintBudgetMs = 800;
     this._startedAt = 0;
@@ -269,9 +292,16 @@ class ShingokiSolver {
     this._heavyChanged = false;
     if (budgetMs > 0 && timeUp(budgetMs, this._startedAt)) return true; // interactive cap
     if (this._deduceDeadline && Date.now() > this._deduceDeadline) return true; // Hint deadline
+    // _candidateIntersectForce ALWAYS runs — it is the big reach driver at moderate
+    // cost. The expensive structural rules (_connectivityForce probes every edge;
+    // _bifurcateForce clones+deduces per frontier edge) are SIZE-GATED: on large
+    // boards they make even the partial slow to return, so skip them when
+    // rows*cols > _heavyMaxCells. Skipping only forces FEWER edges (sound-neutral).
     if (!this._candidateIntersectForce()) return false;
-    if (!this._connectivityForce()) return false;
-    if (!this._bifurcationDisabled && !this._bifurcateForce()) return false;
+    if (this.rows * this.cols <= this._heavyMaxCells) {
+      if (!this._connectivityForce()) return false;
+      if (!this._bifurcationDisabled && !this._bifurcateForce()) return false;
+    }
     return true;
   }
 
@@ -435,8 +465,16 @@ class ShingokiSolver {
   _candidateIntersectForce() {
     const { rows, cols } = this;
     let changed = false;
+    let clueSeen = 0;
     for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
       if (!this.task[r][c]) continue;
+      // Deadline bail (checked every 8 clues to keep Date.now() cost negligible).
+      // Bailing early just forces FEWER edges from the clues processed so far —
+      // sound. The deadline is set by solve()/getStepwiseHint.
+      if (this._deduceDeadline && (++clueSeen & 7) === 0 && Date.now() > this._deduceDeadline) {
+        if (changed) this._heavyChanged = true;
+        return true;
+      }
       const cands = this.clueCandidates(r, c);
       if (cands.length === 0) return false;               // no config fits -> dead
       // intersect: an edge is forced LINE iff every candidate has it LINE; CROSS
@@ -501,6 +539,10 @@ class ShingokiSolver {
   // passes for interactive callers; Tier 1 always runs fully (it is cheap).
   _deduceAll(budgetMs) {
     for (;;) {
+      // Hard deduction deadline: solve() sets _deduceDeadline so root and per-node
+      // deduction can't overrun the search budget. Returning the current state is
+      // SOUND — every edge forced so far is entailed; we just stop forcing more.
+      if (this._deduceDeadline && Date.now() > this._deduceDeadline) return true;
       if (!this._propagate()) return false;
       if (!this._maxReachForce()) return false;
       if (this._maxReachChanged) continue;     // forced edges -> re-propagate
@@ -694,7 +736,14 @@ class ShingokiSolver {
   // shingoki-specific dispatch.
   solve() {
     this._startedAt = Date.now();
-    this._deduceDeadline = 0; // solver runs full unbounded Tier-2; no Hint deadline leak
+    // Effective search budget by size: small/mid boards (<= _heavyMaxCells) get the
+    // full searchMs (15x15 needs ~20s to solve); large boards are capped to
+    // _lightSearchMs so they return a fast sound partial. The deadline bounds BOTH
+    // the one-time root _deduceAll(0) and per-node deduction (threaded into
+    // _deduceAll / _candidateIntersectForce), so large boards can't overrun.
+    const cells = this.rows * this.cols;
+    this._effSearchMs = (cells <= this._heavyMaxCells) ? this._searchMs : Math.min(this._searchMs, this._lightSearchMs);
+    this._deduceDeadline = (this._effSearchMs > 0) ? Date.now() + this._effSearchMs : 0;
     this._initState();
     if (!this._deduceAll(0)) {
       return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
@@ -726,7 +775,7 @@ class ShingokiSolver {
   // soundness rests entirely on _propagate + the structural prunes +
   // _isValidComplete; branch order is sound-neutral.
   _dfs() {
-    if ((this._searchMs > 0 && timeUp(this._searchMs, this._startedAt)) ||
+    if ((this._effSearchMs > 0 && timeUp(this._effSearchMs, this._startedAt)) ||
         (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt))) throw SEARCH_BUDGET;
     if (!this._deduceAll(this._heavyBudgetMs ?? 0)) return false;
     if (this._hasPrematureLoop() || this._deadByConnectivity()) return false;

@@ -808,16 +808,14 @@ test('Shingoki DFS: searchMs cap bails well before maxMs on the 40x40', () => {
   const wall = Date.now() - t0;
   if (!res.solved) {
     assert.equal(res.partial, true);
-    // The searchMs cap bounds the DFS only, NOT the one-time level-0 _deduceAll(0)
-    // at the root. Candidate-strengthening made that root deduction progressively
-    // heavier on the 40x40: intermediate-clue consistency (~2.3s -> ~4.8s), then the
-    // turn/end-vertex white drop-rule (~4.8s -> ~10s), each in exchange for far more
-    // root reach (40x40 root now ~1440/3280 confirmed edges). The DFS searchMs cap
-    // still fires at ~2s; total wall = root-deduction + searchMs + partial-assembly,
-    // now ~30s on this machine. The real intent — the solver returns a sound partial
-    // and does not run away past its maxMs budget unboundedly — still holds; the bound
-    // is sized to root-deduction(~10s) + the 30000ms maxMs + partial-assembly slack.
-    assert.ok(wall < 45000, `searchMs cap should bail near maxMs (not run away), took ${wall}ms`);
+    // The 40x40 is a large board (1600 cells > _heavyMaxCells), so the expensive
+    // Tier-2 rules (_connectivityForce/_bifurcateForce) are size-gated OFF and the
+    // search is capped at the effective budget (min(searchMs, _lightSearchMs) =
+    // 2000 here). A _deduceDeadline now bounds the one-time root _deduceAll too, so
+    // the root deduction can't run away. Total wall = root-deduction + searchMs +
+    // partial-assembly, now a few seconds. The bound is tightened back down to
+    // confirm large boards return their sound partial FAST.
+    assert.ok(wall < 12000, `searchMs cap should bail fast (not run away), took ${wall}ms`);
   }
 });
 
