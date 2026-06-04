@@ -108,7 +108,15 @@ class ShingokiSolver {
     // a sound Tier-1 + candidate-intersect partial FAST. 15x15=225 keeps the heavy
     // rules and solves; 25x25=625 / 40x40=1600 skip them.
     this._heavyMaxCells = 300;
-    this._lightSearchMs = 5000;
+    // Large (gated) boards skip the heavy Tier-2 rules, so their DFS is hopeless
+    // and adds NOTHING to the partial (which is the root-deduction snapshot). Cap
+    // their search wall short (_lightSearchMs) so they return their partial fast,
+    // but give the cheap root deduction its own generous window (_deduceBudgetMs)
+    // so it always reaches fixpoint for the full sound partial, independent of the
+    // short search wall. (Measured: the 40x40 candidate-intersect fixpoint is ~40ms;
+    // its DFS previously wasted ~5s finding nothing.)
+    this._lightSearchMs = 300;
+    this._deduceBudgetMs = 4000;
     this._effSearchMs = searchMs; // set per-size in solve(); _dfs reads this
     this._heavyBudgetMs = 0;
     this._hintBudgetMs = 800;
@@ -742,8 +750,12 @@ class ShingokiSolver {
     // the one-time root _deduceAll(0) and per-node deduction (threaded into
     // _deduceAll / _candidateIntersectForce), so large boards can't overrun.
     const cells = this.rows * this.cols;
-    this._effSearchMs = (cells <= this._heavyMaxCells) ? this._searchMs : Math.min(this._searchMs, this._lightSearchMs);
-    this._deduceDeadline = (this._effSearchMs > 0) ? Date.now() + this._effSearchMs : 0;
+    const gated = cells > this._heavyMaxCells;
+    this._effSearchMs = gated ? Math.min(this._searchMs, this._lightSearchMs) : this._searchMs;
+    // Deduction gets its own window (decoupled from the short gated search wall) so
+    // the root _deduceAll always reaches fixpoint and yields the full sound partial.
+    const deduceWindow = gated ? Math.max(this._effSearchMs, this._deduceBudgetMs) : this._searchMs;
+    this._deduceDeadline = (deduceWindow > 0) ? Date.now() + deduceWindow : 0;
     this._initState();
     if (!this._deduceAll(0)) {
       return { solved: false, horizontal: null, vertical: null, error: 'contradiction on initial propagation' };
