@@ -92,6 +92,9 @@ type MainWorldFn =
   | 'readShakashakaData'
   | 'readShakashakaState'
   | 'applyShakashakaState'
+  | 'readLightUpData'
+  | 'readLightUpState'
+  | 'applyLightUpState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
