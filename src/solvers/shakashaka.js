@@ -2,6 +2,7 @@
 const { timeUp } = require('./shared.js');
 
 const UNK = 9; // undecided open cell
+const GAC_CAP = 5; // max open read-neighbours to enumerate (cost bound; >cap -> don't prune, sound)
 
 function popcount(x) { let n = 0; while (x) { x &= x - 1; n++; } return n; }
 
@@ -175,19 +176,81 @@ class ShakashakaSolver {
     }
     return true;
   }
+  // Is value v supported at open cell (r,c)? Tentatively place v; v is impossible
+  // (return false) iff a number clue around (r,c) is infeasible, OR — when the
+  // cell's open read-neighbours are few enough to enumerate — no assignment of
+  // those neighbours (over their current domains) makes _hasNonRectAt(r,c) pass.
+  // When too many neighbours are open (> GAC_CAP) we cannot disprove v cheaply, so
+  // we KEEP it (sound under-pruning). Reads neighbour domains from this._dom.
+  _gacSupported(board, r, c, v) {
+    const { rows, cols } = this;
+    const U = [];
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const t = r + dr, e = c + dc;
+      if (t < 0 || e < 0 || t >= rows || e >= cols || (t === r && e === c)) continue;
+      if (this.task[t][e] === -1 && board[t][e] === UNK) U.push([t, e]);
+    }
+    board[r][c] = v;
+    let ok;
+    if (!this._clueFeasibleAround(board, r, c)) ok = false;
+    else if (U.length > GAC_CAP) ok = true;
+    else ok = this._enumSupport(board, r, c, U, 0);
+    for (const [t, e] of U) board[t][e] = UNK;
+    board[r][c] = UNK;
+    return ok;
+  }
+  // Recursively assign the open neighbours U from their domains; true iff some
+  // assignment makes _hasNonRectAt(r,c) false (no violation at (r,c)).
+  _enumSupport(board, r, c, U, i) {
+    if (i === U.length) return !this._hasNonRectAt(board, r, c);
+    const [t, e] = U[i], d = this._dom[t][e];
+    for (let w = 0; w <= 4; w++) if (d & (1 << w)) {
+      board[t][e] = w;
+      if (this._enumSupport(board, r, c, U, i + 1)) return true;
+    }
+    board[t][e] = UNK;
+    return false;
+  }
+  // Generalized arc-consistency to a fixpoint over this._dom. Returns false on a
+  // domain wipeout (contradiction). Prunes only provably-impossible values.
+  _gacPropagate() {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const board = this._boardFromDomains();
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        if (this.task[r][c] !== -1) continue;
+        const d = this._dom[r][c];
+        if (popcount(d) <= 1) continue;
+        let nd = 0;
+        for (let v = 0; v <= 4; v++) if (d & (1 << v)) { if (this._gacSupported(board, r, c, v)) nd |= (1 << v); }
+        if (nd === 0) return false;
+        if (nd !== d) {
+          this._dom[r][c] = nd;
+          if (popcount(nd) === 1) { let x = 0, m = nd; while (m > 1) { m >>= 1; x++; } board[r][c] = x; }
+          changed = true;
+        }
+      }
+    }
+    return true;
+  }
+  // Two-tier deduction driver. Tier-1 GAC; Tier-2 bifurcation added in Task 2.
+  // `budget` (ms, 0 = use existing deadline) bounds the heavy passes.
+  _deduceAll(budget) {
+    if (budget > 0) this._deadline = Date.now() + budget;
+    return this._gacPropagate();
+  }
   // Propagation-only result (no search): the determined board (UNK where open).
   _deduceOnly() {
     this._initDomains();
-    const board = this._boardFromDomains();
-    const ok = this._propagate(board);
+    const ok = this._deduceAll(0);
     return { ok, cells: this._boardFromDomains() };
   }
 
   solve() {
     this._startedAt = Date.now();
     this._initDomains();
-    const board = this._boardFromDomains();
-    if (!this._propagate(board)) return { solved: false, cells: null, error: 'no solution' };
+    if (!this._deduceAll(0)) return { solved: false, cells: null, error: 'no solution' };
     const partial = () => ({ solved: false, cells: this._boardFromDomains(), partial: true, error: 'time limit exceeded' });
     const search = () => {
       if (this.maxMs > 0 && timeUp(this.maxMs, this._startedAt)) throw 'BUDGET';
@@ -204,8 +267,7 @@ class ShakashakaSolver {
       for (let v = 0; v <= 4; v++) if (dom & (1 << v)) {
         this._dom = snapshot.map(row => row.slice());
         this._dom[r][c] = (1 << v);
-        const b = this._boardFromDomains();
-        if (this._propagate(b)) { const sol = search(); if (sol) return sol; }
+        if (this._deduceAll(0)) { const sol = search(); if (sol) return sol; }
       }
       this._dom = snapshot;
       return null;

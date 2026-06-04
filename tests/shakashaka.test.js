@@ -168,3 +168,49 @@ test('Shakashaka solve: forced cells hold in every solution (propagation soundne
     }
   }
 });
+
+test('Shakashaka GAC: prunes a triangle impossible by a border (bottom-row T1)', () => {
+  // A 2-row board: a T1 needs a down-neighbour; on the BOTTOM row T1 is impossible.
+  const s = new ShakashakaSolver({ task: [[-1,-1],[-1,-1]] });
+  s._initDomains();
+  s._gacPropagate();
+  // bottom row (r=1): T1 (bit 1) must be pruned from both cells' domains
+  assert.equal((s._dom[1][0] >> 1) & 1, 0, 'bottom-left domain must not contain T1');
+  assert.equal((s._dom[1][1] >> 1) & 1, 0, 'bottom-right domain must not contain T1');
+});
+
+test('Shakashaka GAC: never prunes a value used by a valid solution (brute-force gate)', () => {
+  const boards = [
+    [[-1,-1],[-1,-1]],
+    [[-1,-1,-1],[-1,-2,-1],[-1,-1,-1]],
+    [[-1,0,-1],[-1,-1,-1]],
+    [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+    [[-1,-1,-1,-1],[-1,-2,-1,-1],[-1,-1,2,-1]],
+  ];
+  for (const task of boards) {
+    const all = bruteForce(task);
+    const s = new ShakashakaSolver({ task });
+    s._initDomains();
+    s._gacPropagate(); // may wipe out only if unsat
+    for (let r = 0; r < task.length; r++) for (let c = 0; c < task[0].length; c++) {
+      if (task[r][c] !== -1) continue;
+      for (let v = 0; v <= 4; v++) {
+        const possibleInSomeSolution = all.some(sol => sol[r][c] === v);
+        if (possibleInSomeSolution) {
+          assert.ok((s._dom[r][c] >> v) & 1, `GAC wrongly pruned (${r},${c})=${v} which a valid solution uses`);
+        }
+      }
+    }
+  }
+});
+
+test('Shakashaka _deduceAll: GAC-only fixpoint never makes a solvable board UNSAT', () => {
+  // Solvable board (has brute-force solutions) with a black cell; GAC must not
+  // spuriously wipe a domain. (The plan's original 3x3 center-black board is in
+  // fact UNSAT, so a GAC wipeout there is sound — use an actually-solvable one.)
+  const task = [[-2,-1,-1],[-1,-1,-1],[-1,-1,-1]];
+  assert.ok(bruteForce(task).length > 0, 'fixture must be solvable');
+  const s = new ShakashakaSolver({ task });
+  s._initDomains();
+  assert.equal(s._deduceAll(0), true); // no wipeout on a solvable board
+});
