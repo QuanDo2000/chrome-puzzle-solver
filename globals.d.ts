@@ -27,6 +27,7 @@ declare const NorinoriSolver: any;
 declare const NurikabeSolver: any;
 declare const PipesSolver: any;
 declare const ShingokiSolver: any;
+declare const ShakashakaSolver: any;
 
 // JSDoc typedefs referenced by per-puzzle solver files in src/solvers/.
 // The originals lived as JSDoc @typedef in the old monolithic solver.js
@@ -87,6 +88,9 @@ type MainWorldFn =
   | 'readShingokiData'
   | 'readShingokiState'
   | 'applyShingokiState'
+  | 'readShakashakaData'
+  | 'readShakashakaState'
+  | 'applyShakashakaState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';

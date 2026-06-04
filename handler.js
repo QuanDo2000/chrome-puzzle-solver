@@ -509,6 +509,56 @@ const shingokiHandler = {
 
 registerHandler(shingokiHandler);
 
+// ── Shakashaka handler (puzzles-mobile.com/shakashaka/) ───────────
+
+const shakashakaHandler = {
+  name: 'puzzles-mobile-shakashaka',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/shakashaka/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readShakashakaData', []);
+    if (!data) return { ...result, error: 'No Shakashaka task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'shakashaka',
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  async readState() {
+    const state = await callMainWorld('readShakashakaState', []);
+    if (state) return state;
+    return { cellStatus: [] };
+  },
+
+  async applySolution(solution, _ctx) {
+    if (!solution || !solution.cells) {
+      return { success: false, error: 'Shakashaka applySolution: missing cells' };
+    }
+    const ok = await callMainWorld('applyShakashakaState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Shakashaka apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(shakashakaHandler);
+
 // ── Hashi handler (puzzles-mobile.com/hashi/) ─────────────
 
 const hashiHandler = {
