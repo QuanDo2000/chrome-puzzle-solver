@@ -20,13 +20,14 @@ const FILES = [
   'pipes.js',
   'shingoki.js',
   'shakashaka.js',
+  'lightup.js',
   'diff.js',
 ];
 const EXPORTS = [
   'NonogramSolver', 'AquariumSolver', 'GalaxiesSolver', 'BinairoSolver',
   'ShikakuSolver', 'YinYangSolver', 'SlitherlinkSolver', 'HashiSolver',
   'HeyawakeSolver', 'HitoriSolver', 'KakurasuSolver', 'KurodokoSolver',
-  'MosaicSolver', 'NorinoriSolver', 'NurikabeSolver', 'PipesSolver', 'ShingokiSolver', 'ShakashakaSolver', 'computePuzzleDiff',
+  'MosaicSolver', 'NorinoriSolver', 'NurikabeSolver', 'PipesSolver', 'ShingokiSolver', 'ShakashakaSolver', 'LightUpSolver', 'computePuzzleDiff',
 ];
 
 // Strip the trailing CommonJS export block from a per-puzzle source. The

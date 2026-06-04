@@ -155,3 +155,19 @@ test('LightUp solve: a uniquely-solved board returns the unique solution', () =>
   assert.equal(res.solved, true);
   assert.deepEqual(res.cells, [[1, -1, 1]]);
 });
+
+test('LightUp _deduceOnly: reports newly-forced cells from a seeded board', () => {
+  // [-1, 2, -1]: both white cells are forced bulbs with nothing pre-decided.
+  const s = mk([[-1, 2, -1]]);
+  const decided = [[9, -1, 9]];           // -1 black, 9 UNK
+  const forced = s._deduceOnly(decided);
+  // both (0,0) and (0,2) forced to bulb (value 1)
+  const keys = forced.map(f => `${f.row},${f.col}=${f.value}`).sort();
+  assert.deepEqual(keys, ['0,0=1', '0,2=1']);
+});
+
+test('LightUp _deduceOnly: contradictory seed returns empty (player erred)', () => {
+  const s = mk([[-1, -1, -1]]);
+  const decided = [[1, 9, 1]];            // two bulbs seeing each other
+  assert.deepEqual(s._deduceOnly(decided), []);
+});

@@ -200,6 +200,31 @@ class LightUpSolver {
     return null;
   }
 
+  // Hint engine: pin the player's already-decided cells, propagate to a fixpoint,
+  // and return open cells the deduction newly determined. `decided` is a board-state
+  // grid: -1 black, 0 no-bulb, 1 bulb, 9 UNK (untouched). Returns [] on contradiction
+  // (the live board is wrong) so callers fall back to the cached-solution diff.
+  _deduceOnly(decided) {
+    this._initDomains();
+    this._buildSegments();
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (this.task[r][c] !== -1) continue;
+      const v = decided[r][c];
+      if (v === 0) this._dom[r][c] = 1;
+      else if (v === 1) this._dom[r][c] = 2;
+    }
+    if (!this._propagate()) return [];
+    const forced = [];
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (this.task[r][c] !== -1) continue;
+      if (decided[r][c] !== 9) continue;        // only newly-determined cells
+      const d = this._dom[r][c];
+      if (d === 2) forced.push({ row: r, col: c, value: 1 });
+      else if (d === 1) forced.push({ row: r, col: c, value: 0 });
+    }
+    return forced;
+  }
+
   solve() {
     this._initDomains();
     this._buildSegments();
