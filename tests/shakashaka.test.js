@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { ShakashakaSolver } = require('../src/solvers/shakashaka.js');
 
+function popcount(x) { let n = 0; while (x) { x &= x - 1; n++; } return n; }
+
 // Build a solver over a task grid (-1 open, -2 black, 0..4 numbered black).
 function mk(task) { return new ShakashakaSolver({ task }); }
 
@@ -213,4 +215,41 @@ test('Shakashaka _deduceAll: GAC-only fixpoint never makes a solvable board UNSA
   const s = new ShakashakaSolver({ task });
   s._initDomains();
   assert.equal(s._deduceAll(0), true); // no wipeout on a solvable board
+});
+
+test('Shakashaka bifurcation: _deduceAll with Tier-2 never prunes a valid value (brute-force)', () => {
+  const boards = [
+    [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]],
+    [[-1,-1,-1,-1],[-1,-2,-1,-1],[-1,-1,2,-1],[-1,-1,-1,-1]],
+    [[-1,0,-1],[-1,-1,-1],[-1,-2,-1]],
+    [[-1,-1,-1,-1],[-2,-1,-1,-2],[-1,-1,-1,-1]],
+  ];
+  for (const task of boards) {
+    const all = bruteForce(task);
+    const s = new ShakashakaSolver({ task });
+    s._initDomains();
+    s._deduceAll(0); // GAC + bifurcation
+    for (let r = 0; r < task.length; r++) for (let c = 0; c < task[0].length; c++) {
+      if (task[r][c] !== -1) continue;
+      for (let v = 0; v <= 4; v++) {
+        if (all.some(sol => sol[r][c] === v)) {
+          assert.ok((s._dom[r][c] >> v) & 1, `bifurcation wrongly pruned (${r},${c})=${v}`);
+        }
+      }
+    }
+  }
+});
+
+test('Shakashaka bifurcation: forced cells hold in every solution', () => {
+  const task = [[-1,-1,-1,-1],[-1,-2,-1,-1],[-1,-1,2,-1],[-1,-1,-1,-1]];
+  const all = bruteForce(task);
+  const s = new ShakashakaSolver({ task });
+  s._initDomains(); s._deduceAll(0);
+  for (let r = 0; r < task.length; r++) for (let c = 0; c < task[0].length; c++) {
+    if (task[r][c] !== -1) continue;
+    if (popcount(s._dom[r][c]) === 1) {
+      let v = 0, m = s._dom[r][c]; while (m > 1) { m >>= 1; v++; }
+      for (const sol of all) assert.equal(sol[r][c], v, `forced (${r},${c})=${v} must hold in all solutions`);
+    }
+  }
 });

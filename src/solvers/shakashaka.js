@@ -234,11 +234,54 @@ class ShakashakaSolver {
     }
     return true;
   }
-  // Two-tier deduction driver. Tier-1 GAC; Tier-2 bifurcation added in Task 2.
-  // `budget` (ms, 0 = use existing deadline) bounds the heavy passes.
+  // Tier-2: 1-ply probe each frontier cell-value. Pin it, run full GAC; if that
+  // wipes out, the value is provably impossible -> prune. Frontier = open cells
+  // adjacent to a decided/black cell. Cost-gated by this._deadline. Returns
+  // { changed, ok:false on contradiction }.
+  _bifurcate() {
+    const board = this._boardFromDomains();
+    const frontier = [];
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (this.task[r][c] !== -1 || popcount(this._dom[r][c]) <= 1) continue;
+      let adj = false;
+      for (const [t, e] of [[r-1,c],[r+1,c],[r,c-1],[r,c+1]]) {
+        if (t < 0 || e < 0 || t >= this.rows || e >= this.cols) continue;
+        if (this.task[t][e] !== -1 || board[t][e] !== UNK) { adj = true; break; }
+      }
+      if (adj) frontier.push([r, c]);
+    }
+    let changed = false;
+    for (const [r, c] of frontier) {
+      if (this._deadline && Date.now() > this._deadline) break;
+      const d = this._dom[r][c];
+      if (popcount(d) <= 1) continue;
+      for (let v = 0; v <= 4; v++) if (d & (1 << v)) {
+        const saved = this._dom.map(row => row.slice());
+        this._dom[r][c] = (1 << v);
+        const ok = this._gacPropagate();
+        this._dom = saved;
+        if (!ok) {
+          this._dom[r][c] &= ~(1 << v);
+          changed = true;
+          if (this._dom[r][c] === 0) return { changed, ok: false };
+        }
+      }
+    }
+    return { changed, ok: true };
+  }
+  // Two-tier deduction driver. Tier-1 GAC to fixpoint, then a Tier-2 bifurcation
+  // pass, repeating while anything changed. `budget` (ms, 0 = use existing
+  // deadline) bounds the heavy passes.
   _deduceAll(budget) {
     if (budget > 0) this._deadline = Date.now() + budget;
-    return this._gacPropagate();
+    for (;;) {
+      if (!this._gacPropagate()) return false;
+      if (this._bifurcationDisabled) return true;
+      if (this._deadline && Date.now() > this._deadline) return true;
+      const bif = this._bifurcate();
+      if (!bif.ok) return false;
+      if (!bif.changed) return true;
+    }
   }
   // Propagation-only result (no search): the determined board (UNK where open).
   _deduceOnly() {
