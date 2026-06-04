@@ -116,6 +116,62 @@ class LightUpSolver {
       this._segs[r][c] = seg;
     }
   }
+
+  // Is (r,c) lit by some DECIDED bulb? (itself a bulb, or a bulb in its segment.)
+  _isLit(r, c) {
+    if (this._dom[r][c] === 2) return true;
+    for (const [nr, nc] of this._segs[r][c]) if (this._dom[nr][nc] === 2) return true;
+    return false;
+  }
+
+  // Propagate three sound rules to a fixpoint. Returns false on contradiction.
+  //   A no-collision: a decided bulb forbids bulbs (and lights) its whole segment.
+  //   B clue forcing: a numbered cell pins its undecided neighbours when forced.
+  //   C coverage:     an unlit white cell with exactly one possible lighter forces it;
+  //                   zero possible lighters is a contradiction.
+  _propagate() {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      // Rule A
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        if (this._dom[r][c] !== 2) continue;
+        for (const [nr, nc] of this._segs[r][c]) {
+          const d = this._dom[nr][nc];
+          if (d === 2) return false;          // two bulbs see each other
+          if (d === 3) { this._dom[nr][nc] = 1; changed = true; } // can't be a bulb
+        }
+      }
+      // Rule B
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        const k = this.task[r][c];
+        if (k < 0) continue;                  // not a numbered cell
+        let b = 0; const undec = [];
+        for (const [nr, nc] of this._nb[r][c]) {
+          const d = this._dom[nr][nc];
+          if (d === 2) b++;
+          else if (d === 3) undec.push([nr, nc]);
+        }
+        if (b > k) return false;
+        if (b + undec.length < k) return false;
+        if (b === k && undec.length) { for (const [nr, nc] of undec) this._dom[nr][nc] = 1; changed = true; }
+        else if (b + undec.length === k && undec.length) { for (const [nr, nc] of undec) this._dom[nr][nc] = 2; changed = true; }
+      }
+      // Rule C
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        if (this.task[r][c] !== -1) continue; // only white cells need lighting
+        if (this._isLit(r, c)) continue;
+        let count = 0, only = null;
+        if (this._dom[r][c] & 2) { count++; only = [r, c]; }
+        for (const [nr, nc] of this._segs[r][c]) {
+          if (this._dom[nr][nc] & 2) { count++; only = [nr, nc]; }
+        }
+        if (count === 0) return false;        // can never be lit
+        if (count === 1 && this._dom[only[0]][only[1]] !== 2) { this._dom[only[0]][only[1]] = 2; changed = true; }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
