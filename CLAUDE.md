@@ -2,9 +2,10 @@
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
 Binairo Plus, Shikaku, Yin-Yang, Slitherlink, Hashi, Heyawake, Hitori,
-Kakurasu, Kurodoko, Mosaic, Norinori, Nurikabe, Pipes, and Shingoki puzzles on
-puzzles-mobile.com. Sixteen solver classes in `src/solvers/`, a content-script
-widget in `content.js`, and a small service worker in `background.js`.
+Kakurasu, Kurodoko, Mosaic, Norinori, Nurikabe, Pipes, Shingoki, and Shakashaka
+puzzles on puzzles-mobile.com. Seventeen solver classes in `src/solvers/`, a
+content-script widget in `content.js`, and a small service worker in
+`background.js`.
 
 ## Version control: use `jj`, never plain `git`
 
@@ -251,3 +252,15 @@ Modules with detailed design notes in their headers:
 - Galaxies (shared statics) — `src/widget/galaxies-hint.js`,
   `src/solvers/galaxies.js`
 - Shingoki — `src/widget/puzzles/shingoki.js`, `src/solvers/shingoki.js` (Hint/Loop use a deductive getStepwiseHint — border/axis + number-run propagation + 1-step lookahead — falling back to the cached solution when logic is exhausted) (solver: adaptive DFS + two-tier deduction engine (_deduceAll): Tier 1 = _propagate + _maxReachForce; Tier 2 (_deduceHeavy) = _candidateIntersectForce ALWAYS, with the expensive _connectivityForce + _bifurcateForce SIZE-GATED to rows*cols <= _heavyMaxCells (=300). solve() picks an effective search budget by size — small/mid boards get the full searchMs (default 25000, lets 15x15 solve), large boards are capped to _lightSearchMs (5000) and skip the heavy rules — and sets a _deduceDeadline that bounds root + per-node deduction so large boards can't run away. Measured (maxMs:30000): 7x7-hard SOLVES ~0.4s; 10x10-hard SOLVES ~1.6s; 15x15-hard SOLVES ~21s; 25x25-hard returns a sound FAST partial ~5s (reach ~292/1300); 40x40-monthly returns a sound FAST partial ~5s (reach ~1116/3280). CDCL was tried and removed: useless+harmful on connectivity-dominated boards).
+- Shakashaka — `src/widget/puzzles/shakashaka.js`, `src/solvers/shakashaka.js`
+  (encoding: task -1=open/-2=black-no-number/0-4=numbered-black; cellStatus
+  0/5=white, 1-4=triangle orientations; board-state space: -1 black, 0 white,
+  1–4 triangle, 9=UNK; solver: CSP over {white=0, T1-4=1-4} with ported
+  `hasNonRect` local edge-matching + `taskMarkedCount` number-clue constraints,
+  domain-bitmask propagation + MRV backtracking + trail undo + sound partial on
+  timeout; `applyShakashakaState` maps board-state 0 → cellStatus 5 (explicit
+  white) and 1–4 → cellStatus 1–4 (triangle); triangle geometry per orientation
+  (T1=up-left, T2=up-right, T3=down-right, T4=down-left) and the white=5
+  encoding are empirical — verify both on the live page after first deploy. 25x25
+  returns a sound partial (~95/518 cells, 30s budget); full solve of large boards
+  is a potential follow-up).

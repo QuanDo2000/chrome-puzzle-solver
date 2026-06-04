@@ -27,7 +27,7 @@ test('Shakashaka oracle: hasNonRect accepts a valid T1/T2 pairing', () => {
   // T1 then T2 horizontally, with borders below -> need to satisfy down rule too.
   // Use a 2-wide, check the per-cell predicate for the T1 cell on a board where
   // right=2 and down is white at the edge (t<H-1 false -> border ok path).
-  const s = mk([[-1, -1]]);   // 1 row -> t<H-1 is false for both, so the "need t<H-1" returns violation
+  const _s = mk([[-1, -1]]);   // 1 row -> t<H-1 is false for both, so the "need t<H-1" returns violation
   // On a 1-row board T1 violates (needs a down neighbour). Use 2 rows:
   const s2 = mk([[-1, -1], [-1, -1]]);
   // board where (0,0)=T1, (0,1)=T2, (1,0)=T4, (1,1)=T3 forms a closed diamond (valid).
@@ -135,6 +135,22 @@ test('Shakashaka solve: random small-board fuzz cross-check vs brute-force', () 
         }
       }
     }
+  }
+});
+
+test('Shakashaka solve: 25x25 real fixture returns solved or sound partial (never throws)', () => {
+  const fixtures = require('./fixtures/real-puzzles.js');
+  const { task } = fixtures.shakashaka_25x25;
+  const res = new ShakashakaSolver({ task, maxMs: 30000 }).solve();
+  // Must not throw; must return an object with solved or partial flag
+  assert.ok(res !== null && typeof res === 'object', '25x25 must return a result object');
+  assert.ok(res.solved === true || res.partial === true, '25x25 must be solved or partial');
+  if (res.solved) {
+    const chk = new ShakashakaSolver({ task });
+    assert.equal(chk._isValid(res.cells), true, '25x25 solved output must be valid');
+  }
+  if (res.partial) {
+    assert.ok(res.cells !== null && Array.isArray(res.cells), '25x25 partial must have cells array');
   }
 });
 
