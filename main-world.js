@@ -891,10 +891,11 @@ function applyShakashakaState(solution) {
   try {
     var G = window.Game;
     if (G.saveState) G.saveState(true);
-    var cells = solution.cells; // board-state grid: -1 black, 0 white, 1..4 triangle
+    var cells = solution.cells; // board-state grid: -1 black, 0 white, 1..4 triangle, 9 UNK (leave as-is)
     for (var r = 0; r < cells.length; r++) for (var c = 0; c < cells[r].length; c++) {
       if (G.task[r][c] !== -1) continue;            // skip black cells
       var v = cells[r][c];
+      if (v === 9) continue;                        // UNK: don't touch (preserve current cellStatus)
       G.currentState.cellStatus[r][c] = (v >= 1 && v <= 4) ? v : 5; // triangle or explicit white
     }
     // canonical render ladder

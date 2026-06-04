@@ -257,22 +257,20 @@ const shakashaka = {
     return true;
   },
 
-  // Apply a hint batch: read the live cellStatus, overlay the hint cells onto a
-  // board-state grid, and write it back via applyShakashakaState.
+  // Apply a hint batch: write ONLY the hint cells, leaving every other open cell
+  // untouched (UNK=9, which applyShakashakaState skips). Writing a full board here
+  // would over-commit — marking every still-undecided cell white (cellStatus 5),
+  // including cells whose answer is a not-yet-revealed triangle — which corrupts
+  // the board and makes the next Loop deduction reason from a wrong state.
   async applyHint(hint, { callMainWorld, puzzleData }) {
     const task = puzzleData && puzzleData.task;
     const rows = puzzleData ? puzzleData.rows : 0;
     const cols = puzzleData ? puzzleData.cols : 0;
-    const state = await callMainWorld('readShakashakaState', []);
-    if (!state) return false;
-    const cs = state.cellStatus || [];
     const cells = [];
     for (let r = 0; r < rows; r++) {
-      const row = new Array(cols).fill(0);
+      const row = new Array(cols);
       for (let c = 0; c < cols; c++) {
-        if (task && task[r] && task[r][c] !== -1) { row[c] = -1; continue; }
-        const v = cs[r] ? cs[r][c] : 0;
-        row[c] = (v >= 1 && v <= 4) ? v : 0;
+        row[c] = (task && task[r] && task[r][c] !== -1) ? -1 : 9; // black, else UNK (leave as-is)
       }
       cells.push(row);
     }
