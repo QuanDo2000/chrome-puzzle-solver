@@ -255,12 +255,22 @@ Modules with detailed design notes in their headers:
 - Shakashaka — `src/widget/puzzles/shakashaka.js`, `src/solvers/shakashaka.js`
   (encoding: task -1=open/-2=black-no-number/0-4=numbered-black; cellStatus
   0/5=white, 1-4=triangle orientations; board-state space: -1 black, 0 white,
-  1–4 triangle, 9=UNK; solver: CSP over {white=0, T1-4=1-4} with ported
-  `hasNonRect` local edge-matching + `taskMarkedCount` number-clue constraints,
-  domain-bitmask propagation + MRV backtracking + trail undo + sound partial on
-  timeout; `applyShakashakaState` maps board-state 0 → cellStatus 5 (explicit
-  white) and 1–4 → cellStatus 1–4 (triangle); triangle geometry per orientation
-  (T1=up-left, T2=up-right, T3=down-right, T4=down-left) and the white=5
-  encoding are empirical — verify both on the live page after first deploy. 25x25
-  returns a sound partial (~95/518 cells, 30s budget); full solve of large boards
-  is a potential follow-up).
+  1–4 triangle, 9=UNK; solver: two-tier deduction engine (_deduceAll) + MRV
+  backtracking: Tier-1 = GAC arc-consistency (_gacPropagate) — enumerates open
+  read-neighbours (capped at GAC_CAP=5, sound under-pruning) to prune values
+  whose `_hasNonRectAt` predicate has no support + clue-feasibility; Tier-2 =
+  bifurcation 1-ply probing (_bifurcate) — pins each frontier cell-value, runs
+  full GAC on the clone, prunes on wipeout; oracle-gated (ported `hasNonRect` +
+  brute-force cross-check); size-gated via `_heavyMaxCells`=200 / `_lightBudgetMs`=4000
+  — large boards get a bounded deduction slice and return a fast sound partial.
+  Measured (maxMs=30000): real 5×5 SOLVES ~12ms (root-deduction reach 55%);
+  constructive 6×6 SOLVES ~52ms; 8×8 SOLVES ~196ms; 10×10 SOLVES ~573ms;
+  12×12 SOLVES ~1.4s; 25×25 returns a strong sound PARTIAL ~4s (root-reach
+  ~21%/518, solve-determined ~98/518). Large-board full-solve is a known ceiling
+  (same as Shingoki — deduction is sparse on open boards, search explodes).
+  Hint uses _deduceAll(800ms) with _bifurcationDisabled=true on large boards
+  (GAC-only) so single Hint stays <1s. `applyShakashakaState` maps board-state
+  0 → cellStatus 5 (explicit white) and 1–4 → cellStatus 1–4 (triangle);
+  triangle geometry per orientation (T1=up-left, T2=up-right, T3=down-right,
+  T4=down-left) and the white=5 encoding are empirical — verify both on the
+  live page after first deploy).
