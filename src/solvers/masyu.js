@@ -293,6 +293,21 @@ class MasyuSolver {
     if (this._timedOut) return { solved: false, partial: true, horizontal: root.H, vertical: root.V };
     return { solved: false, error: 'No solution found' };
   }
+
+  // Hint engine: seed the solver with the live board edges (0/1/2), deduce to a fixpoint,
+  // and return the newly-forced LINE edges as { type:'h'|'v', r, c }. Returns [] if the
+  // live board is contradictory (caller falls back to the cached-solution diff).
+  _deduceForced(curH, curV) {
+    this.H = curH.map(r => r.slice()); this.V = curV.map(r => r.slice());
+    this._deadline = Date.now() + (this.maxMs || 2000);
+    if (!this._propagate() || this._infeasible()) return [];
+    const pd = Date.now() + (typeof this.probeMs === 'number' ? this.probeMs : 800);
+    this._pearlProbe(pd); this._probe(pd);
+    const forced = [];
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols - 1; c++) if (this.H[r][c] === 1 && curH[r][c] === 0) forced.push({ type: 'h', r, c });
+    for (let r = 0; r < this.rows - 1; r++) for (let c = 0; c < this.cols; c++) if (this.V[r][c] === 1 && curV[r][c] === 0) forced.push({ type: 'v', r, c });
+    return forced;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

@@ -27,6 +27,7 @@ declare const NorinoriSolver: any;
 declare const NurikabeSolver: any;
 declare const PipesSolver: any;
 declare const ShingokiSolver: any;
+declare const MasyuSolver: any;
 declare const ShakashakaSolver: any;
 declare const LightUpSolver: any;
 

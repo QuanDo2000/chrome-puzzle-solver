@@ -139,3 +139,14 @@ test('Masyu solve: 3x3 outer-ring board solves to a valid loop', () => {
   assert.equal(res.solved, true);
   assert.ok(new MasyuSolver({ task: t, rows: 3, cols: 3 })._isValid(res.horizontal, res.vertical));
 });
+
+test('Masyu _deduceForced: returns forced line-edges from a seeded board', () => {
+  // top-border white forces its horizontal edges to line
+  const t = [[-1,'W',-1],[-1,-1,-1],[-1,-1,-1]];
+  const s = new MasyuSolver({ task: t, rows: 3, cols: 3, maxMs: 1000 });
+  const curH = Array.from({length:3},()=>[0,0]);
+  const curV = Array.from({length:2},()=>[0,0,0]);
+  const forced = s._deduceForced(curH, curV);
+  const has = (type,r,c) => forced.some(f => f.type===type && f.r===r && f.c===c);
+  assert.ok(has('h',0,0) && has('h',0,1), 'white forces its two horizontal line edges');
+});

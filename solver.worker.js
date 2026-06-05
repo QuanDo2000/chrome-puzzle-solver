@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, PipesSolver, ShingokiSolver, ShakashakaSolver, LightUpSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, PipesSolver, ShingokiSolver, MasyuSolver, ShakashakaSolver, LightUpSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -167,6 +167,9 @@ self.onmessage = function (e) {
       const s = new ShingokiSolver({
         rows: extraData.rows, cols: extraData.cols, task: extraData.task, maxMs: 30000,
       });
+      result = s.solve();
+    } else if (type === 'masyu' && extraData) {
+      const s = new MasyuSolver({ rows: extraData.rows, cols: extraData.cols, task: extraData.task, maxMs: 30000 });
       result = s.solve();
     } else if (type === 'shakashaka' && extraData) {
       const s = new ShakashakaSolver({ task: extraData.task, maxMs: 30000 });
