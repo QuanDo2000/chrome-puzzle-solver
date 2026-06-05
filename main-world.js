@@ -1005,6 +1005,51 @@ function applyLightUpState(solution) {
   } catch (e) { return false; }
 }
 
+function readSlantData() {
+  try {
+    var G = window.Game;
+    if (!G || !G.task || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth;
+    var task = [];
+    for (var t = 0; t <= rows; t++) {
+      var src = G.task[t] || [];
+      var arr = new Array(cols + 1);
+      for (var e = 0; e <= cols; e++) { var v = src[e]; arr[e] = (typeof v === 'number') ? v : -1; }
+      task.push(arr);
+    }
+    return { rows: rows, cols: cols, task: task };
+  } catch (e) { return null; }
+}
+
+function readSlantState() {
+  try {
+    var s = window.Game.currentState.cellStatus;
+    return { cellStatus: s.map(function (row) { return row.slice(); }) };
+  } catch (e) { return null; }
+}
+
+function applySlantState(solution) {
+  try {
+    var G = window.Game;
+    if (!solution || !solution.cells) return false;
+    if (!(G && G.currentState)) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    var cells = solution.cells; // 1 '\', 2 '/', 9 UNK / 0 (skip)
+    for (var r = 0; r < cells.length; r++) for (var c = 0; c < cells[r].length; c++) {
+      var v = cells[r][c];
+      if (v === 1) G.currentState.cellStatus[r][c] = 1;
+      else if (v === 2) G.currentState.cellStatus[r][c] = 2;
+    }
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    else if (typeof G.render === 'function') G.render();
+    else if (typeof G.redraw === 'function') G.redraw();
+    else if (typeof G.redrawGrid === 'function') G.redrawGrid();
+    else if (typeof G.draw === 'function') G.draw();
+    else if (G.getSaved && G.loadGame) { var saved = G.getSaved(); if (saved) G.loadGame(saved); }
+    return true;
+  } catch (e) { return false; }
+}
+
 function readShikakuData() {
   var maxAttempts = 20;
   var pollMs = 250;
@@ -2272,6 +2317,11 @@ function dumpPuzzleForBench() {
     if (path.indexOf('/light-up/') !== -1) {
       var t = window.Game.task;
       return { type: 'lightup', rows: t.length, cols: t[0].length, task: t, path: path };
+    }
+
+    if (path.indexOf('/slant/') !== -1) {
+      var t = window.Game.task;
+      return { type: 'slant', rows: window.Game.puzzleHeight, cols: window.Game.puzzleWidth, task: t, path: path };
     }
 
     if (path.indexOf('/shingoki/') !== -1) {

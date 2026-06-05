@@ -100,6 +100,9 @@ type MainWorldFn =
   | 'readLightUpData'
   | 'readLightUpState'
   | 'applyLightUpState'
+  | 'readSlantData'
+  | 'readSlantState'
+  | 'applySlantState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
