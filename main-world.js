@@ -871,6 +871,64 @@ function applyShingokiState(state) {
   }
 }
 
+function readMasyuData() {
+  try {
+    var G = window.Game;
+    if (!G || !G.task || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth;
+    var task = [];
+    for (var r = 0; r < rows; r++) {
+      var srcRow = G.task[r] || [];
+      var arr = new Array(cols);
+      for (var c = 0; c < cols; c++) { var v = srcRow[c]; arr[c] = (v === 'W' || v === 'B') ? v : -1; }
+      task.push(arr);
+    }
+    return { rows: rows, cols: cols, task: task };
+  } catch (e) { return null; }
+}
+
+function readMasyuState(rows, cols) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState) return null;
+    var H = G.currentState.cellHorizontalStatus, V = G.currentState.cellVerticalStatus;
+    if (!Array.isArray(H) || !Array.isArray(V)) return null;
+    var horizontal = [], vertical = [];
+    for (var hr = 0; hr < H.length; hr++) horizontal.push((H[hr] || []).slice());
+    for (var vr = 0; vr < V.length; vr++) vertical.push((V[vr] || []).slice());
+    return { horizontal: horizontal, vertical: vertical };
+  } catch (e) { return null; }
+}
+
+function applyMasyuState(state) {
+  try {
+    var G = window.Game;
+    if (!state || !state.horizontal || !state.vertical) return false;
+    if (!(G && G.currentState)) return false;
+    var H = G.currentState.cellHorizontalStatus, V = G.currentState.cellVerticalStatus;
+    if (!Array.isArray(H) || !Array.isArray(V)) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    for (var r = 0; r < H.length && r < state.horizontal.length; r++) {
+      var dst = H[r], src = state.horizontal[r] || [];
+      if (!Array.isArray(dst)) continue;
+      for (var c = 0; c < dst.length && c < src.length; c++) dst[c] = src[c] === 1 ? 1 : src[c] === 2 ? 2 : 0;
+    }
+    for (var r2 = 0; r2 < V.length && r2 < state.vertical.length; r2++) {
+      var dst2 = V[r2], src2 = state.vertical[r2] || [];
+      if (!Array.isArray(dst2)) continue;
+      for (var c2 = 0; c2 < dst2.length && c2 < src2.length; c2++) dst2[c2] = src2[c2] === 1 ? 1 : src2[c2] === 2 ? 2 : 0;
+    }
+    G.currentState.solved = false; G.solved = false;
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    else if (typeof G.render === 'function') G.render();
+    else if (typeof G.redraw === 'function') G.redraw();
+    else if (typeof G.redrawGrid === 'function') G.redrawGrid();
+    else if (typeof G.draw === 'function') G.draw();
+    else if (G.getSaved && G.loadGame) { var saved = G.getSaved(); if (saved) G.loadGame(saved); }
+    return true;
+  } catch (e) { return false; }
+}
+
 function readShakashakaData() {
   try {
     var G = window.Game;
@@ -2234,6 +2292,17 @@ function dumpPuzzleForBench() {
         sgTask.push(sgArr);
       }
       return { type: 'shingoki', rows: height, cols: width, task: sgTask, path: path };
+    }
+
+    if (path.indexOf('/masyu/') !== -1) {
+      if (!Array.isArray(g.task)) return { error: 'masyu: g.task is not a 2D array', diagnostic: diagnostic(g), path: path };
+      var mTask = [];
+      for (var mr = 0; mr < height; mr++) {
+        var mRow = g.task[mr] || [], mArr = new Array(width);
+        for (var mc = 0; mc < width; mc++) { var mv = mRow[mc]; mArr[mc] = (mv === 'W' || mv === 'B') ? mv : -1; }
+        mTask.push(mArr);
+      }
+      return { type: 'masyu', rows: height, cols: width, task: mTask, path: path };
     }
 
     if (path.indexOf('/nurikabe/') !== -1 || g.slug === 'nurikabe') {
