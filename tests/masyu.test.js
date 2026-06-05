@@ -89,3 +89,53 @@ test('Masyu connectivity: reachability flags pearls split into two components', 
   s.H = [[2,2]]; s.V = []; // both horizontal edges crossed -> three isolated cells, pearls unreachable
   assert.equal(s._connOk(), false);
 });
+
+// Brute-force ALL line/cross edge assignments (2^edges); keep those passing _isValid.
+function bruteForce(task) {
+  const rows = task.length, cols = task[0].length;
+  const s = new MasyuSolver({ task, rows, cols });
+  const total = rows * (cols - 1) + (rows - 1) * cols; const sols = [];
+  for (let mask = 0; mask < (1 << total); mask++) {
+    const H = [], V = []; let b = 0;
+    for (let r = 0; r < rows; r++) { H.push([]); for (let c = 0; c < cols - 1; c++) { H[r].push(((mask >> b) & 1) ? 1 : 2); b++; } }
+    for (let r = 0; r < rows - 1; r++) { V.push([]); for (let c = 0; c < cols; c++) { V[r].push(((mask >> b) & 1) ? 1 : 2); b++; } }
+    if (s._isValid(H, V)) sols.push({ H, V });
+  }
+  return sols;
+}
+
+function randTask(seed, rows, cols) {
+  let x = seed; const rnd = () => { x = (x * 1103515245 + 12345) & 0x7fffffff; return x / 0x7fffffff; };
+  const t = []; for (let r = 0; r < rows; r++) { t.push([]); for (let c = 0; c < cols; c++) { const p = rnd(); t[r].push(p < 0.6 ? -1 : (p < 0.8 ? 'W' : 'B')); } } return t;
+}
+
+test('Masyu soundness gate: solver matches brute-force across 400 random 3x4 boards', () => {
+  let mism = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    const t = randTask(seed, 3, 4);
+    const sols = bruteForce(t);
+    const res = new MasyuSolver({ task: t, rows: 3, cols: 4, maxMs: 3000 }).solve();
+    if (res.solved !== (sols.length > 0)) { mism++; continue; }
+    if (res.solved && !new MasyuSolver({ task: t, rows: 3, cols: 4 })._isValid(res.horizontal, res.vertical)) mism++;
+  }
+  assert.equal(mism, 0);
+});
+
+test('Masyu soundness: root deduction never prunes an edge a solution uses', () => {
+  for (let seed = 1; seed <= 120; seed++) {
+    const t = randTask(seed, 3, 4); const sols = bruteForce(t); if (!sols.length) continue;
+    const s = new MasyuSolver({ task: t, rows: 3, cols: 4 });
+    s.H = Array.from({length:3},()=>[0,0,0]); s.V = Array.from({length:2},()=>[0,0,0,0]);
+    s._deadline = Date.now() + 3000;
+    assert.ok(s._propagate(), `propagation contradicted a solvable board seed ${seed}`);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { const v = s.H[r][c]; if (v !== 0) for (const sol of sols) assert.equal(sol.H[r][c], v, `H prune seed ${seed}`); }
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) { const v = s.V[r][c]; if (v !== 0) for (const sol of sols) assert.equal(sol.V[r][c], v, `V prune seed ${seed}`); }
+  }
+});
+
+test('Masyu solve: 3x3 outer-ring board solves to a valid loop', () => {
+  const t = [['B','W','B'],['W',-1,'W'],['B','W','B']];
+  const res = new MasyuSolver({ task: t, rows: 3, cols: 3, maxMs: 5000 }).solve();
+  assert.equal(res.solved, true);
+  assert.ok(new MasyuSolver({ task: t, rows: 3, cols: 3 })._isValid(res.horizontal, res.vertical));
+});

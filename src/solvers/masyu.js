@@ -175,6 +175,124 @@ class MasyuSolver {
   }
 
   _infeasible() { return this._badSubloop() || !this._connOk(); }
+
+  _snapshot() { return { H: this.H.map(r => r.slice()), V: this.V.map(r => r.slice()) }; }
+  _restore(s) { this.H = s.H.map(r => r.slice()); this.V = s.V.map(r => r.slice()); }
+  _countDetermined() { let n = 0; for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols - 1; c++) if (this.H[r][c] !== 0) n++; for (let r = 0; r < this.rows - 1; r++) for (let c = 0; c < this.cols; c++) if (this.V[r][c] !== 0) n++; return n; }
+
+  // Failed-literal edge probing: pin each undecided edge to each value; if a value
+  // leads to a contradiction/infeasibility, force the OTHER. Fixpoint. Sound.
+  _probe(deadline) {
+    let changed = true;
+    while (changed) {
+      changed = false; if (Date.now() > deadline) return true;
+      const edges = [];
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols - 1; c++) if (this.H[r][c] === 0) edges.push(['h', r, c]);
+      for (let r = 0; r < this.rows - 1; r++) for (let c = 0; c < this.cols; c++) if (this.V[r][c] === 0) edges.push(['v', r, c]);
+      for (const [t, r, c] of edges) {
+        if (Date.now() > deadline) return true;
+        if ((t === 'h' ? this.H[r][c] : this.V[r][c]) !== 0) continue;
+        let bad1 = false, bad2 = false, snap = this._snapshot();
+        if (!(this._set(t, r, c, 1) && this._propagate() && !this._infeasible())) bad1 = true;
+        this._restore(snap); snap = this._snapshot();
+        if (!(this._set(t, r, c, 2) && this._propagate() && !this._infeasible())) bad2 = true;
+        this._restore(snap);
+        if (bad1 && bad2) return false;
+        if (bad1) { this._set(t, r, c, 2); if (!this._propagate()) return false; changed = true; }
+        else if (bad2) { this._set(t, r, c, 1); if (!this._propagate()) return false; changed = true; }
+      }
+    }
+    return true;
+  }
+
+  // The discrete edge-options of a pearl: white=2 orientations, black=4 turn directions.
+  _pearlOptions(r, c) {
+    const t = this.task[r][c];
+    if (t === 'W') return [
+      [['h', r, c - 1, 1], ['h', r, c, 1], ['v', r - 1, c, 2], ['v', r, c, 2]],
+      [['v', r - 1, c, 1], ['v', r, c, 1], ['h', r, c - 1, 2], ['h', r, c, 2]],
+    ];
+    if (t === 'B') return [
+      [['h', r, c, 1], ['v', r, c, 1], ['h', r, c - 1, 2], ['v', r - 1, c, 2]],
+      [['h', r, c, 1], ['v', r - 1, c, 1], ['h', r, c - 1, 2], ['v', r, c, 2]],
+      [['h', r, c - 1, 1], ['v', r, c, 1], ['h', r, c, 2], ['v', r - 1, c, 2]],
+      [['h', r, c - 1, 1], ['v', r - 1, c, 1], ['h', r, c, 2], ['v', r, c, 2]],
+    ];
+    return null;
+  }
+  _applyOpt(opt) { for (const [t, r, c, v] of opt) if (!this._set(t, r, c, v)) return false; return true; }
+
+  // Pearl-orientation probing: drop infeasible discrete options; force edges shared by
+  // every survivor. Fixpoint. Sound.
+  _pearlProbe(deadline) {
+    let changed = true, any = false;
+    while (changed) {
+      changed = false;
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        const opts = this._pearlOptions(r, c); if (!opts) continue;
+        if (Date.now() > deadline) return { ok: true, changed: any };
+        const feasible = [];
+        for (const opt of opts) { const snap = this._snapshot(); const ok = this._applyOpt(opt) && this._propagate() && !this._infeasible(); this._restore(snap); if (ok) feasible.push(opt); }
+        if (feasible.length === 0) return { ok: false };
+        const edgeVals = {};
+        for (const opt of feasible) for (const [t, rr, cc, v] of opt) { const k = t + ':' + rr + ':' + cc; (edgeVals[k] = edgeVals[k] || { coord: [t, rr, cc], vals: new Set() }).vals.add(v); }
+        for (const k in edgeVals) { const { coord, vals } = edgeVals[k]; if (vals.size === 1) { const [t, rr, cc] = coord; const v = [...vals][0]; if (this._get(t, rr, cc) === 0) { if (!this._set(t, rr, cc, v)) return { ok: false }; changed = true; any = true; } } }
+        if (changed) { if (!this._propagate()) return { ok: false }; }
+      }
+    }
+    return { ok: true, changed: any };
+  }
+
+  // Branch on an undecided edge incident to a loop endpoint (deg-1 cell) first — extends
+  // the existing path, keeping connectivity tight. Falls back to first undecided.
+  _pickEdge() {
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (this._deg(r, c) !== 1) continue;
+      if (this._inH(r, c - 1) && this.H[r][c - 1] === 0) return ['h', r, c - 1];
+      if (this._inH(r, c) && this.H[r][c] === 0) return ['h', r, c];
+      if (this._inV(r - 1, c) && this.V[r - 1][c] === 0) return ['v', r - 1, c];
+      if (this._inV(r, c) && this.V[r][c] === 0) return ['v', r, c];
+    }
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols - 1; c++) if (this.H[r][c] === 0) return ['h', r, c];
+    for (let r = 0; r < this.rows - 1; r++) for (let c = 0; c < this.cols; c++) if (this.V[r][c] === 0) return ['v', r, c];
+    return null;
+  }
+
+  _search() {
+    if (Date.now() > this._deadline) { this._timedOut = true; return null; }
+    if (this._infeasible()) return null;
+    const e = this._pickEdge();
+    if (!e) return this._isValid(this.H, this.V) ? { H: this.H, V: this.V } : null;
+    for (const val of [1, 2]) {
+      const snap = this._snapshot();
+      const ok = this._set(e[0], e[1], e[2], val);
+      if (ok && this._propagate() && !this._infeasible()) { const res = this._search(); if (res) return res; }
+      this._restore(snap);
+    }
+    return null;
+  }
+
+  solve() {
+    this.H = Array.from({ length: this.rows }, () => new Array(this.cols - 1).fill(0));
+    this.V = Array.from({ length: this.rows - 1 }, () => new Array(this.cols).fill(0));
+    this._deadline = Date.now() + this.maxMs; this._timedOut = false;
+    if (!this._propagate()) return { solved: false, error: 'No solution (contradiction in givens)' };
+    if (this.useProbe) {
+      const pd = Date.now() + (this.probeMs !== null && this.probeMs !== undefined ? this.probeMs : this.maxMs);
+      let prog = true;
+      while (prog) {
+        prog = false;
+        const pp = this._pearlProbe(pd); if (!pp.ok) return { solved: false, error: 'No solution (contradiction in givens)' }; if (pp.changed) prog = true;
+        const before = this._countDetermined(); if (!this._probe(pd)) return { solved: false, error: 'No solution (contradiction in givens)' }; if (this._countDetermined() > before) prog = true;
+        if (Date.now() > pd) break;
+      }
+    }
+    const root = { H: this.H.map(r => r.slice()), V: this.V.map(r => r.slice()) };
+    const res = this._search();
+    if (res) return { solved: true, horizontal: res.H, vertical: res.V };
+    if (this._timedOut) return { solved: false, partial: true, horizontal: root.H, vertical: root.V };
+    return { solved: false, error: 'No solution found' };
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
