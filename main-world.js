@@ -1050,6 +1050,60 @@ function applySlantState(solution) {
   } catch (e) { return false; }
 }
 
+function readStarBattleData() {
+  try {
+    var G = window.Game;
+    if (!G || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var N = G.puzzleWidth;
+    // Star count: scrape the page title text ("14x14 / 3★ Hard Star Battle").
+    var stars = null;
+    try { var m = (document.body.innerText || '').match(/(\d+)\s*★/); if (m) stars = parseInt(m[1], 10); } catch (e2) {}
+    if (stars === null) { try { var m2 = (document.body.innerText || '').match(/(\d+)\s*stars?\b/i); if (m2) stars = parseInt(m2[1], 10); } catch (e3) {} }
+    // Detect shapeless (walls with a 1) vs shaped (multi-region areas).
+    var walls = null, areas = null;
+    var hasWall = Array.isArray(G.walls) && G.walls.length > 0;
+    if (hasWall) {
+      var anyWall = false;
+      for (var wr = 0; wr < G.walls.length; wr++) { var row = G.walls[wr] || []; for (var wc = 0; wc < row.length; wc++) if (row[wc] === 1) anyWall = true; }
+      if (anyWall) { walls = G.walls.map(function (r) { return r.slice(); }); }
+    }
+    if (!walls && Array.isArray(G.areas) && G.areas.length > 0) {
+      var distinct = {}; for (var ar = 0; ar < G.areas.length; ar++) { var arow = G.areas[ar] || []; for (var ac = 0; ac < arow.length; ac++) distinct[arow[ac]] = 1; }
+      if (Object.keys(distinct).length > 1) areas = G.areas.map(function (r) { return r.slice(); });
+    }
+    return { rows: N, cols: N, stars: stars, areas: areas, walls: walls };
+  } catch (e) { return null; }
+}
+
+function readStarBattleState() {
+  try {
+    var s = window.Game.currentState.cellStatus;
+    return { cellStatus: s.map(function (row) { return row.slice(); }) };
+  } catch (e) { return null; }
+}
+
+function applyStarBattleState(solution) {
+  try {
+    var G = window.Game;
+    if (!solution || !solution.cells) return false;
+    if (!(G && G.currentState)) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    var cells = solution.cells; // 1 star, 2 no-star/X, 9 UNK / 0 (skip)
+    for (var r = 0; r < cells.length; r++) for (var c = 0; c < cells[r].length; c++) {
+      var v = cells[r][c];
+      if (v === 1) G.currentState.cellStatus[r][c] = 1;
+      else if (v === 2) G.currentState.cellStatus[r][c] = 2;
+    }
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    else if (typeof G.render === 'function') G.render();
+    else if (typeof G.redraw === 'function') G.redraw();
+    else if (typeof G.redrawGrid === 'function') G.redrawGrid();
+    else if (typeof G.draw === 'function') G.draw();
+    else if (G.getSaved && G.loadGame) { var saved = G.getSaved(); if (saved) G.loadGame(saved); }
+    return true;
+  } catch (e) { return false; }
+}
+
 function readShikakuData() {
   var maxAttempts = 20;
   var pollMs = 250;
@@ -2322,6 +2376,12 @@ function dumpPuzzleForBench() {
     if (path.indexOf('/slant/') !== -1) {
       var t = window.Game.task;
       return { type: 'slant', rows: window.Game.puzzleHeight, cols: window.Game.puzzleWidth, task: t, path: path };
+    }
+
+    if (path.indexOf('/star-battle/') !== -1) {
+      var sbStars = null;
+      try { var sm = (document.body.innerText || '').match(/(\d+)\s*★/); if (sm) sbStars = parseInt(sm[1], 10); } catch (se) {}
+      return { type: 'starbattle', rows: window.Game.puzzleHeight, cols: window.Game.puzzleWidth, stars: sbStars, areas: window.Game.areas, walls: window.Game.walls, path: path };
     }
 
     if (path.indexOf('/shingoki/') !== -1) {

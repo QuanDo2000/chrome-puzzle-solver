@@ -104,6 +104,9 @@ type MainWorldFn =
   | 'readSlantData'
   | 'readSlantState'
   | 'applySlantState'
+  | 'readStarBattleData'
+  | 'readStarBattleState'
+  | 'applyStarBattleState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
