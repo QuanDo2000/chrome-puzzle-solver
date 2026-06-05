@@ -39,3 +39,15 @@ test('applyHintToGrid: slitherlink edge hint still merges (shared branch)', () =
   applyHintToGrid(grid, { type: 'slitherlink', edges: [{ orientation: 'h', r: 2, c: 0 }] });
   assert.equal(grid.horizontal[2][0], 1);
 });
+
+test('applyHintToGrid: masyu edge hint merges lines (regression for Masyu Loop stall)', () => {
+  // Masyu's loop runs through cell centres: horizontal is rows x (cols-1),
+  // vertical is (rows-1) x cols. Same { edges } hint shape, so it shares the
+  // edge-loop branch. Without 'masyu' in that branch the loop re-applies the
+  // unchanged edge object and stalls after one step.
+  const grid = { horizontal: [[0, 0], [0, 0], [0, 0]], vertical: [[0, 0, 0], [0, 0, 0]] };
+  applyHintToGrid(grid, { type: 'masyu', edges: [{ orientation: 'h', r: 0, c: 1 }, { orientation: 'v', r: 1, c: 2 }] });
+  assert.equal(grid.horizontal[0][1], 1, 'horizontal line merged');
+  assert.equal(grid.vertical[1][2], 1, 'vertical line merged');
+  assert.equal(grid.horizontal[0][0], 0, 'untouched edge stays 0');
+});

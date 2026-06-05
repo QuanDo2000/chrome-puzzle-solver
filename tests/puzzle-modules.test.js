@@ -67,6 +67,7 @@ const nurikabe    = require('../src/widget/puzzles/nurikabe.js');
 const pipes       = require('../src/widget/puzzles/pipes.js');
 const shikaku     = require('../src/widget/puzzles/shikaku.js');
 const shingoki    = require('../src/widget/puzzles/shingoki.js');
+const masyu       = require('../src/widget/puzzles/masyu.js');
 const slitherlink = require('../src/widget/puzzles/slitherlink.js');
 const yinyang     = require('../src/widget/puzzles/yinyang.js');
 
@@ -872,6 +873,23 @@ test('shingoki: loopDoneCheck uses ctx.boardState (no callMainWorld in loop ctx)
   assert.equal(shingoki.loopDoneCheck({ boardState: done, solution, puzzleData: { rows: 1, cols: 1 } }), true);
   assert.equal(shingoki.loopDoneCheck({ boardState: notDone, solution, puzzleData: { rows: 1, cols: 1 } }), false);
   assert.equal(shingoki.loopDoneCheck({ boardState: null, solution, puzzleData: {} }), false);
+});
+
+test('masyu: hasAbsoluteHintCells is set so the Loop cells-length guard does not break', () => {
+  // Masyu hints carry `.edges`, never `.cells`. The runLoop guard
+  // (widget.js: `if (!reg?.hasAbsoluteHintCells && !hint?.cells?.length) break;`)
+  // would halt the loop after one apply without this flag. Regression for the
+  // "Masyu Loop stops after 1 apply" bug.
+  assert.equal(masyu.hasAbsoluteHintCells, true);
+});
+
+test('masyu: loopDoneCheck uses ctx.boardState edges (true iff all solution lines present)', () => {
+  const solution = { horizontal: [[1, 0], [0, 0]], vertical: [[1], [0]] };
+  const done = { horizontal: [[1, 0], [0, 0]], vertical: [[1], [0]] };
+  const notDone = { horizontal: [[0, 0], [0, 0]], vertical: [[1], [0]] };
+  assert.equal(masyu.loopDoneCheck({ boardState: done, solution }), true);
+  assert.equal(masyu.loopDoneCheck({ boardState: notDone, solution }), false);
+  assert.equal(masyu.loopDoneCheck({ boardState: done, solution: null }), false);
 });
 
 test('shingoki: applyHint overlays edges and writes via applyShingokiState (not applyHintCells)', async () => {

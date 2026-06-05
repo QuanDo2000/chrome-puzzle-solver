@@ -22,6 +22,9 @@ const masyu = {
   label: 'Masyu',
   url: 'https://www.puzzles-mobile.com/masyu/',
   solutionKeyPrefix: 'masyu-solution:',
+  // Hints carry edges (not cells); set so the Loop driver's cells-length guard
+  // (widget.js) doesn't break the loop immediately — same as shingoki/slitherlink.
+  hasAbsoluteHintCells: true,
 
   cacheKey(data) {
     if (!data || data.type !== 'masyu' || !data.task) return null;

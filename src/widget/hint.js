@@ -111,7 +111,7 @@ function applyHintToGrid(grid, hint) {
     grid.galaxies = hint.lines;
     return;
   }
-  if (hint?.type === 'slitherlink' || hint?.type === 'shingoki') {
+  if (hint?.type === 'slitherlink' || hint?.type === 'shingoki' || hint?.type === 'masyu') {
     // Edge-loop puzzles: grid is { horizontal, vertical } from the handler's
     // readState, hint is { edges: [{orientation:'h'|'v', r, c}] }. Merge each
     // hint edge as a LINE so the loop step actually advances the board (without
