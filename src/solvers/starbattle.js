@@ -52,6 +52,46 @@ class StarBattleSolver {
     }
     return true;
   }
+
+  _initGrid() {
+    this.g = Array.from({ length: this.rows }, () => new Array(this.cols).fill(0));
+    if (this.walls) for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.walls[r][c]) this.g[r][c] = 2;
+  }
+
+  // Set cell (r,c) to val (1 star / 2 no-star). Returns false on a conflicting prior value.
+  _set(r, c, val) {
+    if (this.g[r][c] === val) return true;
+    if (this.g[r][c] !== 0) return false;
+    this.g[r][c] = val; this._dirty = true; return true;
+  }
+
+  // Adjacency + group-count forcing to a fixpoint. Returns false on contradiction.
+  _propagate() {
+    this._dirty = true;
+    while (this._dirty) {
+      this._dirty = false;
+      // Adjacency: every star crosses its 8 neighbours; two adjacent stars = contradiction.
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.g[r][c] === 1) {
+        for (let u = 0; u < 8; u++) {
+          const nr = r + STAR_DR[u], nc = c + STAR_DC[u];
+          if (nr >= 0 && nc >= 0 && nr < this.rows && nc < this.cols) {
+            if (this.g[nr][nc] === 1) return false;
+            if (this.g[nr][nc] === 0) { this.g[nr][nc] = 2; this._dirty = true; }
+          }
+        }
+      }
+      // Group count: each row/col/region needs exactly k stars.
+      for (const grp of this.groups) {
+        let s = 0; const unk = [];
+        for (const [r, c] of grp) { const v = this.g[r][c]; if (v === 1) s++; else if (v === 0) unk.push([r, c]); }
+        if (s > this.k) return false;
+        if (s + unk.length < this.k) return false;
+        if (s === this.k && unk.length) { for (const [r, c] of unk) if (!this._set(r, c, 2)) return false; }
+        else if (s + unk.length === this.k && unk.length) { for (const [r, c] of unk) if (!this._set(r, c, 1)) return false; }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
