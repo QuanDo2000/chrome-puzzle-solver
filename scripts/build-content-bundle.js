@@ -42,6 +42,7 @@ const WIDGET_FILES = [
   'puzzles/hashi.js',
   'puzzles/slitherlink.js',
   'puzzles/shingoki.js',
+  'puzzles/masyu.js',
   'puzzles/shakashaka.js',
   'puzzles/lightup.js',
   'puzzles/galaxies.js',

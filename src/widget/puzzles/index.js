@@ -24,6 +24,7 @@ if (typeof slitherlink !== 'undefined') PUZZLES[slitherlink.type] = slitherlink;
 if (typeof galaxies !== 'undefined') PUZZLES[galaxies.type] = galaxies;
 if (typeof pipes !== 'undefined') PUZZLES[pipes.type] = pipes;
 if (typeof shingoki !== 'undefined') PUZZLES[shingoki.type] = shingoki;
+if (typeof masyu !== 'undefined') PUZZLES[masyu.type] = masyu;
 if (typeof shakashaka !== 'undefined') PUZZLES[shakashaka.type] = shakashaka;
 if (typeof lightup !== 'undefined') PUZZLES[lightup.type] = lightup;
 

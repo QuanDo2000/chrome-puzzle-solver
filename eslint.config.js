@@ -66,6 +66,7 @@ const solverClasses = {
   NorinoriSolver: 'readonly',
   NurikabeSolver: 'readonly',
   ShingokiSolver: 'readonly',
+  MasyuSolver: 'readonly',
   ShakashakaSolver: 'readonly',
   LightUpSolver: 'readonly',
 };
@@ -325,6 +326,7 @@ module.exports = [
         // src/widget/puzzles/shingoki.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         shingoki: 'readonly',
+        masyu: 'readonly',
         // src/widget/puzzles/shakashaka.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         shakashaka: 'readonly',
