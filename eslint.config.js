@@ -69,6 +69,7 @@ const solverClasses = {
   MasyuSolver: 'readonly',
   ShakashakaSolver: 'readonly',
   LightUpSolver: 'readonly',
+  SlantSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js
@@ -333,6 +334,7 @@ module.exports = [
         // src/widget/puzzles/lightup.js — bundle-scope const consumed
         // by puzzles/index.js when assembling the registry.
         lightup: 'readonly',
+        slant: 'readonly',
         // src/widget/state.js — widget storage prefs.
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',

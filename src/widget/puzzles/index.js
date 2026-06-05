@@ -27,6 +27,7 @@ if (typeof shingoki !== 'undefined') PUZZLES[shingoki.type] = shingoki;
 if (typeof masyu !== 'undefined') PUZZLES[masyu.type] = masyu;
 if (typeof shakashaka !== 'undefined') PUZZLES[shakashaka.type] = shakashaka;
 if (typeof lightup !== 'undefined') PUZZLES[lightup.type] = lightup;
+if (typeof slant !== 'undefined') PUZZLES[slant.type] = slant;
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { PUZZLES };
