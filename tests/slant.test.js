@@ -53,3 +53,46 @@ test('Slant propagation: an over-constrained clue is a contradiction', () => {
   s.cells = [[0]]; s.dsu = s._freshDSU();
   assert.equal(s._propagate(), false);
 });
+
+// Brute-force ALL 2^cells diagonal assignments; keep those passing _isValid.
+function bruteForce(task, rows, cols) {
+  const s = new SlantSolver({ task, rows, cols }); const n = rows * cols; const sols = [];
+  for (let mask = 0; mask < (1 << n); mask++) {
+    const cells = []; let b = 0;
+    for (let r = 0; r < rows; r++) { cells.push([]); for (let c = 0; c < cols; c++) { cells[r].push(((mask >> b) & 1) ? 1 : 2); b++; } }
+    if (s._isValid(cells)) sols.push(cells.map(r => r.slice()));
+  }
+  return sols;
+}
+function randTask(seed, rows, cols) {
+  let x = seed; const rnd = () => { x = (x * 1103515245 + 12345) & 0x7fffffff; return x / 0x7fffffff; };
+  const t = []; for (let i = 0; i <= rows; i++) { t.push([]); for (let j = 0; j <= cols; j++) { const p = rnd(); t[i].push(p < 0.55 ? -1 : Math.min(4, Math.floor(rnd() * 5))); } } return t;
+}
+
+test('Slant soundness gate: solver matches brute-force across 400 random 2x3 boards', () => {
+  let mism = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    const t = randTask(seed, 2, 3); const sols = bruteForce(t, 2, 3);
+    const res = new SlantSolver({ task: t, rows: 2, cols: 3, maxMs: 3000 }).solve();
+    if (res.solved !== (sols.length > 0)) { mism++; continue; }
+    if (res.solved && !new SlantSolver({ task: t, rows: 2, cols: 3 })._isValid(res.cells)) mism++;
+  }
+  assert.equal(mism, 0);
+});
+
+test('Slant soundness: root deduction never prunes a cell a solution uses', () => {
+  for (let seed = 1; seed <= 150; seed++) {
+    const t = randTask(seed, 2, 3); const sols = bruteForce(t, 2, 3); if (!sols.length) continue;
+    const s = new SlantSolver({ task: t, rows: 2, cols: 3 });
+    s.cells = [[0, 0, 0], [0, 0, 0]]; s.dsu = s._freshDSU(); s._deadline = Date.now() + 3000;
+    assert.ok(s._propagate(), `propagation contradicted a solvable board seed ${seed}`);
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) { const v = s.cells[r][c]; if (v !== 0) for (const sol of sols) assert.equal(sol[r][c], v, `prune seed ${seed}`); }
+  }
+});
+
+test('Slant solve: a uniquely-clued board solves to a valid board', () => {
+  const t = [[-1, -1, -1], [-1, 4, -1], [-1, -1, -1]];
+  const res = new SlantSolver({ task: t, rows: 2, cols: 2, maxMs: 5000 }).solve();
+  assert.equal(res.solved, true);
+  assert.deepEqual(res.cells, [[1, 2], [2, 1]]);
+});

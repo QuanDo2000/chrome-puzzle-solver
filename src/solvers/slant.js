@@ -12,9 +12,10 @@
 //   (2) the diagonal-edge graph is ACYCLIC (a forest — no loops; need not be connected).
 //
 // METHOD: clue-forcing + acyclicity propagation (with a rollback union-find of committed
-// cells), then MRV/DFS backtracking with union-find cycle detection. On maxMs timeout
-// returns the SOUND root-propagation snapshot (UNK=9). Soundness is brute-force-gated in
-// tests/slant.test.js. The real 20x20 full-solves in ~0.4s.
+// cells), then first-undecided DFS backtracking with union-find cycle detection. (Branch
+// order is first-undecided, not MRV — every cell is a binary {\,/} domain, so MRV would be
+// degenerate.) On maxMs timeout returns the SOUND root-propagation snapshot (UNK=9).
+// Soundness is brute-force-gated in tests/slant.test.js. The real 20x20 full-solves in ~0.4s.
 //
 // cells[r][c] in solver/output: 1 '\', 2 '/', 9 UNK (partials only).
 
@@ -107,6 +108,35 @@ class SlantSolver {
       }
     }
     return true;
+  }
+
+  _snapshot() { return { cells: this.cells.map(r => r.slice()), dsu: this.dsu.clone() }; }
+  _restore(s) { this.cells = s.cells.map(r => r.slice()); this.dsu = s.dsu.clone(); }
+  _pickCell() {
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.cells[r][c] === 0) return [r, c];
+    return null;
+  }
+  _search() {
+    if (Date.now() > this._deadline) { this._timedOut = true; return null; }
+    const cell = this._pickCell();
+    if (!cell) return this._isValid(this.cells) ? this.cells : null;
+    for (const val of [1, 2]) {
+      const snap = this._snapshot();
+      if (this._set(cell[0], cell[1], val) && this._propagate()) { const res = this._search(); if (res) return res; }
+      this._restore(snap);
+    }
+    return null;
+  }
+  solve() {
+    this.cells = Array.from({ length: this.rows }, () => new Array(this.cols).fill(0));
+    this.dsu = this._freshDSU();
+    this._deadline = Date.now() + this.maxMs; this._timedOut = false;
+    if (!this._propagate()) return { solved: false, error: 'No solution (contradiction in givens)' };
+    const root = this.cells.map(r => r.map(v => (v === 0 ? 9 : v)));
+    const res = this._search();
+    if (res) return { solved: true, cells: res.map(r => r.slice()) };
+    if (this._timedOut) return { solved: false, partial: true, cells: root };
+    return { solved: false, error: 'No solution found' };
   }
 }
 
