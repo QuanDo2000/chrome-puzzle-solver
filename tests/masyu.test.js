@@ -36,3 +36,33 @@ test('Masyu oracle: an empty board with no pearls is vacuously valid', () => {
   const s = mk([[-1,-1],[-1,-1]]);
   assert.equal(s._isValid([[2],[2]], [[2,2]]), true);
 });
+
+test('Masyu propagation: a white pearl on the top border is forced horizontal', () => {
+  const s = mk([[-1,'W',-1],[-1,-1,-1],[-1,-1,-1]]);
+  s.H = Array.from({length:3},()=>[0,0]); s.V = Array.from({length:2},()=>[0,0,0]);
+  assert.equal(s._propagate(), true);
+  // top-row white can't go vertical -> horizontal through: left+right line, bottom cross
+  assert.equal(s.H[0][0], 1); assert.equal(s.H[0][1], 1); assert.equal(s.V[0][1], 2);
+});
+
+test('Masyu propagation: a black pearl with a committed arm forces its continuation', () => {
+  // 5x5 black at (2,2); set the right arm (H[2][2]) line. Black must NOT go straight
+  // (opposite edge H[2][1] crossed) and the right arm must continue straight one cell
+  // (H[2][3] line, the cell beyond's perpendiculars crossed).
+  const task = Array.from({length:5},()=>new Array(5).fill(-1)); task[2][2] = 'B';
+  const s = new MasyuSolver({ task, rows: 5, cols: 5 });
+  s.H = Array.from({length:5},()=>[0,0,0,0]); s.V = Array.from({length:4},()=>[0,0,0,0,0]);
+  s.H[2][2] = 1;
+  assert.equal(s._propagate(), true);
+  assert.equal(s.H[2][1], 2);   // opposite horizontal edge crossed (no straight-through)
+  assert.equal(s.H[2][3], 1);   // right arm continues straight
+  assert.equal(s.V[1][3], 2);   // the continuation cell's perpendiculars crossed
+  assert.equal(s.V[2][3], 2);
+});
+
+test('Masyu propagation: a cell forced to degree 3 is a contradiction', () => {
+  const s = mk([[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]]);
+  s.H = Array.from({length:3},()=>[0,0]); s.V = Array.from({length:2},()=>[0,0,0]);
+  s.H[1][0] = 1; s.H[1][1] = 1; s.V[0][1] = 1; // cell (1,1): left+right+top = 3 lines
+  assert.equal(s._propagate(), false);
+});

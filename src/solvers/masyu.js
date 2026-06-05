@@ -81,6 +81,64 @@ class MasyuSolver {
     while (st.length) { const [r, c] = st.pop(); for (const [nr, nc] of neigh(r, c)) { const k = idx(nr, nc); if (!seen.has(k)) { seen.add(k); st.push([nr, nc]); } } }
     return seen.size === loopCells.length;
   }
+
+  _propagate() {
+    this._dirty = true;
+    while (this._dirty) {
+      this._dirty = false;
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        const inc = this._incident(r, c).filter(e => e[3]);
+        let lines = 0, crosses = 0; const unknown = [];
+        for (const [t, er, ec] of inc) { const v = this._get(t, er, ec); if (v === 1) lines++; else if (v === 2) crosses++; else unknown.push([t, er, ec]); }
+        const cap = inc.length - crosses;
+        const pearl = this.task[r][c] === 'W' || this.task[r][c] === 'B';
+        if (lines > 2) return false;
+        if (lines === 2) { for (const [t, er, ec] of unknown) if (!this._set(t, er, ec, 2)) return false; }
+        else if (lines === 1) { if (cap < 2) return false; if (unknown.length === 1) { if (!this._set(unknown[0][0], unknown[0][1], unknown[0][2], 1)) return false; } }
+        else { // lines === 0
+          if (pearl) { if (cap < 2) return false; if (cap === 2) { for (const [t, er, ec] of unknown) if (!this._set(t, er, ec, 1)) return false; } }
+          else { if (cap < 2) { for (const [t, er, ec] of unknown) if (!this._set(t, er, ec, 2)) return false; } }
+        }
+        const tk = this.task[r][c];
+        if (tk === 'W') { if (!this._white(r, c)) return false; }
+        else if (tk === 'B') { if (!this._black(r, c)) return false; }
+      }
+    }
+    return true;
+  }
+
+  _white(r, c) {
+    const L = this._get('h', r, c - 1), R = this._get('h', r, c), T = this._get('v', r - 1, c), B = this._get('v', r, c);
+    const hPoss = L !== 2 && R !== 2, vPoss = T !== 2 && B !== 2;
+    if (!hPoss && !vPoss) return false;
+    const hLine = L === 1 || R === 1, vLine = T === 1 || B === 1;
+    if (hLine && vLine) return false;
+    if (hLine || (!vPoss && hPoss)) {
+      if (!this._set('h', r, c - 1, 1) || !this._set('h', r, c, 1)) return false;
+      if (!this._set('v', r - 1, c, 2) || !this._set('v', r, c, 2)) return false;
+    } else if (vLine || (!hPoss && vPoss)) {
+      if (!this._set('v', r - 1, c, 1) || !this._set('v', r, c, 1)) return false;
+      if (!this._set('h', r, c - 1, 2) || !this._set('h', r, c, 2)) return false;
+    }
+    return true;
+  }
+
+  _black(r, c) {
+    const L = this._get('h', r, c - 1), R = this._get('h', r, c), T = this._get('v', r - 1, c), B = this._get('v', r, c);
+    if (L === 1) { if (!this._set('h', r, c, 2)) return false; }
+    if (R === 1) { if (!this._set('h', r, c - 1, 2)) return false; }
+    if (T === 1) { if (!this._set('v', r, c, 2)) return false; }
+    if (B === 1) { if (!this._set('v', r - 1, c, 2)) return false; }
+    if (this._get('h', r, c) === 1) { if (!this._inH(r, c + 1)) return false; if (!this._set('h', r, c + 1, 1) || !this._set('v', r - 1, c + 1, 2) || !this._set('v', r, c + 1, 2)) return false; }
+    if (this._get('h', r, c - 1) === 1) { if (!this._inH(r, c - 2)) return false; if (!this._set('h', r, c - 2, 1) || !this._set('v', r - 1, c - 1, 2) || !this._set('v', r, c - 1, 2)) return false; }
+    if (this._get('v', r, c) === 1) { if (!this._inV(r + 1, c)) return false; if (!this._set('v', r + 1, c, 1) || !this._set('h', r + 1, c - 1, 2) || !this._set('h', r + 1, c, 2)) return false; }
+    if (this._get('v', r - 1, c) === 1) { if (!this._inV(r - 2, c)) return false; if (!this._set('v', r - 2, c, 1) || !this._set('h', r - 1, c - 1, 2) || !this._set('h', r - 1, c, 2)) return false; }
+    if (this._inH(r, c) && !this._inH(r, c + 1)) { if (!this._set('h', r, c, 2)) return false; }
+    if (this._inH(r, c - 1) && !this._inH(r, c - 2)) { if (!this._set('h', r, c - 1, 2)) return false; }
+    if (this._inV(r, c) && !this._inV(r + 1, c)) { if (!this._set('v', r, c, 2)) return false; }
+    if (this._inV(r - 1, c) && !this._inV(r - 2, c)) { if (!this._set('v', r - 1, c, 2)) return false; }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
