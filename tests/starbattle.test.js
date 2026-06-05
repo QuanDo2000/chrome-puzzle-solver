@@ -53,3 +53,48 @@ test('StarBattle propagation: over-filled row is a contradiction', () => {
   s._initGrid(); s.g[0][0] = 1; s.g[0][2] = 1; // two stars in a k=1 row
   assert.equal(s._propagate(), false);
 });
+
+// Brute-force ALL 2^cells star placements; keep those passing _isValid.
+function bruteForce(rows, cols, k, areas) {
+  const s = new StarBattleSolver({ rows, cols, stars: k, areas }); const n = rows * cols; const sols = [];
+  for (let mask = 0; mask < (1 << n); mask++) {
+    const cells = []; let b = 0;
+    for (let r = 0; r < rows; r++) { cells.push([]); for (let c = 0; c < cols; c++) { cells[r].push(((mask >> b) & 1) ? 1 : 0); b++; } }
+    if (s._isValid(cells)) sols.push(cells.map(r => r.slice()));
+  }
+  return sols;
+}
+function randAreas(seed, rows, cols, nreg) {
+  let x = seed; const rnd = () => { x = (x * 1103515245 + 12345) & 0x7fffffff; return x / 0x7fffffff; };
+  const a = []; for (let r = 0; r < rows; r++) { a.push([]); for (let c = 0; c < cols; c++) a[r].push(Math.floor(rnd() * nreg)); } return a;
+}
+
+test('StarBattle soundness gate: solver matches brute-force across 300 random 4x4 k=1 boards', () => {
+  let mism = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const areas = randAreas(seed, 4, 4, 4); const sols = bruteForce(4, 4, 1, areas);
+    const res = new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas, maxMs: 3000 }).solve();
+    if (res.solved !== (sols.length > 0)) { mism++; continue; }
+    if (res.solved && !new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas })._isValid(res.cells)) mism++;
+  }
+  assert.equal(mism, 0);
+});
+
+test('StarBattle soundness: root deduction never prunes a cell a solution uses', () => {
+  for (let seed = 1; seed <= 120; seed++) {
+    const areas = randAreas(seed, 4, 4, 4); const sols = bruteForce(4, 4, 1, areas); if (!sols.length) continue;
+    const s = new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas }); s._initGrid(); s._deadline = Date.now() + 3000;
+    assert.ok(s._propagate(), `propagation contradicted a solvable board seed ${seed}`);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+      const v = s.g[r][c];
+      if (v === 1) for (const sol of sols) assert.equal(sol[r][c], 1, `prune-star seed ${seed}`);
+      if (v === 2) for (const sol of sols) assert.equal(sol[r][c], 0, `prune-nostar seed ${seed}`);
+    }
+  }
+});
+
+test('StarBattle solve: the quad board solves to a valid board', () => {
+  const res = new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas: QUAD, maxMs: 5000 }).solve();
+  assert.equal(res.solved, true);
+  assert.ok(new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas: QUAD })._isValid(res.cells));
+});

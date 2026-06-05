@@ -92,6 +92,44 @@ class StarBattleSolver {
     }
     return true;
   }
+
+  _snapshot() { return this.g.map(r => r.slice()); }
+  _restore(s) { this.g = s.map(r => r.slice()); }
+
+  // Pick a candidate cell from the group (row/col/region) with the fewest unknowns that still needs stars.
+  _pick() {
+    let best = null, bestN = Infinity;
+    for (const grp of this.groups) {
+      let s = 0; const unk = [];
+      for (const [r, c] of grp) { const v = this.g[r][c]; if (v === 1) s++; else if (v === 0) unk.push([r, c]); }
+      if (s < this.k && unk.length && unk.length < bestN) { bestN = unk.length; best = unk; }
+    }
+    return best ? best[0] : null;
+  }
+
+  _search() {
+    if (Date.now() > this._deadline) { this._timedOut = true; return null; }
+    const cell = this._pick();
+    if (!cell) { const cells = this.g.map(r => r.map(v => v === 1 ? 1 : 0)); return this._isValid(cells) ? cells : null; }
+    const [r, c] = cell;
+    for (const val of [1, 2]) {
+      const snap = this._snapshot();
+      if (this._set(r, c, val) && this._propagate()) { const res = this._search(); if (res) return res; }
+      this._restore(snap);
+    }
+    return null;
+  }
+
+  solve() {
+    this._initGrid();
+    this._deadline = Date.now() + this.maxMs; this._timedOut = false;
+    if (!this._propagate()) return { solved: false, error: 'No solution (contradiction in givens)' };
+    const root = this.g.map(r => r.map(v => v === 1 ? 1 : (v === 2 ? 0 : 9)));
+    const res = this._search();
+    if (res) return { solved: true, cells: res.map(r => r.slice()) };
+    if (this._timedOut) return { solved: false, partial: true, cells: root };
+    return { solved: false, error: 'No solution found' };
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
