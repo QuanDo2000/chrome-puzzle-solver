@@ -747,6 +747,69 @@ const slantHandler = {
 
 registerHandler(slantHandler);
 
+const starbattleHandler = {
+  name: 'puzzles-mobile-starbattle',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/star-battle/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readStarBattleData', []);
+    if (!data) return { ...result, error: 'No Star Battle task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'starbattle',
+      rows: data.rows,
+      cols: data.cols,
+      stars: data.stars,
+      areas: data.areas,
+      walls: data.walls,
+      regionMap: data.areas, // drives the preview region borders (shaped)
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  // Normalized board: star (cellStatus 1) -> 1, everything else -> 0. The default per-cell
+  // diff then flags only wrongly-placed stars (board 1 where the solution has 0); X-marks and
+  // blanks read as 0 and are never flagged.
+  async readState(ctx) {
+    const state = await callMainWorld('readStarBattleState', []);
+    const cs = state && state.cellStatus;
+    const rows = (ctx && ctx.rows) || (cs ? cs.length : 0);
+    const cols = (ctx && ctx.cols) || (cs && cs[0] ? cs[0].length : 0);
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+      const row = new Array(cols).fill(0);
+      for (let c = 0; c < cols; c++) { const v = cs && cs[r] ? cs[r][c] : 0; row[c] = (v === 1) ? 1 : 0; }
+      grid.push(row);
+    }
+    return grid;
+  },
+
+  async applySolution(solution, _ctx) {
+    const cells = Array.isArray(solution) ? solution : (solution && solution.cells);
+    if (!Array.isArray(cells)) {
+      return { success: false, error: 'Star Battle applySolution: missing cells' };
+    }
+    const ok = await callMainWorld('applyStarBattleState', [{ cells }]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Star Battle apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(starbattleHandler);
+
 // ── Hashi handler (puzzles-mobile.com/hashi/) ─────────────
 
 const hashiHandler = {
