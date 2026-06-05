@@ -30,6 +30,7 @@ declare const ShingokiSolver: any;
 declare const MasyuSolver: any;
 declare const ShakashakaSolver: any;
 declare const LightUpSolver: any;
+declare const SlantSolver: any;
 
 // JSDoc typedefs referenced by per-puzzle solver files in src/solvers/.
 // The originals lived as JSDoc @typedef in the old monolithic solver.js

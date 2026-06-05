@@ -2,7 +2,7 @@
 // from content.js. Receives { id, type, rowClues, colClues, initialGrid, extraData }
 // and posts back { id, result }.
 importScripts('solver.js');
-/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, PipesSolver, ShingokiSolver, MasyuSolver, ShakashakaSolver, LightUpSolver */
+/* global NonogramSolver, GalaxiesSolver, AquariumSolver, BinairoSolver, ShikakuSolver, YinYangSolver, SlitherlinkSolver, HashiSolver, HeyawakeSolver, HitoriSolver, KakurasuSolver, KurodokoSolver, MosaicSolver, NorinoriSolver, NurikabeSolver, PipesSolver, ShingokiSolver, MasyuSolver, ShakashakaSolver, LightUpSolver, SlantSolver */
 
 self.onmessage = function (e) {
   const { id, type, rowClues, colClues, initialGrid, extraData } = e.data || {};
@@ -176,6 +176,9 @@ self.onmessage = function (e) {
       result = s.solve();
     } else if (type === 'lightup' && extraData) {
       const s = new LightUpSolver({ task: extraData.task, maxMs: 30000 });
+      result = s.solve();
+    } else if (type === 'slant' && extraData) {
+      const s = new SlantSolver({ rows: extraData.rows, cols: extraData.cols, task: extraData.task, maxMs: 30000 });
       result = s.solve();
     } else {
       const s = new NonogramSolver(rowClues, colClues);

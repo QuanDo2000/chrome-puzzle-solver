@@ -96,3 +96,11 @@ test('Slant solve: a uniquely-clued board solves to a valid board', () => {
   assert.equal(res.solved, true);
   assert.deepEqual(res.cells, [[1, 2], [2, 1]]);
 });
+
+test('Slant _deduceForced: returns forced cells from a partial live board', () => {
+  // centre clue 4 forces all four cells even from an empty live board.
+  const s = new SlantSolver({ task: [[-1, -1, -1], [-1, 4, -1], [-1, -1, -1]], rows: 2, cols: 2, maxMs: 1000 });
+  const forced = s._deduceForced([[0, 0], [0, 0]]);
+  const keys = forced.map(f => `${f.row},${f.col}=${f.value}`).sort();
+  assert.deepEqual(keys, ['0,0=1', '0,1=2', '1,0=2', '1,1=1']);
+});

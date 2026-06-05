@@ -138,6 +138,27 @@ class SlantSolver {
     if (this._timedOut) return { solved: false, partial: true, cells: root };
     return { solved: false, error: 'No solution found' };
   }
+
+  // Hint engine: seed the solver with the live cellStatus (0/1/2), deduce to a fixpoint,
+  // and return the newly-forced cells as { row, col, value }. Returns [] if the live board
+  // is contradictory (caller falls back to the cached-solution diff).
+  _deduceForced(curCells) {
+    this.cells = curCells.map(row => row.map(v => (v === 1 || v === 2) ? v : 0));
+    this.dsu = this._freshDSU();
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      const v = this.cells[r][c];
+      if (v === 1 || v === 2) { const [u, w] = this._edge(r, c, v); if (!this.dsu.union(u, w)) return []; }
+    }
+    this._deadline = Date.now() + (this.maxMs || 2000);
+    if (!this._propagate()) return [];
+    const forced = [];
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (curCells[r][c] === 1 || curCells[r][c] === 2) continue;
+      const v = this.cells[r][c];
+      if (v === 1 || v === 2) forced.push({ row: r, col: c, value: v });
+    }
+    return forced;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
