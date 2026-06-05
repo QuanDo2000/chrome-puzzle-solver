@@ -27,3 +27,29 @@ test('Slant oracle: a corner-vertex clue pins its single cell', () => {
   assert.equal(s._isValid([[1]]), true);   // '\' points to (0,0)
   assert.equal(s._isValid([[2]]), false);  // '/' does not
 });
+
+test('Slant propagation: a degree-4 centre vertex forces the surrounding star', () => {
+  const s = mk([[-1, -1, -1], [-1, 4, -1], [-1, -1, -1]], 2, 2);
+  s.cells = [[0, 0], [0, 0]]; s.dsu = s._freshDSU();
+  assert.equal(s._propagate(), true);
+  assert.deepEqual(s.cells, [[1, 2], [2, 1]]); // all four diagonals forced to meet the centre
+});
+
+test('Slant propagation: acyclicity forces the non-cycling diagonal', () => {
+  // Pre-commit three sides of the diamond; the 4th cell must take the non-cycling diagonal.
+  const s = mk([[-1, -1, -1], [-1, -1, -1], [-1, -1, -1]], 2, 2);
+  s.cells = [[0, 0], [0, 0]]; s.dsu = s._freshDSU();
+  assert.equal(s._set(0, 0, 2), true); // '/' v(0,1)-v(1,0)
+  assert.equal(s._set(1, 0, 1), true); // '\' v(1,0)-v(2,1)
+  assert.equal(s._set(1, 1, 2), true); // '/' v(1,2)-v(2,1)
+  // now cell (0,1) as '\' would be v(0,1)-v(1,2): v(0,1) and v(1,2) already connected -> cycle.
+  assert.equal(s._propagate(), true);
+  assert.equal(s.cells[0][1], 2); // forced to '/', not the cycling '\'
+});
+
+test('Slant propagation: an over-constrained clue is a contradiction', () => {
+  // corner vertex (0,0) can have at most 1 incident cell; clue 2 is impossible.
+  const s = mk([[2, -1], [-1, -1]], 1, 1);
+  s.cells = [[0]]; s.dsu = s._freshDSU();
+  assert.equal(s._propagate(), false);
+});

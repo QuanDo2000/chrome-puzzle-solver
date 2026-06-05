@@ -68,6 +68,46 @@ class SlantSolver {
     }
     return true;
   }
+
+  _freshDSU() { return new DSU(this.V); }
+
+  // Set cell (r,c) to val (1/2), unioning its diagonal edge. Returns false on a
+  // conflicting prior value OR if the edge would close a cycle.
+  _set(r, c, val) {
+    if (this.cells[r][c] === val) return true;
+    if (this.cells[r][c] !== 0) return false;
+    const [u, v] = this._edge(r, c, val);
+    if (!this.dsu.union(u, v)) return false; // would create a cycle
+    this.cells[r][c] = val; this._dirty = true; return true;
+  }
+
+  // Clue-forcing + acyclicity-forcing to a fixpoint. Returns false on contradiction.
+  _propagate() {
+    this._dirty = true;
+    while (this._dirty) {
+      this._dirty = false;
+      // Clue forcing: per clued vertex, count pointing/undecided incident cells.
+      for (let t = 0; t <= this.rows; t++) for (let e = 0; e <= this.cols; e++) {
+        const k = this.task[t][e]; if (k < 0) continue;
+        let P = 0; const und = [];
+        for (const sl of this._slots(t, e)) { const v = this.cells[sl[0]][sl[1]]; if (v === sl[2]) P++; else if (v === 0) und.push(sl); }
+        if (P > k) return false;
+        if (P + und.length < k) return false;
+        if (P === k && und.length) { for (const sl of und) { const notp = sl[2] === 1 ? 2 : 1; if (!this._set(sl[0], sl[1], notp)) return false; } }
+        else if (P + und.length === k && und.length) { for (const sl of und) { if (!this._set(sl[0], sl[1], sl[2])) return false; } }
+      }
+      // Acyclicity forcing: an undecided cell whose '\' would cycle must be '/' (and vice-versa).
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        if (this.cells[r][c] !== 0) continue;
+        const [u1, v1] = this._edge(r, c, 1), [u2, v2] = this._edge(r, c, 2);
+        const cyc1 = this.dsu.connected(u1, v1), cyc2 = this.dsu.connected(u2, v2);
+        if (cyc1 && cyc2) return false;
+        else if (cyc1) { if (!this._set(r, c, 2)) return false; }
+        else if (cyc2) { if (!this._set(r, c, 1)) return false; }
+      }
+    }
+    return true;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
