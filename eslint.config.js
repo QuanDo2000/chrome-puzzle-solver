@@ -70,6 +70,7 @@ const solverClasses = {
   ShakashakaSolver: 'readonly',
   LightUpSolver: 'readonly',
   SlantSolver: 'readonly',
+  StarBattleSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js
@@ -335,6 +336,7 @@ module.exports = [
         // by puzzles/index.js when assembling the registry.
         lightup: 'readonly',
         slant: 'readonly',
+        starbattle: 'readonly',
         // src/widget/state.js — widget storage prefs.
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
