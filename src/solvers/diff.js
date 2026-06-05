@@ -127,10 +127,12 @@ function _slitherlinkDiff(board, solution) {
 
 function computePuzzleDiff(type, grid, solution, stars) {
   const out = [];
-  // Shingoki shares slitherlink's {horizontal, vertical} edge shape, so the
-  // edge-based diff applies verbatim (committed LINE edge disagreeing with
-  // the solution; UNKNOWN edges never flagged).
-  if (type === 'slitherlink' || type === 'shingoki') return _slitherlinkDiff(grid, solution);
+  // Shingoki and Masyu share slitherlink's {horizontal, vertical} edge shape
+  // (Masyu's arrays are sized differently — rows x (cols-1) / (rows-1) x cols —
+  // but _slitherlinkDiff derives its dims from the array lengths, so the
+  // edge-based diff applies verbatim: committed LINE edge disagreeing with the
+  // solution; UNKNOWN edges never flagged).
+  if (type === 'slitherlink' || type === 'shingoki' || type === 'masyu') return _slitherlinkDiff(grid, solution);
   if (type === 'hashi') {
     // Hashi grids are {islands, edges}, not the 2D / H+V shapes the public
     // signature advertises for the other puzzle types. Cast locally so the

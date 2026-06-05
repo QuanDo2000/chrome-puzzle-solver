@@ -300,6 +300,11 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   // rendering. Shingoki additionally paints vertex clue circles via its
   // drawStaticLayer hook (slitherlink draws per-cell digits instead).
   const isEdgeLoop = puzzleData?.type === 'slitherlink' || puzzleData?.type === 'shingoki';
+  // Masyu reuses the {horizontal, vertical} edge model but its loop runs between
+  // CELL CENTRES (not lattice grid-lines like slitherlink/shingoki), and its
+  // edge arrays are sized rows x (cols-1) / (rows-1) x cols. So it needs its own
+  // cell-centre geometry — it CANNOT reuse the isEdgeLoop arm.
+  const isMasyu = puzzleData?.type === 'masyu';
   const isHashi = puzzleData?.type === 'hashi';
 
   // Idempotent: ensure the preview is visible whether or not we redraw.
@@ -427,6 +432,74 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
         if (row[c] !== 2) continue;
         const midX = c * cellSize;
         const midY = (r + 0.5) * cellSize;
+        ctx.beginPath();
+        ctx.moveTo(midX - xMarkSize / 2, midY - xMarkSize / 2);
+        ctx.lineTo(midX + xMarkSize / 2, midY + xMarkSize / 2);
+        ctx.moveTo(midX + xMarkSize / 2, midY - xMarkSize / 2);
+        ctx.lineTo(midX - xMarkSize / 2, midY + xMarkSize / 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  } else if (isMasyu) {
+    // Masyu loop edges run between CELL CENTRES. H[r][c] (rows x (cols-1))
+    // joins cell (r,c)-(r,c+1): a horizontal segment at y=(r+0.5)cs from
+    // x=(c+0.5)cs to x=(c+1.5)cs. V[r][c] ((rows-1) x cols) joins
+    // (r,c)-(r+1,c): a vertical segment at x=(c+0.5)cs from y=(r+0.5)cs to
+    // y=(r+1.5)cs. Same stroke style as the isEdgeLoop arm.
+    ctx.save();
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = Math.max(2, Math.floor(cellSize / 6));
+    ctx.lineCap = 'round';
+    const hg = grid.horizontal || [];
+    for (let r = 0; r < rows; r++) {
+      const row = hg[r] || [];
+      for (let c = 0; c < cols - 1; c++) {
+        if (row[c] === 1) {
+          ctx.beginPath();
+          ctx.moveTo((c + 0.5) * cellSize, (r + 0.5) * cellSize);
+          ctx.lineTo((c + 1.5) * cellSize, (r + 0.5) * cellSize);
+          ctx.stroke();
+        }
+      }
+    }
+    const vg = grid.vertical || [];
+    for (let r = 0; r < rows - 1; r++) {
+      const row = vg[r] || [];
+      for (let c = 0; c < cols; c++) {
+        if (row[c] === 1) {
+          ctx.beginPath();
+          ctx.moveTo((c + 0.5) * cellSize, (r + 0.5) * cellSize);
+          ctx.lineTo((c + 0.5) * cellSize, (r + 1.5) * cellSize);
+          ctx.stroke();
+        }
+      }
+    }
+    // × marks for EMPTY (=2) edges, at each edge's midpoint between centres.
+    ctx.strokeStyle = '#9aa0a6';
+    ctx.lineWidth = Math.max(1, Math.floor(cellSize / 12));
+    ctx.lineCap = 'round';
+    const xMarkSize = Math.max(3, Math.floor(cellSize / 5));
+    for (let r = 0; r < rows; r++) {
+      const row = hg[r] || [];
+      for (let c = 0; c < cols - 1; c++) {
+        if (row[c] !== 2) continue;
+        const midX = (c + 1) * cellSize;
+        const midY = (r + 0.5) * cellSize;
+        ctx.beginPath();
+        ctx.moveTo(midX - xMarkSize / 2, midY - xMarkSize / 2);
+        ctx.lineTo(midX + xMarkSize / 2, midY + xMarkSize / 2);
+        ctx.moveTo(midX + xMarkSize / 2, midY - xMarkSize / 2);
+        ctx.lineTo(midX - xMarkSize / 2, midY + xMarkSize / 2);
+        ctx.stroke();
+      }
+    }
+    for (let r = 0; r < rows - 1; r++) {
+      const row = vg[r] || [];
+      for (let c = 0; c < cols; c++) {
+        if (row[c] !== 2) continue;
+        const midX = (c + 0.5) * cellSize;
+        const midY = (r + 1) * cellSize;
         ctx.beginPath();
         ctx.moveTo(midX - xMarkSize / 2, midY - xMarkSize / 2);
         ctx.lineTo(midX + xMarkSize / 2, midY + xMarkSize / 2);
@@ -575,23 +648,30 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     ctx.restore();
   }
 
-  if (isEdgeLoop && hint && Array.isArray(hint.edges)) {
+  if ((isEdgeLoop || isMasyu) && hint && Array.isArray(hint.edges)) {
     ctx.save();
     ctx.strokeStyle = '#2e86de';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
     ctx.lineCap = 'round';
     for (const e of hint.edges) {
-      if (e.orientation === 'h') {
-        ctx.beginPath();
+      ctx.beginPath();
+      if (isMasyu) {
+        // Cell-centre geometry (see the isMasyu dynamic arm above).
+        if (e.orientation === 'h') {
+          ctx.moveTo((e.c + 0.5) * cellSize, (e.r + 0.5) * cellSize);
+          ctx.lineTo((e.c + 1.5) * cellSize, (e.r + 0.5) * cellSize);
+        } else {
+          ctx.moveTo((e.c + 0.5) * cellSize, (e.r + 0.5) * cellSize);
+          ctx.lineTo((e.c + 0.5) * cellSize, (e.r + 1.5) * cellSize);
+        }
+      } else if (e.orientation === 'h') {
         ctx.moveTo(e.c * cellSize, e.r * cellSize);
         ctx.lineTo((e.c + 1) * cellSize, e.r * cellSize);
-        ctx.stroke();
       } else {
-        ctx.beginPath();
         ctx.moveTo(e.c * cellSize, e.r * cellSize);
         ctx.lineTo(e.c * cellSize, (e.r + 1) * cellSize);
-        ctx.stroke();
       }
+      ctx.stroke();
     }
     ctx.restore();
   } else if (hint) {
@@ -684,6 +764,21 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
           } else {
             ctx.moveTo(em.c * cellSize, em.r * cellSize);
             ctx.lineTo(em.c * cellSize, (em.r + 1) * cellSize);
+          }
+          ctx.stroke();
+        }
+      } else if (puzzleData.type === 'masyu') {
+        // Re-stroke wrong loop edges red between cell centres.
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
+        for (const em of /** @type {any[]} */ (mistakes)) {
+          ctx.beginPath();
+          if (em.orientation === 'h') {
+            ctx.moveTo((em.c + 0.5) * cellSize, (em.r + 0.5) * cellSize);
+            ctx.lineTo((em.c + 1.5) * cellSize, (em.r + 0.5) * cellSize);
+          } else {
+            ctx.moveTo((em.c + 0.5) * cellSize, (em.r + 0.5) * cellSize);
+            ctx.lineTo((em.c + 0.5) * cellSize, (em.r + 1.5) * cellSize);
           }
           ctx.stroke();
         }
