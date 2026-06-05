@@ -66,3 +66,26 @@ test('Masyu propagation: a cell forced to degree 3 is a contradiction', () => {
   s.H[1][0] = 1; s.H[1][1] = 1; s.V[0][1] = 1; // cell (1,1): left+right+top = 3 lines
   assert.equal(s._propagate(), false);
 });
+
+test('Masyu connectivity: a closed loop missing a pearl is a bad sub-loop', () => {
+  // 2x3 (H is 2x2, V is 1x3): a closed 2x2 loop on the left cells
+  // (H[0][0],H[1][0] line; V[0][0],V[0][1] line), with the pearl at (0,2) left out.
+  const s = mk([[-1,-1,'W'],[-1,-1,-1]]);
+  s.H = [[1,0],[1,0]]; s.V = [[1,1,0]];
+  assert.equal(s._badSubloop(), true);
+});
+
+test('Masyu connectivity: an OPEN path is NOT a bad sub-loop (regression)', () => {
+  // a path with deg-1 open ends must not be flagged
+  const s = mk([[-1,'W',-1,-1],['W',-1,'W',-1],[-1,-1,-1,-1]]);
+  s.H = Array.from({length:3},()=>[0,0,0]); s.V = Array.from({length:2},()=>[0,0,0,0]);
+  s.H[0][0]=1; s.H[0][1]=1; s.V[0][0]=1; s.V[1][0]=1; s.H[2][0]=1; s.V[0][1]=2;
+  assert.equal(s._badSubloop(), false);
+});
+
+test('Masyu connectivity: reachability flags pearls split into two components', () => {
+  // cross a moat so a pearl can never connect (force isolation)
+  const s = mk([['W',-1,'B']]);
+  s.H = [[2,2]]; s.V = []; // both horizontal edges crossed -> three isolated cells, pearls unreachable
+  assert.equal(s._connOk(), false);
+});

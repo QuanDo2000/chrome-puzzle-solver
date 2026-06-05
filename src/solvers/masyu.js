@@ -139,6 +139,42 @@ class MasyuSolver {
     if (this._inV(r - 1, c) && !this._inV(r - 2, c)) { if (!this._set('v', r - 1, c, 2)) return false; }
     return true;
   }
+
+  // A line-edge component is a CLOSED loop iff every cell in it has degree exactly 2
+  // (a path has degree-1 open ends). A closed loop missing any pearl can never be part
+  // of the single-loop solution -> prune.
+  _badSubloop() {
+    const { rows, cols } = this; const idx = (r, c) => r * cols + c;
+    const deg = (r, c) => this._deg(r, c);
+    const lineNb = (r, c) => { const o = []; if (this._get('h', r, c - 1) === 1) o.push([r, c - 1]); if (this._get('h', r, c) === 1) o.push([r, c + 1]); if (this._get('v', r - 1, c) === 1) o.push([r - 1, c]); if (this._get('v', r, c) === 1) o.push([r + 1, c]); return o; };
+    let totalPearls = 0;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (this.task[r][c] === 'W' || this.task[r][c] === 'B') totalPearls++;
+    const seen = new Set();
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      if (deg(r, c) === 0 || seen.has(idx(r, c))) continue;
+      const st = [[r, c]]; seen.add(idx(r, c)); let allDeg2 = true, pearlsIn = 0;
+      while (st.length) { const [cr, cc] = st.pop(); if (deg(cr, cc) !== 2) allDeg2 = false; if (this.task[cr][cc] === 'W' || this.task[cr][cc] === 'B') pearlsIn++; for (const [nr, nc] of lineNb(cr, cc)) { const k = idx(nr, nc); if (!seen.has(k)) { seen.add(k); st.push([nr, nc]); } } }
+      if (allDeg2 && pearlsIn < totalPearls) return true;
+    }
+    return false;
+  }
+
+  // Reachability: all pearls + all line-edge cells must lie in ONE connected component
+  // of the AVAILABLE graph (cells joined by non-crossed edges). Sound necessary condition.
+  _connOk() {
+    const { rows, cols } = this; const idx = (r, c) => r * cols + c;
+    const required = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const p = this.task[r][c] === 'W' || this.task[r][c] === 'B'; if (p || this._deg(r, c) >= 1) required.push([r, c]); }
+    if (required.length === 0) return true;
+    const av = (t, r, c) => t === 'h' ? (this._inH(r, c) && this.H[r][c] !== 2) : (this._inV(r, c) && this.V[r][c] !== 2);
+    const nb = (r, c) => { const o = []; if (av('h', r, c - 1)) o.push([r, c - 1]); if (av('h', r, c)) o.push([r, c + 1]); if (av('v', r - 1, c)) o.push([r - 1, c]); if (av('v', r, c)) o.push([r + 1, c]); return o; };
+    const seen = new Set(); const st = [required[0]]; seen.add(idx(required[0][0], required[0][1]));
+    while (st.length) { const [r, c] = st.pop(); for (const [nr, nc] of nb(r, c)) { const k = idx(nr, nc); if (!seen.has(k)) { seen.add(k); st.push([nr, nc]); } } }
+    for (const [r, c] of required) if (!seen.has(idx(r, c))) return false;
+    return true;
+  }
+
+  _infeasible() { return this._badSubloop() || !this._connOk(); }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
