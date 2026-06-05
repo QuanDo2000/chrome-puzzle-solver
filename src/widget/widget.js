@@ -522,6 +522,17 @@ function makeWidget() {
         applyPartialResult(result);
         return;
       }
+      // Generic cell-state partial: any puzzle whose solver emits { partial:true,
+      // cells:[...] } (lightup, shakashaka, slant, starbattle, ...) and declares a
+      // partialResultArm hook routes through that hook's preview UI. Edge puzzles
+      // (slitherlink/shingoki/masyu) use the horizontal/vertical branch above; hashi
+      // uses the edges branch; the older grid-emitting puzzles use the per-type
+      // branches above. Placed last so those specific shapes take precedence.
+      if (result?.partial && Array.isArray(result.cells) &&
+          typeof PUZZLES !== 'undefined' && PUZZLES && PUZZLES[puzzleData?.type]?.partialResultArm) {
+        applyPartialResult(result);
+        return;
+      }
       if (result?.partialGrid) {
         cachePartial(puzzleData, result.partialGrid, result.partialFilled);
       } else if (result?.error === 'partial state exhausted') {
