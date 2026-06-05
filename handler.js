@@ -695,6 +695,58 @@ const lightupHandler = {
 
 registerHandler(lightupHandler);
 
+const slantHandler = {
+  name: 'puzzles-mobile-slant',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/slant/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readSlantData', []);
+    if (!data) return { ...result, error: 'No Slant task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'slant',
+      rows: data.rows,
+      cols: data.cols,
+      task: data.task,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  // Bare board-state grid = the live cellStatus (0 empty, 1 '\', 2 '/').
+  async readState(ctx) {
+    const state = await callMainWorld('readSlantState', []);
+    const cs = state && state.cellStatus;
+    if (Array.isArray(cs)) return cs.map((row) => row.slice());
+    const rows = (ctx && ctx.rows) || 0, cols = (ctx && ctx.cols) || 0;
+    return Array.from({ length: rows }, () => new Array(cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const cells = Array.isArray(solution) ? solution : (solution && solution.cells);
+    if (!Array.isArray(cells)) {
+      return { success: false, error: 'Slant applySolution: missing cells' };
+    }
+    const ok = await callMainWorld('applySlantState', [{ cells }]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Slant apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(slantHandler);
+
 // ── Hashi handler (puzzles-mobile.com/hashi/) ─────────────
 
 const hashiHandler = {
