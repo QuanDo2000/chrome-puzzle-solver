@@ -98,3 +98,13 @@ test('StarBattle solve: the quad board solves to a valid board', () => {
   assert.equal(res.solved, true);
   assert.ok(new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas: QUAD })._isValid(res.cells));
 });
+
+test('StarBattle _deduceForced: a seeded star forces no-star cells (adjacency + counts)', () => {
+  const s = new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas: QUAD, maxMs: 1000 });
+  // live cellStatus: a star at (0,1) (value 1), everything else unknown (0).
+  const cur = [[0, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+  const forced = s._deduceForced(cur);
+  const has = (r, c, v) => forced.some(f => f.row === r && f.col === c && f.value === v);
+  assert.ok(has(0, 0, 2) && has(1, 0, 2) && has(2, 1, 2), 'adjacency + group counts force no-stars');
+  assert.ok(forced.every(f => f.value === 1 || f.value === 2), 'forced values are star(1) or no-star(2)');
+});

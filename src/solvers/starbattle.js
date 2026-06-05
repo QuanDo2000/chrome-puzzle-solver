@@ -120,6 +120,28 @@ class StarBattleSolver {
     return null;
   }
 
+  // Hint engine: seed the solver with the live cellStatus (1 star, 2 X/no-star, 0 unknown), deduce to a fixpoint,
+  // and return the newly-forced cells as { row, col, value } (value 1 = star, 2 = no-star). Returns [] if the live
+  // board is contradictory (caller falls back to the cached-solution diff).
+  _deduceForced(curCells) {
+    this._initGrid();
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      const v = curCells[r][c];
+      if (v === 1) { if (!this._set(r, c, 1)) return []; }
+      else if (v === 2) { if (!this._set(r, c, 2)) return []; }
+    }
+    this._deadline = Date.now() + (this.maxMs || 2000);
+    if (!this._propagate()) return [];
+    const forced = [];
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (curCells[r][c] === 1 || curCells[r][c] === 2) continue;
+      const v = this.g[r][c];
+      if (v === 1) forced.push({ row: r, col: c, value: 1 });
+      else if (v === 2) forced.push({ row: r, col: c, value: 2 });
+    }
+    return forced;
+  }
+
   solve() {
     this._initGrid();
     this._deadline = Date.now() + this.maxMs; this._timedOut = false;
