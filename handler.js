@@ -1328,6 +1328,39 @@ const tapaHandler = {
 
 registerHandler(tapaHandler);
 
+// ── Tents handler (puzzles-mobile.com/tents/) ─────────────────
+
+const tentsHandler = {
+  name: 'puzzles-mobile-tents',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() && window.location.pathname.includes('/tents/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readTentsData', []);
+    if (!data) return { ...result, error: 'No Tents task data found' };
+    const stageEl = document.getElementById('stage') || document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return { found: true, type: 'tents', rows: data.rows, cols: data.cols, trees: data.trees, colClue: data.colClue, rowClue: data.rowClue, rowClues: [], colClues: [], _cells: [], _element: stageEl };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readTentsState', [ctx.rows, ctx.cols]);
+    if (state) return state; // RAW cellStatus 0/1/2 (no normalization — like tapa)
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyTentsState', [solution]);
+    return ok ? { success: true } : { success: false, error: 'Tents apply failed' };
+  },
+};
+
+registerHandler(tentsHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
