@@ -939,10 +939,22 @@ function readStitchesData() {
     var colClue = [], rowClue = [];
     for (var c = 0; c < cols; c++) colClue.push(parseInt(G.task[c], 10) || 0);
     for (var rr = 0; rr < rows; rr++) rowClue.push(parseInt(G.task[cols + rr], 10) || 0);
+    // K = stitches per adjacent region pair. DERIVE it from the puzzle (URL/title independent —
+    // works for /random/WxH-K-... and /special/daily alike): total stitch-endpoints = sum(colClue)
+    // = 2 * K * (#adjacent region pairs). Fall back to the URL/title only if the derivation isn't
+    // a clean integer.
     var K = null;
-    var pm = (location.pathname || '').match(/\d+x\d+-(\d+)/);
-    if (pm) K = parseInt(pm[1], 10);
-    if (!K) { var tm = (document.body.innerText || '').match(/\/\s*(\d+)/); if (tm) K = parseInt(tm[1], 10); }
+    var pairSet = {};
+    for (var pr = 0; pr < rows; pr++) for (var pc = 0; pc < cols; pc++) {
+      var a = areas[pr][pc];
+      if (pc + 1 < cols && areas[pr][pc + 1] !== a) pairSet[Math.min(a, areas[pr][pc + 1]) + '-' + Math.max(a, areas[pr][pc + 1])] = 1;
+      if (pr + 1 < rows && areas[pr + 1][pc] !== a) pairSet[Math.min(a, areas[pr + 1][pc]) + '-' + Math.max(a, areas[pr + 1][pc])] = 1;
+    }
+    var numPairs = 0; for (var pk in pairSet) numPairs++;
+    var totalEnd = 0; for (var ci = 0; ci < colClue.length; ci++) totalEnd += colClue[ci];
+    if (numPairs > 0 && totalEnd > 0 && totalEnd % (2 * numPairs) === 0) K = totalEnd / (2 * numPairs);
+    if (!K) { var pm = (location.pathname || '').match(/\d+x\d+-(\d+)/); if (pm) K = parseInt(pm[1], 10); }
+    if (!K) { var tm = (document.body.innerText || '').match(/(\d+)x\d+\s*\/\s*(\d+)/); if (tm) K = parseInt(tm[2], 10); }
     if (!K) return null;
     return { rows: rows, cols: cols, areas: areas, colClue: colClue, rowClue: rowClue, stitches: K };
   } catch (e) { return null; }
@@ -2490,7 +2502,17 @@ function dumpPuzzleForBench() {
       var stCol = [], stRow = [];
       for (var sc = 0; sc < width; sc++) stCol.push(parseInt(g.task[sc], 10) || 0);
       for (var srr = 0; srr < height; srr++) stRow.push(parseInt(g.task[width + srr], 10) || 0);
-      var stK = null, spm = (path || '').match(/\d+x\d+-(\d+)/); if (spm) stK = parseInt(spm[1], 10);
+      // K = sum(colClue) / (2 * #adjacent region pairs) — see readStitchesData; URL/title fallback.
+      var stK = null, stPairs = {};
+      for (var spr = 0; spr < height; spr++) for (var spc = 0; spc < width; spc++) {
+        var sa = stAreas[spr][spc];
+        if (spc + 1 < width && stAreas[spr][spc + 1] !== sa) stPairs[Math.min(sa, stAreas[spr][spc + 1]) + '-' + Math.max(sa, stAreas[spr][spc + 1])] = 1;
+        if (spr + 1 < height && stAreas[spr + 1][spc] !== sa) stPairs[Math.min(sa, stAreas[spr + 1][spc]) + '-' + Math.max(sa, stAreas[spr + 1][spc])] = 1;
+      }
+      var stNumPairs = 0; for (var spk in stPairs) stNumPairs++;
+      var stTotal = 0; for (var sci = 0; sci < stCol.length; sci++) stTotal += stCol[sci];
+      if (stNumPairs > 0 && stTotal > 0 && stTotal % (2 * stNumPairs) === 0) stK = stTotal / (2 * stNumPairs);
+      if (!stK) { var spm = (path || '').match(/\d+x\d+-(\d+)/); if (spm) stK = parseInt(spm[1], 10); }
       return { type: 'stitches', rows: height, cols: width, areas: stAreas, colClue: stCol, rowClue: stRow, stitches: stK, path: path };
     }
 
