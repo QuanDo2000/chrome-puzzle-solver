@@ -41,6 +41,59 @@ class StitchesSolver {
     this.pairEdges.get(key).push(id);
   }
 
+  _initState() {
+    this.st = new Int8Array(this.edges.length).fill(-1); // -1 unknown, 0 rejected, 1 selected
+    this._dirty = false;
+  }
+
+  _set(id, val) { // false on conflict
+    if (this.st[id] === val) return true;
+    if (this.st[id] !== -1) return false;
+    this.st[id] = val; this._dirty = true; return true;
+  }
+
+  // region-pair exactly-K + cell-degree<=1 + row/col line-count, to a fixpoint.
+  _propagate() {
+    const { rows, cols, K } = this;
+    this._dirty = true;
+    while (this._dirty) {
+      this._dirty = false;
+      // 1) region pairs
+      for (const [, ids] of this.pairEdges) {
+        let s = 0, u = 0; for (const id of ids) { if (this.st[id] === 1) s++; else if (this.st[id] === -1) u++; }
+        if (s > K || s + u < K) return false;
+        if (s === K && u) { for (const id of ids) if (this.st[id] === -1 && !this._set(id, 0)) return false; }
+        else if (s + u === K && u) { for (const id of ids) if (this.st[id] === -1 && !this._set(id, 1)) return false; }
+      }
+      // 2) cell degree <= 1
+      for (let cid = 0; cid < rows * cols; cid++) {
+        const inc = this.cellEdges[cid]; if (!inc.length) continue;
+        let s = 0; for (const id of inc) if (this.st[id] === 1) s++;
+        if (s > 1) return false;
+        if (s === 1) { for (const id of inc) if (this.st[id] === -1 && !this._set(id, 0)) return false; }
+      }
+      // 3) row/col endpoint counts
+      const rowKnown = new Int32Array(rows), rowPoss = new Int32Array(rows);
+      const colKnown = new Int32Array(cols), colPoss = new Int32Array(cols);
+      const cellPoss = new Uint8Array(rows * cols);
+      for (let cid = 0; cid < rows * cols; cid++) {
+        const inc = this.cellEdges[cid]; if (!inc.length) continue;
+        let s = 0, u = 0; for (const id of inc) { if (this.st[id] === 1) s++; else if (this.st[id] === -1) u++; }
+        if (s === 1) { rowKnown[Math.floor(cid / cols)]++; colKnown[cid % cols]++; }
+        else if (u > 0) { cellPoss[cid] = 1; rowPoss[Math.floor(cid / cols)]++; colPoss[cid % cols]++; }
+      }
+      for (let r = 0; r < rows; r++) {
+        if (rowKnown[r] > this.rowClue[r] || rowKnown[r] + rowPoss[r] < this.rowClue[r]) return false;
+        if (rowKnown[r] === this.rowClue[r] && rowPoss[r]) for (let c = 0; c < cols; c++) { const cid = r * cols + c; if (cellPoss[cid]) for (const id of this.cellEdges[cid]) if (this.st[id] === -1 && !this._set(id, 0)) return false; }
+      }
+      for (let c = 0; c < cols; c++) {
+        if (colKnown[c] > this.colClue[c] || colKnown[c] + colPoss[c] < this.colClue[c]) return false;
+        if (colKnown[c] === this.colClue[c] && colPoss[c]) for (let r = 0; r < rows; r++) { const cid = r * cols + c; if (cellPoss[cid]) for (const id of this.cellEdges[cid]) if (this.st[id] === -1 && !this._set(id, 0)) return false; }
+      }
+    }
+    return true;
+  }
+
   // Full-board validity oracle (the decoded ruleset). horizontal/vertical: rows x cols 0/1.
   _isValid(sol) {
     const { rows, cols, K, colClue, rowClue } = this;
