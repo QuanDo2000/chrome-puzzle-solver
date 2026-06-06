@@ -20,14 +20,20 @@ const STAR_DC = [-1, 0, 1, 1, 1, 0, -1, -1];
 
 class StarBattleSolver {
   constructor({ rows, cols, stars, areas = null, walls = null, maxMs = 30000 } = {}) {
-    this.rows = rows; this.cols = cols; this.k = stars; this.areas = areas; this.walls = walls; this.maxMs = maxMs;
+    this.rows = rows; this.cols = cols; this.k = stars; this.maxMs = maxMs;
+    // Normalize areas/walls: the page (and callers) pass [] for "none" — shaped boards
+    // carry walls:[], shapeless boards carry areas all-0 or absent. Treat anything that
+    // isn't a proper 2D grid as null so _initGrid/_isValid never index an empty array
+    // (walls:[] -> walls[r] is undefined -> a throw that strands the worker mid-solve).
+    this.areas = (Array.isArray(areas) && areas.length && Array.isArray(areas[0])) ? areas : null;
+    this.walls = (Array.isArray(walls) && walls.length && Array.isArray(walls[0])) ? walls : null;
     // Groups that each need exactly k stars: every row, every column, and (shaped) every region.
     this.groups = [];
     for (let r = 0; r < rows; r++) { const g = []; for (let c = 0; c < cols; c++) g.push([r, c]); this.groups.push(g); }
     for (let c = 0; c < cols; c++) { const g = []; for (let r = 0; r < rows; r++) g.push([r, c]); this.groups.push(g); }
-    if (areas) {
+    if (this.areas) {
       const byId = {};
-      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const a = areas[r][c]; (byId[a] = byId[a] || []).push([r, c]); }
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const a = this.areas[r][c]; (byId[a] = byId[a] || []).push([r, c]); }
       for (const id in byId) this.groups.push(byId[id]);
     }
   }

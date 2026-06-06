@@ -99,6 +99,18 @@ test('StarBattle solve: the quad board solves to a valid board', () => {
   assert.ok(new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas: QUAD })._isValid(res.cells));
 });
 
+test('StarBattle constructor: empty walls/areas ([]) are treated as "none", not indexed', () => {
+  // The page (and the bench dump) pass walls:[] on shaped boards. An un-normalized []
+  // is truthy, so _initGrid/_isValid would index walls[r] (undefined) and throw, stranding
+  // the worker mid-solve (looks like a hang). Both [] and null must solve identically.
+  const mk = (walls) => new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas: QUAD, walls, maxMs: 5000 });
+  assert.doesNotThrow(() => mk([]).solve());
+  const a = mk([]).solve(), b = mk(null).solve();
+  assert.equal(a.solved, true);
+  assert.equal(b.solved, true);
+  assert.deepEqual(a.cells, b.cells);
+});
+
 test('StarBattle _deduceForced: a seeded star forces no-star cells (adjacency + counts)', () => {
   const s = new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas: QUAD, maxMs: 1000 });
   // live cellStatus: a star at (0,1) (value 1), everything else unknown (0).
