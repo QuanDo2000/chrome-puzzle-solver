@@ -137,6 +137,29 @@ class TapaSolver {
     }
     return true;
   }
+
+  // Hint engine. initialState = live cellStatus (0 unknown / 1 shaded / 2 not-shaded). Clue cells
+  // are 0 in cellStatus (the page doesn't track them) — re-assert them as not-shaded (g=0) or the
+  // propagation can target clue cells and Loop never terminates ([[project_clue_cells_not_in_cellstatus]]).
+  // Returns the newly-forced shadeable cells as { row, col, value(1 shaded / 2 not-shaded) }.
+  getHint(initialState) {
+    this._initG(); // clue cells already g=0 (not-shaded); shadeable cells g=9
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.task[r][c] === -1) {
+      const v = initialState[r] ? initialState[r][c] : 0;
+      this.g[r][c] = v === 1 ? 1 : v === 2 ? 0 : 9;
+    }
+    this._deadline = Date.now() + (this.maxMs || 1500);
+    if (!this._propagate()) return [];
+    const out = [];
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (this.task[r][c] !== -1) continue;
+      const was = initialState[r] ? initialState[r][c] : 0;
+      if (was !== 0) continue; // only newly-decided
+      if (this.g[r][c] === 1) out.push({ row: r, col: c, value: 1 });
+      else if (this.g[r][c] === 0) out.push({ row: r, col: c, value: 2 });
+    }
+    return out;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

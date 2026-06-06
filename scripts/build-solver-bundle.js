@@ -25,13 +25,14 @@ const FILES = [
   'lightup.js',
   'starbattle.js',
   'stitches.js',
+  'tapa.js',
   'diff.js',
 ];
 const EXPORTS = [
   'NonogramSolver', 'AquariumSolver', 'GalaxiesSolver', 'BinairoSolver',
   'ShikakuSolver', 'YinYangSolver', 'SlitherlinkSolver', 'HashiSolver',
   'HeyawakeSolver', 'HitoriSolver', 'KakurasuSolver', 'KurodokoSolver',
-  'MosaicSolver', 'NorinoriSolver', 'NurikabeSolver', 'PipesSolver', 'ShingokiSolver', 'MasyuSolver', 'ShakashakaSolver', 'LightUpSolver', 'SlantSolver', 'StarBattleSolver', 'StitchesSolver', 'computePuzzleDiff',
+  'MosaicSolver', 'NorinoriSolver', 'NurikabeSolver', 'PipesSolver', 'ShingokiSolver', 'MasyuSolver', 'ShakashakaSolver', 'LightUpSolver', 'SlantSolver', 'StarBattleSolver', 'StitchesSolver', 'TapaSolver', 'computePuzzleDiff',
 ];
 
 // Strip the trailing CommonJS export block from a per-puzzle source. The

@@ -95,3 +95,13 @@ test('Tapa soundness gate: solver matches brute-force across random tiny boards'
   }
   assert.ok(tested >= 200, `gate exercised too few boards (${tested})`);
 });
+
+test('Tapa getHint: re-asserts clue cells unshaded and returns forced cells', () => {
+  // 3x3 centre clue 8: from a blank live board, getHint forces all 8 neighbours shaded.
+  const s = new TapaSolver({ rows: 3, cols: 3, task: [[-1,-1,-1],[-1,8,-1],[-1,-1,-1]], maxMs: 1000 });
+  const live = [[0,0,0],[0,0,0],[0,0,0]]; // page cellStatus: clue cell (1,1) is 0 (untracked)
+  const forced = s.getHint(live);
+  const shadedForced = forced.filter((f) => f.value === 1).map((f) => `${f.row},${f.col}`).sort();
+  assert.deepEqual(shadedForced, ['0,0','0,1','0,2','1,0','1,2','2,0','2,1','2,2']);
+  assert.ok(forced.every((f) => f.value === 1 || f.value === 2));
+});
