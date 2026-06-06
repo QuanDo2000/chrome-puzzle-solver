@@ -11,7 +11,12 @@
 //
 // METHOD: count + adjacency propagation, then MRV backtracking (branch the tightest group's candidate cells).
 // On maxMs timeout returns the SOUND root-propagation snapshot (UNK=9). Soundness is brute-force-gated in
-// tests/starbattle.test.js. The real 14x14 hard 3-star full-solves in ~0.8s (unique).
+// tests/starbattle.test.js. The real 14x14 hard 3-star boards full-solve in well under a second.
+//
+// PERF: group counts (stars + unknowns per row/col/region) are maintained INCREMENTALLY in _set — each cell
+// caches the group indices it belongs to (cellGroups), so _propagate/_pick read gs/gu in O(1) instead of
+// rescanning every group's cells per node. Adjacency runs off a star queue (_sq) rather than a full-grid scan.
+// This is the dominant search cost on boards with no root deduction (real 14x14 hard).
 //
 // Internal working grid g[r][c]: 0 unknown, 1 star, 2 no-star. Output cells: 1 star, 0 no-star, 9 UNK.
 
@@ -36,6 +41,9 @@ class StarBattleSolver {
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const a = this.areas[r][c]; (byId[a] = byId[a] || []).push([r, c]); }
       for (const id in byId) this.groups.push(byId[id]);
     }
+    // Per-cell index of the groups it belongs to (row, col, and region) — drives incremental counts.
+    this.cellGroups = Array.from({ length: rows * cols }, () => []);
+    for (let gi = 0; gi < this.groups.length; gi++) for (const [r, c] of this.groups[gi]) this.cellGroups[r * cols + c].push(gi);
   }
 
   // Full-board validity oracle (port of getErrors). cells fully decided: 1 star, 0 no-star.
@@ -61,14 +69,23 @@ class StarBattleSolver {
 
   _initGrid() {
     this.g = Array.from({ length: this.rows }, () => new Array(this.cols).fill(0));
-    if (this.walls) for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.walls[r][c]) this.g[r][c] = 2;
+    this.gs = new Int32Array(this.groups.length);            // stars placed per group
+    this.gu = new Int32Array(this.groups.length);            // unknown cells per group
+    for (let gi = 0; gi < this.groups.length; gi++) this.gu[gi] = this.groups[gi].length;
+    this._sq = [];                                           // flat [r0,c0,r1,c1,...] queue of stars to cross
+    if (this.walls) for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.walls[r][c]) this._set(r, c, 2);
   }
 
-  // Set cell (r,c) to val (1 star / 2 no-star). Returns false on a conflicting prior value.
+  // Set cell (r,c) to val (1 star / 2 no-star), updating group counts. Returns false on a conflicting prior value.
   _set(r, c, val) {
     if (this.g[r][c] === val) return true;
     if (this.g[r][c] !== 0) return false;
-    this.g[r][c] = val; this._dirty = true; return true;
+    this.g[r][c] = val;
+    const gis = this.cellGroups[r * this.cols + c];
+    for (let i = 0; i < gis.length; i++) { const gi = gis[i]; this.gu[gi]--; if (val === 1) this.gs[gi]++; }
+    if (val === 1) { this._sq.push(r, c); }
+    this._dirty = true;
+    return true;
   }
 
   // Adjacency + group-count forcing to a fixpoint. Returns false on contradiction.
@@ -76,47 +93,51 @@ class StarBattleSolver {
     this._dirty = true;
     while (this._dirty) {
       this._dirty = false;
-      // Adjacency: every star crosses its 8 neighbours; two adjacent stars = contradiction.
-      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.g[r][c] === 1) {
+      // Adjacency: cross the 8 neighbours of every newly-placed star; two adjacent stars = contradiction.
+      while (this._sq.length) {
+        const c = this._sq.pop(), r = this._sq.pop();
         for (let u = 0; u < 8; u++) {
           const nr = r + STAR_DR[u], nc = c + STAR_DC[u];
           if (nr >= 0 && nc >= 0 && nr < this.rows && nc < this.cols) {
-            if (this.g[nr][nc] === 1) return false;
-            if (this.g[nr][nc] === 0) { this.g[nr][nc] = 2; this._dirty = true; }
+            const gv = this.g[nr][nc];
+            if (gv === 1) return false;
+            if (gv === 0 && !this._set(nr, nc, 2)) return false;
           }
         }
       }
-      // Group count: each row/col/region needs exactly k stars.
-      for (const grp of this.groups) {
-        let s = 0; const unk = [];
-        for (const [r, c] of grp) { const v = this.g[r][c]; if (v === 1) s++; else if (v === 0) unk.push([r, c]); }
+      // Group count: each row/col/region needs exactly k stars (read incrementally).
+      const grps = this.groups;
+      for (let gi = 0; gi < grps.length; gi++) {
+        const s = this.gs[gi], u = this.gu[gi];
         if (s > this.k) return false;
-        if (s + unk.length < this.k) return false;
-        if (s === this.k && unk.length) { for (const [r, c] of unk) if (!this._set(r, c, 2)) return false; }
-        else if (s + unk.length === this.k && unk.length) { for (const [r, c] of unk) if (!this._set(r, c, 1)) return false; }
+        if (s + u < this.k) return false;
+        if (u > 0 && s === this.k) { const g = grps[gi]; for (let j = 0; j < g.length; j++) { const rc = g[j]; if (this.g[rc[0]][rc[1]] === 0 && !this._set(rc[0], rc[1], 2)) return false; } }
+        else if (u > 0 && s + u === this.k) { const g = grps[gi]; for (let j = 0; j < g.length; j++) { const rc = g[j]; if (this.g[rc[0]][rc[1]] === 0 && !this._set(rc[0], rc[1], 1)) return false; } }
       }
     }
     return true;
   }
 
-  _snapshot() { return this.g.map(r => r.slice()); }
-  _restore(s) { this.g = s.map(r => r.slice()); }
+  _snapshot() { return { g: this.g.map((r) => r.slice()), gs: this.gs.slice(), gu: this.gu.slice() }; }
+  _restore(s) { this.g = s.g.map((r) => r.slice()); this.gs = s.gs.slice(); this.gu = s.gu.slice(); this._sq.length = 0; }
 
   // Pick a candidate cell from the group (row/col/region) with the fewest unknowns that still needs stars.
   _pick() {
-    let best = null, bestN = Infinity;
-    for (const grp of this.groups) {
-      let s = 0; const unk = [];
-      for (const [r, c] of grp) { const v = this.g[r][c]; if (v === 1) s++; else if (v === 0) unk.push([r, c]); }
-      if (s < this.k && unk.length && unk.length < bestN) { bestN = unk.length; best = unk; }
+    let best = -1, bestN = Infinity;
+    for (let gi = 0; gi < this.groups.length; gi++) {
+      const s = this.gs[gi], u = this.gu[gi];
+      if (s < this.k && u > 0 && u < bestN) { bestN = u; best = gi; }
     }
-    return best ? best[0] : null;
+    if (best < 0) return null;
+    const g = this.groups[best];
+    for (let j = 0; j < g.length; j++) { const rc = g[j]; if (this.g[rc[0]][rc[1]] === 0) return rc; }
+    return null;
   }
 
   _search() {
     if (Date.now() > this._deadline) { this._timedOut = true; return null; }
     const cell = this._pick();
-    if (!cell) { const cells = this.g.map(r => r.map(v => v === 1 ? 1 : 0)); return this._isValid(cells) ? cells : null; }
+    if (!cell) { const cells = this.g.map((r) => r.map((v) => v === 1 ? 1 : 0)); return this._isValid(cells) ? cells : null; }
     const [r, c] = cell;
     for (const val of [1, 2]) {
       const snap = this._snapshot();
@@ -152,9 +173,9 @@ class StarBattleSolver {
     this._initGrid();
     this._deadline = Date.now() + this.maxMs; this._timedOut = false;
     if (!this._propagate()) return { solved: false, error: 'No solution (contradiction in givens)' };
-    const root = this.g.map(r => r.map(v => v === 1 ? 1 : (v === 2 ? 0 : 9)));
+    const root = this.g.map((r) => r.map((v) => v === 1 ? 1 : (v === 2 ? 0 : 9)));
     const res = this._search();
-    if (res) return { solved: true, cells: res.map(r => r.slice()) };
+    if (res) return { solved: true, cells: res.map((r) => r.slice()) };
     if (this._timedOut) return { solved: false, partial: true, cells: root };
     return { solved: false, error: 'No solution found' };
   }
