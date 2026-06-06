@@ -28,27 +28,29 @@ test('Tapa clue patterns: a clue enumerates only matching neighbour bitmasks', (
   assert.equal(cl.patterns[0], 255);
 });
 
+// g is a flat Int8Array (g[r*cols+c]); _initG() seeds the dirty worklist with all clues, and
+// cell writes must go through _set() so propagation sees them.
 test('Tapa propagation: a clue with one pattern forces its neighbours', () => {
   // 3x3, centre clue 8 (all neighbours shaded) -> all 8 neighbours forced shaded.
   const s = new TapaSolver({ rows: 3, cols: 3, task: [[-1,-1,-1],[-1,8,-1],[-1,-1,-1]] });
   s._initG();
   assert.equal(s._propagate(), true);
-  for (const [r, c] of [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]) assert.equal(s.g[r][c], 1);
+  for (const [r, c] of [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]) assert.equal(s.g[r * 3 + c], 1);
 });
 
 test('Tapa propagation: no-2x2 forces the 4th cell unshaded', () => {
   const s = new TapaSolver({ rows: 2, cols: 2, task: [[-1,-1],[-1,-1]] });
   s._initG();
-  s.g[0][0] = 1; s.g[0][1] = 1; s.g[1][0] = 1; // three of a 2x2 shaded
+  s._set(0, 1); s._set(1, 1); s._set(2, 1); // three of a 2x2 shaded (flat: (0,0)=0,(0,1)=1,(1,0)=2)
   assert.equal(s._propagate(), true);
-  assert.equal(s.g[1][1], 0); // forced unshaded
+  assert.equal(s.g[3], 0); // (1,1) forced unshaded
 });
 
 test('Tapa propagation: clue 0 forces all neighbours unshaded', () => {
   const s = new TapaSolver({ rows: 3, cols: 3, task: [[-1,-1,-1],[-1,0,-1],[-1,-1,-1]] });
   s._initG();
   assert.equal(s._propagate(), true);
-  for (const [r, c] of [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]) assert.equal(s.g[r][c], 0);
+  for (const [r, c] of [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]) assert.equal(s.g[r * 3 + c], 0);
 });
 
 const REAL_TAPA = { rows: 6, cols: 6, task: [[-1,-1,-1,-1,-1,-1],[22,-1,33,7,-1,5],[-1,-1,-1,-1,-1,-1],[3,-1,-1,-1,-1,12],[12,-1,-1,-1,-1,3],[-1,-1,-1,-1,-1,-1]] };
@@ -69,6 +71,17 @@ test('Tapa solve: the real 20x20-hard board FULL-solves fast (connectivity-prune
   // 5s budget would time out to a partial if the prune ever regresses, so this guards it.
   const task = [[-1,-1,-1,12,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,13,-1,-1,-1],[4,-1,6,-1,-1,-1,112,-1,5,-1,-1,33,-1,122,-1,-1,-1,7,-1,4],[4,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,4],[-1,-1,7,-1,23,-1,-1,-1,-1,112,23,-1,-1,-1,-1,13,-1,4,-1,-1],[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],[12,-1,-1,-1,-1,-1,-1,33,122,-1,-1,24,7,-1,-1,-1,-1,-1,-1,13],[-1,-1,6,-1,13,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,24,-1,7,-1,-1],[5,-1,-1,-1,5,-1,-1,-1,12,-1,-1,7,-1,-1,-1,24,-1,-1,-1,22],[-1,-1,6,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,24,-1,-1],[-1,-1,-1,-1,13,-1,-1,23,-1,22,13,-1,15,-1,-1,14,-1,-1,-1,-1],[-1,-1,-1,-1,12,-1,-1,33,-1,4,12,-1,23,-1,-1,6,-1,-1,-1,-1],[-1,-1,7,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6,-1,-1],[5,-1,-1,-1,122,-1,-1,-1,15,-1,-1,13,-1,-1,-1,14,-1,-1,-1,5],[-1,-1,7,-1,22,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,12,-1,6,-1,-1],[5,-1,-1,-1,-1,-1,-1,113,6,-1,-1,13,5,-1,-1,-1,-1,-1,-1,13],[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],[-1,-1,14,-1,5,-1,-1,-1,-1,33,33,-1,-1,-1,-1,24,-1,14,-1,-1],[3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,4],[4,-1,5,-1,-1,-1,122,-1,7,-1,-1,23,-1,12,-1,-1,-1,6,-1,4],[-1,-1,-1,12,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,12,-1,-1,-1]];
   const s = new TapaSolver({ rows: 20, cols: 20, task, maxMs: 5000 });
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.equal(r.partial, undefined);
+  assert.ok(s._isValid(r.grid.map((row) => row.map((v) => (v === 1 ? 1 : 0)))));
+});
+
+test('Tapa solve: the real 35x35 monthly FULL-solves under a tight budget (worklist-perf regression)', () => {
+  // Naive full-rescan propagation takes ~8s here; the dirty-clue worklist + trail + flat grid bring
+  // it to ~0.4s. A tight 5s budget times out to a partial if those optimizations regress.
+  const { tapa_35x35: P } = require('./fixtures/real-puzzles.js');
+  const s = new TapaSolver({ rows: P.rows, cols: P.cols, task: P.task, maxMs: 5000 });
   const r = s.solve();
   assert.equal(r.solved, true);
   assert.equal(r.partial, undefined);
