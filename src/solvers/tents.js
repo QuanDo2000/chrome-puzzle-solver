@@ -80,6 +80,40 @@ class TentsSolver {
     return true;
   }
 
+  // matching feasibility: trees must still be coverable by possible-tent cells (tent or unknown)
+  _matchFeasible() { return this._maxMatch((r, c) => !this.trees[r][c] && (this.g[r][c] === 1 || this.g[r][c] === 9)) === this.T; }
+
+  _tentGrid() { const t = []; for (let r = 0; r < this.rows; r++) { t.push([]); for (let c = 0; c < this.cols; c++) t[r].push(this.g[r][c] === 1 ? 1 : 0); } return t; }
+  // emit: 0 unknown/tree, 1 tent, 2 grass.
+  _emit() { const out = []; for (let r = 0; r < this.rows; r++) { out.push([]); for (let c = 0; c < this.cols; c++) { if (this.trees[r][c]) { out[r].push(0); continue; } const v = this.g[r][c]; out[r].push(v === 9 ? 0 : v === 1 ? 1 : 2); } } return out; }
+
+  _pick() { for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (!this.trees[r][c] && this.g[r][c] === 9) return [r, c]; return null; }
+
+  _search(countAll) {
+    if (Date.now() > this._deadline) { this._timedOut = true; return true; }
+    if (!this._matchFeasible()) return false;
+    const cell = this._pick();
+    if (!cell) { const t = this._tentGrid(); if (this._isValid(t)) { this._count++; if (!this._first) this._first = this.g.map((row) => row.slice()); if (!countAll) return true; if (this._count >= 2) return true; } return false; }
+    const [r, c] = cell;
+    for (const v of [1, 2]) {
+      const snap = this.g.map((row) => row.slice());
+      if (this._set(r, c, v) && this._propagate() && this._search(countAll)) { if (!countAll || this._count >= 2 || this._timedOut) return true; }
+      this.g = snap;
+    }
+    return false;
+  }
+
+  solve(countAll = false) {
+    this._initG();
+    this._deadline = Date.now() + this.maxMs; this._timedOut = false; this._count = 0; this._first = null;
+    if (!this._propagate()) return { solved: false, error: 'No solution (contradiction in givens)' };
+    const root = this._emit();
+    this._search(countAll);
+    if (this._first) { this.g = this._first; return { solved: true, grid: this._emit(), count: this._count }; }
+    if (this._timedOut) return { solved: false, partial: true, grid: root };
+    return { solved: false, error: 'No solution found' };
+  }
+
   // Oracle on a complete tent grid (tent[r][c] === 1 iff tent).
   _isValid(tent) {
     const { rows, cols, trees, colClue, rowClue } = this;
