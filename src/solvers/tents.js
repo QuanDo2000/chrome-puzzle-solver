@@ -50,6 +50,36 @@ class TentsSolver {
     return m;
   }
 
+  _free(r, c) { return r >= 0 && c >= 0 && r < this.rows && c < this.cols && !this.trees[r][c]; }
+
+  // g[r][c]: 9 unknown, 1 tent, 2 grass. Tree cells fixed 0 (never tents).
+  _initG() {
+    this.g = [];
+    for (let r = 0; r < this.rows; r++) { this.g.push([]); for (let c = 0; c < this.cols; c++) this.g[r].push(this.trees[r][c] ? 0 : 9); }
+  }
+
+  _set(r, c, v) { if (this.g[r][c] === v) return true; if (this.g[r][c] !== 9) return false; this.g[r][c] = v; this._dirty = true; return true; }
+
+  // count + 8-adjacency + tree-coverage, to a fixpoint. Returns false on contradiction.
+  _propagate() {
+    const { rows, cols } = this;
+    this._dirty = true;
+    while (this._dirty) {
+      this._dirty = false;
+      // adjacency: a tent forces its 8 neighbours to grass; two adjacent tents = contradiction
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (this.g[r][c] === 1) {
+        for (let a = 0; a < 8; a++) { const nr = r + D8R[a], nc = c + D8C[a]; if (!this._free(nr, nc)) continue; if (this.g[nr][nc] === 1) return false; if (this.g[nr][nc] === 9 && !this._set(nr, nc, 2)) return false; }
+      }
+      // row count forcing
+      for (let r = 0; r < rows; r++) { let t = 0; const unk = []; for (let c = 0; c < cols; c++) { if (this.g[r][c] === 1) t++; else if (this.g[r][c] === 9) unk.push(c); } if (t > this.rowClue[r]) return false; if (t + unk.length < this.rowClue[r]) return false; if (t === this.rowClue[r]) { for (const c of unk) if (!this._set(r, c, 2)) return false; } else if (t + unk.length === this.rowClue[r]) { for (const c of unk) if (!this._set(r, c, 1)) return false; } }
+      // col count forcing
+      for (let c = 0; c < cols; c++) { let t = 0; const unk = []; for (let r = 0; r < rows; r++) { if (this.g[r][c] === 1) t++; else if (this.g[r][c] === 9) unk.push(r); } if (t > this.colClue[c]) return false; if (t + unk.length < this.colClue[c]) return false; if (t === this.colClue[c]) { for (const r of unk) if (!this._set(r, c, 2)) return false; } else if (t + unk.length === this.colClue[c]) { for (const r of unk) if (!this._set(r, c, 1)) return false; } }
+      // tree coverage: a tree with no placed adjacent tent and exactly one possible adjacent cell -> force it
+      for (const [tr, tc] of this.treeList) { let placed = 0; const cand = []; for (let a = 0; a < 4; a++) { const r = tr + D4R[a], c = tc + D4C[a]; if (!this._free(r, c)) continue; if (this.g[r][c] === 1) placed++; else if (this.g[r][c] === 9) cand.push([r, c]); } if (placed === 0) { if (cand.length === 0) return false; if (cand.length === 1 && !this._set(cand[0][0], cand[0][1], 1)) return false; } }
+    }
+    return true;
+  }
+
   // Oracle on a complete tent grid (tent[r][c] === 1 iff tent).
   _isValid(tent) {
     const { rows, cols, trees, colClue, rowClue } = this;
