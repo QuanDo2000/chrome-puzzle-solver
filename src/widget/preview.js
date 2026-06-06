@@ -305,6 +305,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   // edge arrays are sized rows x (cols-1) / (rows-1) x cols. So it needs its own
   // cell-centre geometry — it CANNOT reuse the isEdgeLoop arm.
   const isMasyu = puzzleData?.type === 'masyu';
+  const isStitches = puzzleData?.type === 'stitches';
   const isHashi = puzzleData?.type === 'hashi';
 
   // Idempotent: ensure the preview is visible whether or not we redraw.
@@ -509,6 +510,20 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
       }
     }
     ctx.restore();
+  } else if (isStitches) {
+    // Stitches run between CELL CENTRES across region borders. horizontal[r][c]===1 joins
+    // (r,c)-(r,c+1); vertical[r][c]===1 joins (r,c)-(r+1,c). Draw the segment + a hole dot
+    // at each endpoint centre.
+    ctx.save();
+    const hg = grid.horizontal || [], vg = grid.vertical || [];
+    const holes = [];
+    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = Math.max(2, Math.floor(cellSize / 7)); ctx.lineCap = 'round';
+    for (let r = 0; r < rows; r++) { const row = hg[r] || []; for (let c = 0; c < cols - 1; c++) if (row[c] === 1) { ctx.beginPath(); ctx.moveTo((c + 0.5) * cellSize, (r + 0.5) * cellSize); ctx.lineTo((c + 1.5) * cellSize, (r + 0.5) * cellSize); ctx.stroke(); holes.push([r, c], [r, c + 1]); } }
+    for (let r = 0; r < rows - 1; r++) { const row = vg[r] || []; for (let c = 0; c < cols; c++) if (row[c] === 1) { ctx.beginPath(); ctx.moveTo((c + 0.5) * cellSize, (r + 0.5) * cellSize); ctx.lineTo((c + 0.5) * cellSize, (r + 1.5) * cellSize); ctx.stroke(); holes.push([r, c], [r + 1, c]); } }
+    ctx.fillStyle = '#f59e0b';
+    const rad = Math.max(2, Math.floor(cellSize / 7));
+    for (const [hr, hc] of holes) { ctx.beginPath(); ctx.arc((hc + 0.5) * cellSize, (hr + 0.5) * cellSize, rad, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
   } else if (isHashi) {
     // Hashi bridges. Single bridges render as one centered line; double
     // bridges as two parallel lines offset ±bridgeOffset perpendicular to
@@ -648,15 +663,15 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     ctx.restore();
   }
 
-  if ((isEdgeLoop || isMasyu) && hint && Array.isArray(hint.edges)) {
+  if ((isEdgeLoop || isMasyu || isStitches) && hint && Array.isArray(hint.edges)) {
     ctx.save();
     ctx.strokeStyle = '#2e86de';
     ctx.lineWidth = Math.max(3, Math.floor(cellSize / 5));
     ctx.lineCap = 'round';
     for (const e of hint.edges) {
       ctx.beginPath();
-      if (isMasyu) {
-        // Cell-centre geometry (see the isMasyu dynamic arm above).
+      if (isMasyu || isStitches) {
+        // Cell-centre geometry (see the isMasyu / isStitches dynamic arm above).
         if (e.orientation === 'h') {
           ctx.moveTo((e.c + 0.5) * cellSize, (e.r + 0.5) * cellSize);
           ctx.lineTo((e.c + 1.5) * cellSize, (e.r + 0.5) * cellSize);
@@ -782,6 +797,13 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
           }
           ctx.stroke();
         }
+      } else if (puzzleData.type === 'stitches') {
+        ctx.save(); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = Math.max(2, Math.floor(cellSize / 6)); ctx.lineCap = 'round';
+        for (const em of /** @type {any[]} */ (mistakes)) {
+          if (em.orientation === 'h') { ctx.beginPath(); ctx.moveTo((em.c + 0.5) * cellSize, (em.r + 0.5) * cellSize); ctx.lineTo((em.c + 1.5) * cellSize, (em.r + 0.5) * cellSize); ctx.stroke(); }
+          else { ctx.beginPath(); ctx.moveTo((em.c + 0.5) * cellSize, (em.r + 0.5) * cellSize); ctx.lineTo((em.c + 0.5) * cellSize, (em.r + 1.5) * cellSize); ctx.stroke(); }
+        }
+        ctx.restore();
       } else if (puzzleData.type === 'hashi') {
         // Re-stroke wrong bridges in red between the two island centres.
         // computePuzzleDiff returns {a, b, orientation, expected, actual}

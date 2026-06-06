@@ -134,3 +134,12 @@ test('Stitches _deduceForced: returns [] on a contradictory live board', () => {
   const forced = s._deduceForced([[1, 1, 0]], [[0, 0, 0]]); // cell (0,1) degree 2
   assert.deepEqual(forced, []);
 });
+
+test('Stitches diff: a board stitch absent from the solution is flagged; UNKNOWN never', () => {
+  const { computePuzzleDiff } = require('../src/solvers/diff.js');
+  const solution = { horizontal: [[1, 0]], vertical: [[0, 0]] };
+  const board = { horizontal: [[0, 1]], vertical: [[0, 0]] }; // stitch at (0,1) not in solution
+  const d = computePuzzleDiff('stitches', board, solution);
+  assert.ok(d.some((m) => m.orientation === 'h' && m.r === 0 && m.c === 1));
+  assert.equal(computePuzzleDiff('stitches', { horizontal: [[1, 0]], vertical: [[0, 0]] }, solution).length, 0);
+});

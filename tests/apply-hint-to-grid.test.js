@@ -51,3 +51,11 @@ test('applyHintToGrid: masyu edge hint merges lines (regression for Masyu Loop s
   assert.equal(grid.vertical[1][2], 1, 'vertical line merged');
   assert.equal(grid.horizontal[0][0], 0, 'untouched edge stays 0');
 });
+
+test('applyHintToGrid: stitches hint edges merge as stitches into the board grid', () => {
+  const { applyHintToGrid } = require('../src/widget/hint.js');
+  const grid = { horizontal: [[0, 0], [0, 0]], vertical: [[0, 0], [0, 0]] };
+  applyHintToGrid(grid, { type: 'stitches', edges: [{ orientation: 'h', r: 0, c: 0 }, { orientation: 'v', r: 1, c: 1 }] });
+  assert.equal(grid.horizontal[0][0], 1);
+  assert.equal(grid.vertical[1][1], 1);
+});

@@ -132,7 +132,7 @@ function computePuzzleDiff(type, grid, solution, stars) {
   // but _slitherlinkDiff derives its dims from the array lengths, so the
   // edge-based diff applies verbatim: committed LINE edge disagreeing with the
   // solution; UNKNOWN edges never flagged).
-  if (type === 'slitherlink' || type === 'shingoki' || type === 'masyu') return _slitherlinkDiff(grid, solution);
+  if (type === 'slitherlink' || type === 'shingoki' || type === 'masyu' || type === 'stitches') return _slitherlinkDiff(grid, solution);
   if (type === 'hashi') {
     // Hashi grids are {islands, edges}, not the 2D / H+V shapes the public
     // signature advertises for the other puzzle types. Cast locally so the
