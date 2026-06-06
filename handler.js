@@ -810,6 +810,66 @@ const starbattleHandler = {
 
 registerHandler(starbattleHandler);
 
+// ── Stitches handler (puzzles-mobile.com/stitches/) ───────────
+
+const stitchesHandler = {
+  name: 'puzzles-mobile-stitches',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() &&
+           window.location.pathname.includes('/stitches/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readStitchesData', []);
+    if (!data) return { ...result, error: 'No Stitches task data found' };
+    const stageEl = document.getElementById('stage') ||
+                    document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return {
+      found: true,
+      type: 'stitches',
+      rows: data.rows,
+      cols: data.cols,
+      areas: data.areas,
+      regionMap: data.areas,   // drives the preview region borders
+      colClue: data.colClue,
+      rowClue: data.rowClue,
+      stitches: data.stitches,
+      rowClues: [],
+      colClues: [],
+      _cells: [],
+      _element: stageEl,
+    };
+  },
+
+  // Normalize tri-state -> 1/0 (drop the player's blocked-X) so the edge diff /
+  // loopDoneCheck / firstMismatch see only placed stitches. The hint reads the raw
+  // state separately (readStitchesState) for _deduceForced.
+  async readState(ctx) {
+    const state = await callMainWorld('readStitchesState', [ctx.rows, ctx.cols]);
+    if (!state) return { horizontal: [], vertical: [] };
+    return {
+      horizontal: (state.horizontal || []).map((r) => r.map((v) => (v === 1 ? 1 : 0))),
+      vertical: (state.vertical || []).map((r) => r.map((v) => (v === 1 ? 1 : 0))),
+    };
+  },
+
+  async applySolution(solution, _ctx) {
+    if (!solution || !solution.horizontal || !solution.vertical) {
+      return { success: false, error: 'Stitches applySolution: missing horizontal/vertical' };
+    }
+    const ok = await callMainWorld('applyStitchesState', [solution]);
+    return ok
+      ? { success: true }
+      : { success: false, error: 'Stitches apply failed (no window.Game or MAIN-world timeout)' };
+  },
+};
+
+registerHandler(stitchesHandler);
+
 // ── Hashi handler (puzzles-mobile.com/hashi/) ─────────────
 
 const hashiHandler = {
