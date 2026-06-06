@@ -27,3 +27,26 @@ test('Tapa clue patterns: a clue enumerates only matching neighbour bitmasks', (
   assert.equal(cl.patterns.length, 1);          // only the all-8 mask
   assert.equal(cl.patterns[0], 255);
 });
+
+test('Tapa propagation: a clue with one pattern forces its neighbours', () => {
+  // 3x3, centre clue 8 (all neighbours shaded) -> all 8 neighbours forced shaded.
+  const s = new TapaSolver({ rows: 3, cols: 3, task: [[-1,-1,-1],[-1,8,-1],[-1,-1,-1]] });
+  s._initG();
+  assert.equal(s._propagate(), true);
+  for (const [r, c] of [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]) assert.equal(s.g[r][c], 1);
+});
+
+test('Tapa propagation: no-2x2 forces the 4th cell unshaded', () => {
+  const s = new TapaSolver({ rows: 2, cols: 2, task: [[-1,-1],[-1,-1]] });
+  s._initG();
+  s.g[0][0] = 1; s.g[0][1] = 1; s.g[1][0] = 1; // three of a 2x2 shaded
+  assert.equal(s._propagate(), true);
+  assert.equal(s.g[1][1], 0); // forced unshaded
+});
+
+test('Tapa propagation: clue 0 forces all neighbours unshaded', () => {
+  const s = new TapaSolver({ rows: 3, cols: 3, task: [[-1,-1,-1],[-1,0,-1],[-1,-1,-1]] });
+  s._initG();
+  assert.equal(s._propagate(), true);
+  for (const [r, c] of [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]) assert.equal(s.g[r][c], 0);
+});

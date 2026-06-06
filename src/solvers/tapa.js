@@ -53,6 +53,39 @@ class TapaSolver {
     }
   }
 
+  _initG() {
+    // g: 9 unknown, 0 unshaded, 1 shaded. Clue cells fixed 0 (never shaded).
+    this.g = [];
+    for (let r = 0; r < this.rows; r++) { this.g.push([]); for (let c = 0; c < this.cols; c++) this.g[r].push(this.task[r][c] === -1 ? 9 : 0); }
+  }
+
+  // clue-pattern arc-consistency + no-2x2, to a fixpoint. Returns false on contradiction.
+  _propagate() {
+    const { rows, cols } = this;
+    let dirty = true;
+    while (dirty) {
+      dirty = false;
+      for (const cl of this.clues) {
+        const ok = [];
+        for (const m of cl.patterns) {
+          let good = true;
+          for (let a = 0; a < 8; a++) { const [h, n] = cl.nbr[a]; if (!this.shadeable(h, n)) continue; const want = (m >> a) & 1; const cur = this.g[h][n]; if ((cur === 1 && !want) || (cur === 0 && want)) { good = false; break; } }
+          if (good) ok.push(m);
+        }
+        if (!ok.length) return false;
+        for (let a = 0; a < 8; a++) { const [h, n] = cl.nbr[a]; if (!this.shadeable(h, n) || this.g[h][n] !== 9) continue; let all1 = true, all0 = true; for (const m of ok) { if ((m >> a) & 1) all0 = false; else all1 = false; } if (all1) { this.g[h][n] = 1; dirty = true; } else if (all0) { this.g[h][n] = 0; dirty = true; } }
+      }
+      for (let r = 0; r < rows - 1; r++) for (let c = 0; c < cols - 1; c++) {
+        const q = [[r, c], [r, c + 1], [r + 1, c], [r + 1, c + 1]];
+        let sh = 0, unk = 0, unkCell = null;
+        for (const [h, n] of q) { if (this.g[h][n] === 1) sh++; else if (this.g[h][n] === 9) { unk++; unkCell = [h, n]; } }
+        if (sh === 4) return false;
+        if (sh === 3 && unk === 1) { this.g[unkCell[0]][unkCell[1]] = 0; dirty = true; }
+      }
+    }
+    return true;
+  }
+
   // Oracle (ported getErrors) on a complete shaded boolean grid (shaded[r][c] === 1 iff shaded).
   _isValid(shaded) {
     const { rows, cols, task } = this;
