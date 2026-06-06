@@ -523,6 +523,13 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     ctx.fillStyle = '#f59e0b';
     const rad = Math.max(2, Math.floor(cellSize / 7));
     for (const [hr, hc] of holes) { ctx.beginPath(); ctx.arc((hc + 0.5) * cellSize, (hr + 0.5) * cellSize, rad, 0, Math.PI * 2); ctx.fill(); }
+    // × marks for blocked-X borders (=2), at the border midpoint between the two cells, so the
+    // preview mirrors the live board (which keeps the player's / page's ruled-out borders).
+    ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = Math.max(1, Math.floor(cellSize / 12)); ctx.lineCap = 'round';
+    const xs = Math.max(3, Math.floor(cellSize / 5));
+    const cross = (mx, my) => { ctx.beginPath(); ctx.moveTo(mx - xs / 2, my - xs / 2); ctx.lineTo(mx + xs / 2, my + xs / 2); ctx.moveTo(mx + xs / 2, my - xs / 2); ctx.lineTo(mx - xs / 2, my + xs / 2); ctx.stroke(); };
+    for (let r = 0; r < rows; r++) { const row = hg[r] || []; for (let c = 0; c < cols - 1; c++) if (row[c] === 2) cross((c + 1) * cellSize, (r + 0.5) * cellSize); }
+    for (let r = 0; r < rows - 1; r++) { const row = vg[r] || []; for (let c = 0; c < cols; c++) if (row[c] === 2) cross((c + 0.5) * cellSize, (r + 1) * cellSize); }
     ctx.restore();
   } else if (isHashi) {
     // Hashi bridges. Single bridges render as one centered line; double

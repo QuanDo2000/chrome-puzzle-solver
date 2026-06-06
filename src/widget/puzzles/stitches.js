@@ -106,8 +106,10 @@ const stitches = {
   async applyHint(hint, { callMainWorld, puzzleData }) {
     const rows = puzzleData ? puzzleData.rows : 0, cols = puzzleData ? puzzleData.cols : 0;
     const state = await callMainWorld('readStitchesState', [rows, cols]);
-    const H = (state && state.horizontal) ? state.horizontal.map((r) => r.map((v) => (v === 1 ? 1 : 0))) : Array.from({ length: rows }, () => new Array(cols).fill(0));
-    const V = (state && state.vertical) ? state.vertical.map((r) => r.map((v) => (v === 1 ? 1 : 0))) : Array.from({ length: rows }, () => new Array(cols).fill(0));
+    // Keep the raw tri-state (stitch 1 / blocked-X 2) so applying a hint never erases the player's
+    // X-borders; only the hint stitch edges below are added.
+    const H = (state && state.horizontal) ? state.horizontal.map((r) => r.slice()) : Array.from({ length: rows }, () => new Array(cols).fill(0));
+    const V = (state && state.vertical) ? state.vertical.map((r) => r.slice()) : Array.from({ length: rows }, () => new Array(cols).fill(0));
     for (const e of (hint.edges || [])) { if (e.orientation === 'h') { if (H[e.r]) H[e.r][e.c] = 1; } else { if (V[e.r]) V[e.r][e.c] = 1; } }
     const ok = await callMainWorld('applyStitchesState', [{ horizontal: H, vertical: V }]);
     return ok === true;

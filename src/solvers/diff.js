@@ -125,6 +125,23 @@ function _slitherlinkDiff(board, solution) {
   return out;
 }
 
+// Stitches diff: flag only a placed stitch (board value 1) the solution does not have. The
+// blocked-X (2) and unplaced (0) board values are never mistakes.
+function _stitchesDiff(board, solution) {
+  const out = [];
+  if (!board || !solution) return out;
+  const scan = (b, s, orientation) => {
+    const bb = b || [], ss = s || [];
+    for (let r = 0; r < Math.min(bb.length, ss.length); r++) {
+      const br = bb[r] || [], sr = ss[r] || [];
+      for (let c = 0; c < Math.min(br.length, sr.length); c++) if (br[c] === 1 && sr[c] !== 1) out.push({ orientation, r, c });
+    }
+  };
+  scan(board.horizontal, solution.horizontal, 'h');
+  scan(board.vertical, solution.vertical, 'v');
+  return out;
+}
+
 function computePuzzleDiff(type, grid, solution, stars) {
   const out = [];
   // Shingoki and Masyu share slitherlink's {horizontal, vertical} edge shape
@@ -132,7 +149,10 @@ function computePuzzleDiff(type, grid, solution, stars) {
   // but _slitherlinkDiff derives its dims from the array lengths, so the
   // edge-based diff applies verbatim: committed LINE edge disagreeing with the
   // solution; UNKNOWN edges never flagged).
-  if (type === 'slitherlink' || type === 'shingoki' || type === 'masyu' || type === 'stitches') return _slitherlinkDiff(grid, solution);
+  if (type === 'slitherlink' || type === 'shingoki' || type === 'masyu') return _slitherlinkDiff(grid, solution);
+  // Stitches: the board carries a third state, 2 = blocked-X (a ruled-out border, a valid aid —
+  // NOT a mistake). Flag only a placed STITCH (board 1) the solution lacks; ignore 0 and 2.
+  if (type === 'stitches') return _stitchesDiff(grid, solution);
   if (type === 'hashi') {
     // Hashi grids are {islands, edges}, not the 2D / H+V shapes the public
     // signature advertises for the other puzzle types. Cast locally so the

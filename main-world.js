@@ -972,15 +972,17 @@ function applyStitchesState(state) {
     var H = G.currentState.cellHorizontalStatus, V = G.currentState.cellVerticalStatus;
     if (!Array.isArray(H) || !Array.isArray(V)) return false;
     if (typeof G.saveState === 'function') G.saveState(true);
+    // Preserve the player's / page's blocked-X borders (value 2). The Loop writes the whole board
+    // back each step, so mapping 2 -> 0 here would erase those X-borders on every step.
     for (var r = 0; r < H.length && r < state.horizontal.length; r++) {
       var dst = H[r], src = state.horizontal[r] || [];
       if (!Array.isArray(dst)) continue;
-      for (var c = 0; c < dst.length && c < src.length; c++) dst[c] = src[c] === 1 ? 1 : 0;
+      for (var c = 0; c < dst.length && c < src.length; c++) dst[c] = src[c] === 1 ? 1 : src[c] === 2 ? 2 : 0;
     }
     for (var r2 = 0; r2 < V.length && r2 < state.vertical.length; r2++) {
       var dst2 = V[r2], src2 = state.vertical[r2] || [];
       if (!Array.isArray(dst2)) continue;
-      for (var c2 = 0; c2 < dst2.length && c2 < src2.length; c2++) dst2[c2] = src2[c2] === 1 ? 1 : 0;
+      for (var c2 = 0; c2 < dst2.length && c2 < src2.length; c2++) dst2[c2] = src2[c2] === 1 ? 1 : src2[c2] === 2 ? 2 : 0;
     }
     G.currentState.solved = false; G.solved = false;
     if (typeof G.drawCurrentState === 'function') G.drawCurrentState();

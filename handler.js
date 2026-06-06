@@ -845,16 +845,15 @@ const stitchesHandler = {
     };
   },
 
-  // Normalize tri-state -> 1/0 (drop the player's blocked-X) so the edge diff /
-  // loopDoneCheck / firstMismatch see only placed stitches. The hint reads the raw
-  // state separately (readStitchesState) for _deduceForced.
+  // Return the RAW tri-state board (0 none / 1 stitch / 2 blocked-X), like masyu/slitherlink.
+  // The Loop writes this grid straight back (applySolution), so it MUST preserve the player's /
+  // page's X-borders — normalizing them to 0 here erases them on every Loop step. The stitches
+  // edge-diff (diff.js) flags only wrong placed stitches and ignores the X-borders; loopDoneCheck
+  // / firstMismatch already test ===1 only, so the raw 2s never false-trigger.
   async readState(ctx) {
     const state = await callMainWorld('readStitchesState', [ctx.rows, ctx.cols]);
     if (!state) return { horizontal: [], vertical: [] };
-    return {
-      horizontal: (state.horizontal || []).map((r) => r.map((v) => (v === 1 ? 1 : 0))),
-      vertical: (state.vertical || []).map((r) => r.map((v) => (v === 1 ? 1 : 0))),
-    };
+    return { horizontal: state.horizontal || [], vertical: state.vertical || [] };
   },
 
   async applySolution(solution, _ctx) {

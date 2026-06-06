@@ -135,11 +135,14 @@ test('Stitches _deduceForced: returns [] on a contradictory live board', () => {
   assert.deepEqual(forced, []);
 });
 
-test('Stitches diff: a board stitch absent from the solution is flagged; UNKNOWN never', () => {
+test('Stitches diff: only wrong placed stitches are flagged; UNKNOWN(0) and blocked-X(2) never', () => {
   const { computePuzzleDiff } = require('../src/solvers/diff.js');
   const solution = { horizontal: [[1, 0]], vertical: [[0, 0]] };
   const board = { horizontal: [[0, 1]], vertical: [[0, 0]] }; // stitch at (0,1) not in solution
   const d = computePuzzleDiff('stitches', board, solution);
   assert.ok(d.some((m) => m.orientation === 'h' && m.r === 0 && m.c === 1));
+  // correct stitch -> no flag; UNKNOWN never flagged
   assert.equal(computePuzzleDiff('stitches', { horizontal: [[1, 0]], vertical: [[0, 0]] }, solution).length, 0);
+  // a blocked-X (2) on a non-solution border is a valid aid, NOT a mistake -> never flagged
+  assert.equal(computePuzzleDiff('stitches', { horizontal: [[1, 2]], vertical: [[0, 0]] }, solution).length, 0);
 });
