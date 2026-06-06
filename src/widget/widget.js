@@ -522,6 +522,10 @@ function makeWidget() {
         applyPartialResult(result);
         return;
       }
+      if (result?.partial && puzzleData?.type === 'tapa' && Array.isArray(result.grid)) {
+        applyPartialResult(result);
+        return;
+      }
       // Generic cell-state partial: any puzzle whose solver emits { partial:true,
       // cells:[...] } (lightup, shakashaka, slant, starbattle, ...) and declares a
       // partialResultArm hook routes through that hook's preview UI. Edge puzzles
