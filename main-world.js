@@ -929,6 +929,70 @@ function applyMasyuState(state) {
   } catch (e) { return false; }
 }
 
+function readStitchesData() {
+  try {
+    var G = window.Game;
+    if (!G || !Array.isArray(G.task) || !Array.isArray(G.areas) || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth;
+    var areas = [];
+    for (var r = 0; r < rows; r++) areas.push((G.areas[r] || []).slice());
+    var colClue = [], rowClue = [];
+    for (var c = 0; c < cols; c++) colClue.push(parseInt(G.task[c], 10) || 0);
+    for (var rr = 0; rr < rows; rr++) rowClue.push(parseInt(G.task[cols + rr], 10) || 0);
+    var K = null;
+    var pm = (location.pathname || '').match(/\d+x\d+-(\d+)/);
+    if (pm) K = parseInt(pm[1], 10);
+    if (!K) { var tm = (document.body.innerText || '').match(/\/\s*(\d+)/); if (tm) K = parseInt(tm[1], 10); }
+    if (!K) return null;
+    return { rows: rows, cols: cols, areas: areas, colClue: colClue, rowClue: rowClue, stitches: K };
+  } catch (e) { return null; }
+}
+
+function readStitchesState(rows, cols) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState) return null;
+    var H = G.currentState.cellHorizontalStatus, V = G.currentState.cellVerticalStatus;
+    if (!Array.isArray(H) || !Array.isArray(V)) return null;
+    var horizontal = [], vertical = [];
+    for (var r = 0; r < rows; r++) {
+      var hr = H[r] || [], vr = V[r] || [], orow = [], orow2 = [];
+      for (var c = 0; c < cols; c++) { orow.push(hr[c] === 1 ? 1 : hr[c] === 2 ? 2 : 0); orow2.push(vr[c] === 1 ? 1 : vr[c] === 2 ? 2 : 0); }
+      horizontal.push(orow); vertical.push(orow2);
+    }
+    return { horizontal: horizontal, vertical: vertical };
+  } catch (e) { return null; }
+}
+
+function applyStitchesState(state) {
+  try {
+    var G = window.Game;
+    if (!state || !state.horizontal || !state.vertical) return false;
+    if (!(G && G.currentState)) return false;
+    var H = G.currentState.cellHorizontalStatus, V = G.currentState.cellVerticalStatus;
+    if (!Array.isArray(H) || !Array.isArray(V)) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    for (var r = 0; r < H.length && r < state.horizontal.length; r++) {
+      var dst = H[r], src = state.horizontal[r] || [];
+      if (!Array.isArray(dst)) continue;
+      for (var c = 0; c < dst.length && c < src.length; c++) dst[c] = src[c] === 1 ? 1 : 0;
+    }
+    for (var r2 = 0; r2 < V.length && r2 < state.vertical.length; r2++) {
+      var dst2 = V[r2], src2 = state.vertical[r2] || [];
+      if (!Array.isArray(dst2)) continue;
+      for (var c2 = 0; c2 < dst2.length && c2 < src2.length; c2++) dst2[c2] = src2[c2] === 1 ? 1 : 0;
+    }
+    G.currentState.solved = false; G.solved = false;
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    else if (typeof G.render === 'function') G.render();
+    else if (typeof G.redraw === 'function') G.redraw();
+    else if (typeof G.redrawGrid === 'function') G.redrawGrid();
+    else if (typeof G.draw === 'function') G.draw();
+    else if (G.getSaved && G.loadGame) { var saved = G.getSaved(); if (saved) G.loadGame(saved); }
+    return true;
+  } catch (e) { return false; }
+}
+
 function readShakashakaData() {
   try {
     var G = window.Game;
@@ -2416,6 +2480,16 @@ function dumpPuzzleForBench() {
         mTask.push(mArr);
       }
       return { type: 'masyu', rows: height, cols: width, task: mTask, path: path };
+    }
+
+    if (path.indexOf('/stitches/') !== -1) {
+      if (!Array.isArray(g.task) || !Array.isArray(g.areas)) return { error: 'stitches: g.task/g.areas missing', diagnostic: diagnostic(g), path: path };
+      var stAreas = []; for (var sr = 0; sr < height; sr++) stAreas.push((g.areas[sr] || []).slice());
+      var stCol = [], stRow = [];
+      for (var sc = 0; sc < width; sc++) stCol.push(parseInt(g.task[sc], 10) || 0);
+      for (var srr = 0; srr < height; srr++) stRow.push(parseInt(g.task[width + srr], 10) || 0);
+      var stK = null, spm = (path || '').match(/\d+x\d+-(\d+)/); if (spm) stK = parseInt(spm[1], 10);
+      return { type: 'stitches', rows: height, cols: width, areas: stAreas, colClue: stCol, rowClue: stRow, stitches: stK, path: path };
     }
 
     if (path.indexOf('/nurikabe/') !== -1 || g.slug === 'nurikabe') {
