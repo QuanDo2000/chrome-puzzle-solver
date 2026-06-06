@@ -1295,6 +1295,39 @@ const nurikabeHandler = {
 
 registerHandler(nurikabeHandler);
 
+// ── Tapa handler (puzzles-mobile.com/tapa/) ───────────────────
+
+const tapaHandler = {
+  name: 'puzzles-mobile-tapa',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() && window.location.pathname.includes('/tapa/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readTapaData', []);
+    if (!data) return { ...result, error: 'No Tapa task data found' };
+    const stageEl = document.getElementById('stage') || document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return { found: true, type: 'tapa', rows: data.rows, cols: data.cols, task: data.task, rowClues: [], colClues: [], _cells: [], _element: stageEl };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readTapaState', [ctx.rows, ctx.cols]);
+    if (state) return state; // RAW cellStatus 0/1/2 (no normalization — like nurikabe)
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyTapaState', [solution]);
+    return ok ? { success: true } : { success: false, error: 'Tapa apply failed' };
+  },
+};
+
+registerHandler(tapaHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
