@@ -91,10 +91,42 @@ class TapaSolver {
   // emit in the Nurikabe value-space: 0 unknown, 1 shaded, 2 not-shaded (clue cells -> 2).
   _emit() { const out = []; for (let r = 0; r < this.rows; r++) { out.push([]); for (let c = 0; c < this.cols; c++) { if (this.task[r][c] !== -1) { out[r].push(2); continue; } const v = this.g[r][c]; out[r].push(v === 9 ? 0 : v === 1 ? 1 : 2); } } return out; }
 
-  _pick() { for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.task[r][c] === -1 && this.g[r][c] === 9) return [r, c]; return null; }
+  // Connectivity-feasibility prune: every definitely-shaded (1) cell must still be reachable from
+  // the others through {shaded ∪ unknown} cells. A definitely-unshaded (0) cell can never become
+  // shaded, so if it splits the shaded region into >1 component the branch can never satisfy the
+  // single-group rule — prune it. This is THE lever on large boards (connectivity is the bottleneck).
+  _connectFeasible() {
+    const { rows, cols } = this, g = this.g;
+    let first = -1, nsh = 0;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (g[r][c] === 1) { if (first < 0) first = r * cols + c; nsh++; }
+    if (nsh <= 1) return true;
+    const seen = new Uint8Array(rows * cols), st = [first]; seen[first] = 1; let reach = 0;
+    while (st.length) {
+      const id = st.pop(), r = (id / cols) | 0, c = id % cols;
+      if (g[r][c] === 1) reach++;
+      for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const h = r + dr, n = c + dc; if (h < 0 || n < 0 || h >= rows || n >= cols) continue; const nid = h * cols + n; if (seen[nid]) continue; const gv = g[h][n]; if (gv === 1 || gv === 9) { seen[nid] = 1; st.push(nid); } }
+    }
+    return reach === nsh;
+  }
+
+  // Branch on the most-constrained clue (fewest surviving valid patterns >1) that still has an
+  // undecided neighbour — its first undecided neighbour. Falls back to the first undecided cell.
+  _pick() {
+    let best = null, bestN = Infinity;
+    for (const cl of this.clues) {
+      let cnt = 0, hasUnk = false;
+      for (const m of cl.patterns) { let ok = true; for (let a = 0; a < 8; a++) { const [h, n] = cl.nbr[a]; if (!this.shadeable(h, n)) continue; const want = (m >> a) & 1, cur = this.g[h][n]; if ((cur === 1 && !want) || (cur === 0 && want)) { ok = false; break; } } if (ok) cnt++; }
+      for (let a = 0; a < 8; a++) { const [h, n] = cl.nbr[a]; if (this.shadeable(h, n) && this.g[h][n] === 9) { hasUnk = true; break; } }
+      if (hasUnk && cnt > 1 && cnt < bestN) { bestN = cnt; best = cl; }
+    }
+    if (best) { for (let a = 0; a < 8; a++) { const [h, n] = best.nbr[a]; if (this.shadeable(h, n) && this.g[h][n] === 9) return [h, n]; } }
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.task[r][c] === -1 && this.g[r][c] === 9) return [r, c];
+    return null;
+  }
 
   _search(countAll) {
     if (Date.now() > this._deadline) { this._timedOut = true; return true; }
+    if (!this._connectFeasible()) return false;
     const cell = this._pick();
     if (!cell) { const sh = this._shadedFromG(); if (this._isValid(sh)) { this._count++; if (!this._first) this._first = this.g.map((row) => row.slice()); if (!countAll) return true; if (this._count >= 2) return true; } return false; }
     const [r, c] = cell;
