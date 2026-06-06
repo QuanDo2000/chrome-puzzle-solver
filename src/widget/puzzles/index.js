@@ -16,6 +16,7 @@ if (typeof mosaic !== 'undefined') PUZZLES[mosaic.type] = mosaic;
 if (typeof norinori !== 'undefined') PUZZLES[norinori.type] = norinori;
 if (typeof nurikabe !== 'undefined') PUZZLES[nurikabe.type] = nurikabe;
 if (typeof tapa !== 'undefined') PUZZLES[tapa.type] = tapa;
+if (typeof tents !== 'undefined') PUZZLES[tents.type] = tents;
 if (typeof heyawake !== 'undefined') PUZZLES[heyawake.type] = heyawake;
 if (typeof yinyang !== 'undefined') PUZZLES[yinyang.type] = yinyang;
 if (typeof aquarium !== 'undefined') PUZZLES[aquarium.type] = aquarium;

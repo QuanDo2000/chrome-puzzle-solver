@@ -70,6 +70,7 @@ const shingoki    = require('../src/widget/puzzles/shingoki.js');
 const masyu       = require('../src/widget/puzzles/masyu.js');
 const stitches    = require('../src/widget/puzzles/stitches.js');
 const tapa        = require('../src/widget/puzzles/tapa.js');
+const tents       = require('../src/widget/puzzles/tents.js');
 const slitherlink = require('../src/widget/puzzles/slitherlink.js');
 const yinyang     = require('../src/widget/puzzles/yinyang.js');
 
@@ -1022,4 +1023,26 @@ test('tapa: hintDispatch falls back to cached-solution cells when deduction stal
   // a board already matching the solution yields no fallback cells
   const done = tapa.hintDispatch({ ...ctx, grid: [[1, 2], [2, 1]] });
   assert.equal(done.success, false);
+});
+
+test('tents: solutionFromResult unwraps the grid; hasAbsoluteHintCells + renderEmptyCells set', () => {
+  assert.deepEqual(tents.solutionFromResult({ solved: true, grid: [[1, 2], [0, 1]] }), [[1, 2], [0, 1]]);
+  assert.equal(tents.solutionFromResult({ solved: false }), null);
+  assert.equal(tents.hasAbsoluteHintCells, true);
+  assert.equal(tents.renderEmptyCells, true);
+  assert.equal(tents.type, 'tents');
+});
+
+test('tents: hintDispatch falls back to cached-solution cells when deduction stalls', () => {
+  const ctx = {
+    grid: [[0, 0, 0]],
+    solution: [[0, 1, 2]], // tree col0 -> 0; col1 tent; col2 grass
+    rows: 1, cols: 3,
+    detectedGrid: { trees: [[1, 0, 0]], colClue: [0, 1, 0], rowClue: [1] },
+    firstMismatch: () => null,
+  };
+  const res = tents.hintDispatch(ctx);
+  assert.equal(res.success, true);
+  assert.ok(res.hint.extraCells.length > 0);
+  assert.ok(res.hint.extraCells.every((c) => c.value === 1 || c.value === 2));
 });
