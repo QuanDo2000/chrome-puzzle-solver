@@ -32,6 +32,7 @@ declare const ShakashakaSolver: any;
 declare const LightUpSolver: any;
 declare const SlantSolver: any;
 declare const StarBattleSolver: any;
+declare const StitchesSolver: any;
 
 // JSDoc typedefs referenced by per-puzzle solver files in src/solvers/.
 // The originals lived as JSDoc @typedef in the old monolithic solver.js
@@ -107,6 +108,9 @@ type MainWorldFn =
   | 'readStarBattleData'
   | 'readStarBattleState'
   | 'applyStarBattleState'
+  | 'readStitchesData'
+  | 'readStitchesState'
+  | 'applyStitchesState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';

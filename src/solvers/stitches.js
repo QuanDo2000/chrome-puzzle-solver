@@ -162,6 +162,29 @@ class StitchesSolver {
     if (this._timedOut) return { solved: false, partial: true, horizontal: root.horizontal, vertical: root.vertical };
     return { solved: false, error: 'No solution found' };
   }
+
+  // Hint engine: seed from the live board (h/v tri-state 1=stitch, 2=blocked-X, 0=unknown),
+  // propagate, and return newly-forced STITCH edges as { type:'horizontal'|'vertical', r, c, value:1 }.
+  // Returns [] if the live board is contradictory (caller falls back to the cached solution).
+  _deduceForced(curH, curV) {
+    this._initState();
+    for (let i = 0; i < this.edges.length; i++) {
+      const e = this.edges[i];
+      const live = e.type === 'h' ? ((curH[e.r] || [])[e.c]) : ((curV[e.r] || [])[e.c]);
+      if (live === 1) { if (!this._set(i, 1)) return []; }
+      else if (live === 2) { if (!this._set(i, 0)) return []; }
+    }
+    this._deadline = Date.now() + (this.maxMs || 1500);
+    if (!this._propagate()) return [];
+    const forced = [];
+    for (let i = 0; i < this.edges.length; i++) {
+      if (this.st[i] !== 1) continue;
+      const e = this.edges[i];
+      const live = e.type === 'h' ? ((curH[e.r] || [])[e.c]) : ((curV[e.r] || [])[e.c]);
+      if (live !== 1) forced.push({ type: e.type === 'h' ? 'horizontal' : 'vertical', r: e.r, c: e.c, value: 1 });
+    }
+    return forced;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

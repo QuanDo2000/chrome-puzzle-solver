@@ -120,3 +120,17 @@ test('Stitches soundness gate: solver matches brute-force across random tiny boa
   }
   assert.ok(tested >= 200, `gate exercised too few boards (${tested})`);
 });
+
+test('Stitches _deduceForced: forces a region pair whose only candidate edges == K', () => {
+  // 1x2 regions [0,1] K=1: empty live board -> the single edge is forced selected.
+  const s = new StitchesSolver({ rows: 1, cols: 2, areas: [[0, 1]], colClue: [1, 1], rowClue: [2], stitches: 1, maxMs: 1000 });
+  const H = [[0, 0]], V = [[0, 0]];
+  const forced = s._deduceForced(H, V);
+  assert.ok(forced.some((f) => f.type === 'horizontal' && f.r === 0 && f.c === 0 && f.value === 1));
+});
+
+test('Stitches _deduceForced: returns [] on a contradictory live board', () => {
+  const s = new StitchesSolver({ rows: 1, cols: 3, areas: [[0, 1, 2]], colClue: [1, 0, 1], rowClue: [2], stitches: 1, maxMs: 1000 });
+  const forced = s._deduceForced([[1, 1, 0]], [[0, 0, 0]]); // cell (0,1) degree 2
+  assert.deepEqual(forced, []);
+});
