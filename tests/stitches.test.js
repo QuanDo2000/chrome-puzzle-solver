@@ -57,3 +57,66 @@ test('Stitches propagation: a zero row-clue rejects edges in that row, leaving t
   assert.equal(s.st[eH01], 0); // rejected (row-0 clue is 0)
   assert.equal(s.st[eH11], 1); // forced (pair 0-1 still needs its one stitch)
 });
+
+const REAL = {
+  rows: 15, cols: 15, stitches: 3,
+  task: ["1","5","6","8","10","9","5","10","4","4","8","6","1","7","0","2","4","6","7","9","4","10","7","6","8","6","3","7","4","1"].map(Number),
+  areas: [[0,0,0,0,1,1,1,1,1,1,1,1,1,1,1],[0,0,0,0,1,0,1,1,1,1,1,1,1,1,1],[0,0,0,0,0,0,2,1,2,1,3,3,1,1,1],[0,0,4,0,0,2,2,1,2,1,1,3,3,3,1],[4,0,4,2,0,2,2,2,2,2,1,1,3,3,1],[4,0,4,2,2,2,4,4,3,2,2,3,3,3,3],[4,0,4,2,2,2,4,4,3,2,2,3,3,3,3],[4,4,4,4,4,4,4,4,3,3,3,3,5,3,5],[4,4,4,6,5,4,5,3,3,5,5,3,5,5,5],[6,6,4,6,5,4,5,3,3,3,5,3,3,5,5],[6,6,4,6,5,5,5,5,5,5,5,5,5,5,5],[6,6,6,6,5,5,6,6,7,5,7,7,5,7,5],[6,6,6,6,5,5,6,6,7,5,7,5,5,7,5],[6,6,6,6,5,5,6,7,7,7,7,7,5,7,7],[6,6,6,6,6,6,6,6,6,6,7,7,7,7,7]],
+};
+function mkReal(maxMs = 30000) {
+  return new StitchesSolver({ rows: REAL.rows, cols: REAL.cols, areas: REAL.areas, colClue: REAL.task.slice(0, 15), rowClue: REAL.task.slice(15), stitches: REAL.stitches, maxMs });
+}
+
+test('Stitches solve: the real 15x15-3 board solves to a valid, oracle-passing board', () => {
+  const s = mkReal();
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.equal(r.partial, undefined);
+  assert.ok(s._isValid({ horizontal: r.horizontal, vertical: r.vertical }));
+  // 14 region-pairs x 3 = 42 stitches
+  let n = 0; for (const row of r.horizontal) for (const v of row) if (v === 1) n++; for (const row of r.vertical) for (const v of row) if (v === 1) n++;
+  assert.equal(n, 42);
+});
+
+// Brute-force differential soundness gate (no page oracle exists).
+function rng(seed) { let x = seed >>> 0; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; }
+
+test('Stitches soundness gate: solver matches brute-force across random tiny boards', () => {
+  let tested = 0;
+  for (let iter = 0; iter < 1500 && tested < 400; iter++) {
+    const rnd = rng(iter * 2654435761 + 12345);
+    const rows = 2 + Math.floor(rnd() * 2), cols = 2 + Math.floor(rnd() * 2);
+    const nreg = 2 + Math.floor(rnd() * 2), K = 1 + Math.floor(rnd() * 2);
+    const areas = []; for (let r = 0; r < rows; r++) { areas.push([]); for (let c = 0; c < cols; c++) areas[r].push(Math.floor(rnd() * nreg)); }
+    const probe = new StitchesSolver({ rows, cols, areas, colClue: new Array(cols).fill(0), rowClue: new Array(rows).fill(0), stitches: K });
+    const E = probe.edges; if (!E.length || E.length > 16) continue;
+    // structurally-valid configs (region==K, degree<=1)
+    const pairs = [...probe.pairEdges.keys()];
+    const structural = [];
+    for (let mask = 0; mask < (1 << E.length); mask++) {
+      const pc = new Map(pairs.map((p) => [p, 0])); const deg = new Int32Array(rows * cols); let ok = true;
+      for (let i = 0; i < E.length; i++) if (mask & (1 << i)) { pc.set(E[i].pair, pc.get(E[i].pair) + 1); for (const cid of E[i].cells) if (++deg[cid] > 1) ok = false; }
+      if (!ok) continue; let allK = true; for (const [, v] of pc) if (v !== K) { allK = false; break; }
+      if (allK) structural.push(mask);
+    }
+    if (!structural.length) continue;
+    // derive clues from a random structurally-valid config
+    const C = structural[Math.floor(rnd() * structural.length)]; const deg = new Int32Array(rows * cols);
+    for (let i = 0; i < E.length; i++) if (C & (1 << i)) for (const cid of E[i].cells) deg[cid]++;
+    const rowClue = new Array(rows).fill(0), colClue = new Array(cols).fill(0);
+    for (let i = 0; i < deg.length; i++) if (deg[i] === 1) { rowClue[Math.floor(i / cols)]++; colClue[i % cols]++; }
+    // brute solutions
+    const toSol = (mask) => { const H = Array.from({ length: rows }, () => new Array(cols).fill(0)), V = Array.from({ length: rows }, () => new Array(cols).fill(0)); for (let i = 0; i < E.length; i++) if (mask & (1 << i)) { const e = E[i]; if (e.type === 'h') H[e.r][e.c] = 1; else V[e.r][e.c] = 1; } return { horizontal: H, vertical: V }; };
+    const oracleS = new StitchesSolver({ rows, cols, areas, colClue, rowClue, stitches: K });
+    let brute = 0; for (let mask = 0; mask < (1 << E.length); mask++) if (oracleS._isValid(toSol(mask))) brute++;
+    tested++;
+    const solver = new StitchesSolver({ rows, cols, areas, colClue, rowClue, stitches: K, maxMs: 5000 });
+    const res = solver.solve(true); // countAll for uniqueness
+    assert.equal(!!res.solved, brute > 0, `solved-mismatch areas=${JSON.stringify(areas)} K=${K}`);
+    if (res.solved) {
+      assert.ok(solver._isValid({ horizontal: res.horizontal, vertical: res.vertical }), 'oracle rejects own solution');
+      assert.equal(res.count === 1, brute === 1, `uniqueness areas=${JSON.stringify(areas)} K=${K} brute=${brute} count=${res.count}`);
+    }
+  }
+  assert.ok(tested >= 200, `gate exercised too few boards (${tested})`);
+});

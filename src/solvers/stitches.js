@@ -113,6 +113,55 @@ class StitchesSolver {
     for (let c = 0; c < cols; c++) if (cc[c] !== colClue[c]) return false;
     return true;
   }
+
+  _snapshot() { return this.st.slice(); }
+  _restore(s) { this.st = s; }
+
+  // tightest region-pair still needing stitches -> its first undecided edge
+  _pick() {
+    let best = -1, bestU = Infinity;
+    for (const [, ids] of this.pairEdges) {
+      let s = 0, u = 0; for (const id of ids) { if (this.st[id] === 1) s++; else if (this.st[id] === -1) u++; }
+      if (s < this.K && u && u < bestU) { bestU = u; best = ids.find((id) => this.st[id] === -1); }
+    }
+    return best;
+  }
+
+  _toGrids() {
+    const H = Array.from({ length: this.rows }, () => new Array(this.cols).fill(0));
+    const V = Array.from({ length: this.rows }, () => new Array(this.cols).fill(0));
+    for (let i = 0; i < this.edges.length; i++) if (this.st[i] === 1) { const e = this.edges[i]; if (e.type === 'h') H[e.r][e.c] = 1; else V[e.r][e.c] = 1; }
+    return { horizontal: H, vertical: V };
+  }
+
+  _search(countAll) {
+    if (Date.now() > this._deadline) { this._timedOut = true; return true; }
+    const e = this._pick();
+    if (e === -1) {
+      const g = this._toGrids();
+      if (this._isValid(g)) { this._count++; if (!this._first) this._first = g; if (!countAll) return true; if (this._count >= 2) return true; }
+      return false;
+    }
+    for (const val of [1, 0]) {
+      const snap = this._snapshot();
+      if (this._set(e, val) && this._propagate()) { if (this._search(countAll)) { if (!countAll || this._count >= 2 || this._timedOut) return true; } }
+      this._restore(snap);
+    }
+    return false;
+  }
+
+  solve(countAll = false) {
+    this._initState();
+    this._deadline = Date.now() + this.maxMs; this._timedOut = false; this._count = 0; this._first = null;
+    // infeasible if any adjacent pair has fewer than K candidate edges
+    for (const [, ids] of this.pairEdges) if (ids.length < this.K) return { solved: false, error: 'No solution (a region pair has < K borders)' };
+    if (!this._propagate()) return { solved: false, error: 'No solution (contradiction in givens)' };
+    const root = this._toGrids();
+    this._search(countAll);
+    if (this._first) return { solved: true, horizontal: this._first.horizontal, vertical: this._first.vertical, count: this._count };
+    if (this._timedOut) return { solved: false, partial: true, horizontal: root.horizontal, vertical: root.vertical };
+    return { solved: false, error: 'No solution found' };
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
