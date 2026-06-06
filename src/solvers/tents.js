@@ -129,6 +129,30 @@ class TentsSolver {
     if (total !== this.T) return false;
     return this._maxMatch((r, c) => tent[r][c] === 1) === this.T; // perfect matching trees <-> tents
   }
+
+  // Hint engine. initialState = live cellStatus (0 unknown / 1 tent / 2 grass). Tree cells are 0 in
+  // cellStatus (untracked) — _initG fixes them 0 (never tent) so deduction can't target them and
+  // Loop never stalls on them ([[project_clue_cells_not_in_cellstatus]]). Returns newly-forced
+  // non-tree cells as { row, col, value(1 tent / 2 grass) }.
+  getHint(initialState) {
+    this._initG();
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (!this.trees[r][c]) {
+      const v = initialState[r] ? initialState[r][c] : 0;
+      if (v === 1) { if (!this._set(r, c, 1)) return []; }
+      else if (v === 2) { if (!this._set(r, c, 2)) return []; }
+    }
+    this._deadline = Date.now() + (this.maxMs || 1500);
+    if (!this._propagate()) return [];
+    const out = [];
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (this.trees[r][c]) continue;
+      const was = initialState[r] ? initialState[r][c] : 0;
+      if (was !== 0) continue;
+      if (this.g[r][c] === 1) out.push({ row: r, col: c, value: 1 });
+      else if (this.g[r][c] === 2) out.push({ row: r, col: c, value: 2 });
+    }
+    return out;
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

@@ -34,6 +34,7 @@ declare const SlantSolver: any;
 declare const StarBattleSolver: any;
 declare const StitchesSolver: any;
 declare const TapaSolver: any;
+declare const TentsSolver: any;
 
 // JSDoc typedefs referenced by per-puzzle solver files in src/solvers/.
 // The originals lived as JSDoc @typedef in the old monolithic solver.js
@@ -115,6 +116,9 @@ type MainWorldFn =
   | 'readTapaData'
   | 'readTapaState'
   | 'applyTapaState'
+  | 'readTentsData'
+  | 'readTentsState'
+  | 'applyTentsState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';

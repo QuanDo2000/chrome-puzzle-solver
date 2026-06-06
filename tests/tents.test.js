@@ -67,6 +67,14 @@ test('Tents solve: the real 15x15-hard board solves to a valid, oracle-passing b
   assert.equal(tent.flat().filter((x) => x).length, 45); // 45 tents = 45 trees
 });
 
+test('Tents getHint: re-asserts trees not-tent and returns forced cells', () => {
+  // 1x3, tree at col0, colClue [0,1,0], rowClue [1]: from blank, getHint forces (0,1) tent + (0,2) grass.
+  const s = new TentsSolver({ rows: 1, cols: 3, trees: [[1,0,0]], colClue: [0,1,0], rowClue: [1], maxMs: 1000 });
+  const forced = s.getHint([[0, 0, 0]]); // page cellStatus: tree cell (0,0) is 0 (untracked)
+  assert.ok(forced.some((f) => f.row === 0 && f.col === 1 && f.value === 1)); // tent
+  assert.ok(forced.every((f) => f.value === 1 || f.value === 2));
+});
+
 function rng(seed) { let x = seed >>> 0; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; }
 
 test('Tents soundness gate: solver matches brute-force across random tiny boards', () => {

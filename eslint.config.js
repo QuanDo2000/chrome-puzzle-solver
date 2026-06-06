@@ -73,6 +73,7 @@ const solverClasses = {
   StarBattleSolver: 'readonly',
   StitchesSolver: 'readonly',
   TapaSolver: 'readonly',
+  TentsSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js
@@ -341,6 +342,7 @@ module.exports = [
         starbattle: 'readonly',
         stitches: 'readonly',
         tapa: 'readonly',
+        tents: 'readonly',
         // src/widget/state.js — widget storage prefs.
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
