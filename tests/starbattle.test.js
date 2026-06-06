@@ -99,6 +99,16 @@ test('StarBattle solve: the quad board solves to a valid board', () => {
   assert.ok(new StarBattleSolver({ rows: 4, cols: 4, stars: 1, areas: QUAD })._isValid(res.cells));
 });
 
+test('StarBattle widget solutionFromResult: star->1, no-star->X(2), UNK->empty(0)', () => {
+  // Empty/UNK cells must render EMPTY in the preview — only decided no-stars become an X marker.
+  const mod = require('../src/widget/puzzles/starbattle.js');
+  // full solve (solver cells {0 no-star, 1 star}) -> {1 star, 2 X}
+  assert.deepEqual(mod.solutionFromResult({ cells: [[1, 0], [0, 1]] }), [[1, 2], [2, 1]]);
+  // partial: UNK (9) stays empty (0), never X; decided no-star (0) -> X (2)
+  assert.deepEqual(mod.solutionFromResult({ cells: [[1, 9], [0, 9]] }), [[1, 0], [2, 0]]);
+  assert.equal(mod.solutionFromResult(null), null);
+});
+
 test('StarBattle constructor: empty walls/areas ([]) are treated as "none", not indexed', () => {
   // The page (and the bench dump) pass walls:[] on shaped boards. An un-normalized []
   // is truthy, so _initGrid/_isValid would index walls[r] (undefined) and throw, stranding

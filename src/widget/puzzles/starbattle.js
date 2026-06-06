@@ -4,19 +4,23 @@ const { hashFNV1a } = require('../shared.js');
 
 // Star Battle widget module — detect / solve / hint / loop / preview hooks.
 //
-// CELL MODEL: per-cell board-state grid; each cell is 1 = star or 0 = no-star (UNK=9 in solver
-// partials). The solver returns { solved, cells, partial?, error? }; solutionFromResult returns the
-// bare 2-D cells array so the preview cell-loop, the default per-cell mistake-diff, undo/redo and the
-// cache share one shape. The handler's readState returns a normalized 0/1 board (star=1, else 0);
-// region borders come from puzzleData.regionMap (the shaped areas) via the existing preview infra.
-//
 // HINT (deductive): hintDispatch reads the raw cellStatus (1 star, 2 X, 0 unknown), runs
 // StarBattleSolver._deduceForced, reports newly-forced cells (stars AND no-stars), batch-capped;
 // falls back to revealing the next cached-solution stars.
 //
-// TWO VALUE-SPACES (don't conflate): the board/solution grid is {0 no-star, 1 star} (used by
-// solutionFromResult, loopDoneCheck, firstMismatch, the per-cell diff); the hint extraCells AND the
-// cellStatus apply path are {1 star, 2 no-star/X} (used by _deduceForced and applyStarBattleState).
+// VALUE-SPACES (don't conflate):
+//   * solver cells (StarBattleSolver): 1 star, 0 no-star, 9 UNK (partials only).
+//   * preview / solution / apply space: 0 empty, 1 star, 2 X (no-star marker), 9 UNK (= empty).
+//     solutionFromResult converts solver -> this space (no-star 0 -> X 2; UNK 9 -> empty 0), so a full
+//     Solve previews and applies stars PLUS an X on every no-star, while an untouched board or the
+//     undecided part of a partial stays blank. drawPreviewCell paints 1 -> star, 2 -> X, else nothing;
+//     applyStarBattleState writes 1 -> cellStatus 1, 2 -> cellStatus 2, and skips 0/9. EMPTY CELLS
+//     MUST RENDER EMPTY — never draw an X for value 0.
+//   * handler.readState returns a normalized {0 not-star, 1 star} board (X reads as 0), so the default
+//     per-cell mistake-diff / firstMismatch (guarded by grid !== 0) flag only wrongly-placed stars.
+//   * hint extraCells / _deduceForced: {1 star, 2 no-star}; applyHint writes only those (rest 9).
+// loopDoneCheck and the hint fallback test === 1 (stars) only, so the no-star 0-vs-2 distinction is
+// moot there. Region borders come from puzzleData.regionMap (the shaped areas) via the preview infra.
 
 function hintBatchCap(rows, cols) { return Math.max(4, Math.ceil((rows * cols) / 30)); }
 
@@ -65,11 +69,12 @@ const starbattle = {
     ctx.restore();
   },
 
-  // Dynamic per-cell render: a star glyph for value 1, an X for a decided no-star (0).
-  // value 9 (UNK, partials only) draws nothing.
+  // Dynamic per-cell render (value-space 0 empty / 1 star / 2 X / 9 UNK): a star glyph for 1, an X for
+  // an explicit no-star marker (2). Empty (0) and UNK (9) draw NOTHING — an untouched or partly-deduced
+  // board stays blank; only solved/marked cells get a glyph.
   drawPreviewCell(ctx, { v, x, y, cellSize }) {
     if (v === 1) _drawStar(ctx, x, y, cellSize, '#f59e0b');
-    else if (v === 0) _drawCross(ctx, x, y, cellSize, 'rgba(120, 124, 130, 0.65)');
+    else if (v === 2) _drawCross(ctx, x, y, cellSize, 'rgba(120, 124, 130, 0.65)');
   },
 
   drawHintCell(ctx, { cell, cx, cy, cellSize }) {
@@ -92,7 +97,13 @@ const starbattle = {
   },
 
   solveExtraData(data) { return { rows: data.rows, cols: data.cols, stars: data.stars, areas: data.areas, walls: data.walls }; },
-  solutionFromResult(result) { return result && result.cells ? result.cells : null; },
+  // Convert solver cells (1 star / 0 no-star / 9 UNK) into the preview/apply space (1 star / 2 X /
+  // 0 empty): a full solution becomes stars + an X on every no-star; a partial's UNK (9) -> empty (0).
+  solutionFromResult(result) {
+    return result && result.cells
+      ? result.cells.map((row) => row.map((v) => (v === 1 ? 1 : (v === 9 ? 0 : 2))))
+      : null;
+  },
   solutionToCacheJson(solution) { return Array.isArray(solution) ? { cells: solution.map((row) => row.slice()) } : null; },
   solutionFromCacheJson(parsed) { return (parsed && Array.isArray(parsed.cells)) ? parsed.cells.map((row) => row.slice()) : null; },
 
@@ -158,7 +169,7 @@ const starbattle = {
     clearPendingHint, setStatus, drawPreview, setConfirming, setLoopConfirming, setSolveBtnText,
   }) {
     setLoopConfirming(false); clearPendingHint(); setSolveBtnText('Confirm'); setConfirming(true);
-    const cells = (result.cells || []).map((row) => row.map((v) => (v === 1 ? 1 : (v === 0 ? 0 : 9))));
+    const cells = (result.cells || []).map((row) => row.map((v) => (v === 1 ? 1 : (v === 9 ? 0 : 2))));
     let placed = 0, total = 0;
     for (const row of result.cells || []) for (const v of row) { total++; if (v === 1 || v === 0) placed++; }
     const pct = total > 0 ? Math.round(100 * placed / total) : 0;
