@@ -1088,11 +1088,14 @@ function applyStarBattleState(solution) {
     if (!solution || !solution.cells) return false;
     if (!(G && G.currentState)) return false;
     if (typeof G.saveState === 'function') G.saveState(true);
-    var cells = solution.cells; // 1 star, 2 no-star/X, 9 UNK / 0 (skip)
+    // Full/partial solution cells: 1 star, 0 no-star (full solve), 2 no-star (hint), 9 UNK.
+    // Both 0 and 2 paint the X-marker (cellStatus 2); 9 is left untouched so a partial only
+    // commits the cells it actually deduced.
+    var cells = solution.cells;
     for (var r = 0; r < cells.length; r++) for (var c = 0; c < cells[r].length; c++) {
       var v = cells[r][c];
       if (v === 1) G.currentState.cellStatus[r][c] = 1;
-      else if (v === 2) G.currentState.cellStatus[r][c] = 2;
+      else if (v === 2 || v === 0) G.currentState.cellStatus[r][c] = 2;
     }
     if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
     else if (typeof G.render === 'function') G.render();

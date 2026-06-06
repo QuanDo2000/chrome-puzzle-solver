@@ -65,9 +65,11 @@ const starbattle = {
     ctx.restore();
   },
 
-  // Dynamic per-cell render: a star glyph for value 1.
+  // Dynamic per-cell render: a star glyph for value 1, an X for a decided no-star (0).
+  // value 9 (UNK, partials only) draws nothing.
   drawPreviewCell(ctx, { v, x, y, cellSize }) {
     if (v === 1) _drawStar(ctx, x, y, cellSize, '#f59e0b');
+    else if (v === 0) _drawCross(ctx, x, y, cellSize, 'rgba(120, 124, 130, 0.65)');
   },
 
   drawHintCell(ctx, { cell, cx, cy, cellSize }) {
@@ -156,7 +158,7 @@ const starbattle = {
     clearPendingHint, setStatus, drawPreview, setConfirming, setLoopConfirming, setSolveBtnText,
   }) {
     setLoopConfirming(false); clearPendingHint(); setSolveBtnText('Confirm'); setConfirming(true);
-    const cells = (result.cells || []).map((row) => row.map((v) => (v === 1 ? 1 : 0)));
+    const cells = (result.cells || []).map((row) => row.map((v) => (v === 1 ? 1 : (v === 0 ? 0 : 9))));
     let placed = 0, total = 0;
     for (const row of result.cells || []) for (const v of row) { total++; if (v === 1 || v === 0) placed++; }
     const pct = total > 0 ? Math.round(100 * placed / total) : 0;
@@ -172,6 +174,20 @@ function _drawStar(ctx, x, y, size, fill) {
   ctx.font = `${Math.floor(size * 0.8)}px serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('★', x + size / 2, y + size / 2 + size * 0.04);
+  ctx.restore();
+}
+
+// Draw a small X (the no-star marker) centred in the cell.
+function _drawCross(ctx, x, y, size, stroke) {
+  const m = size * 0.3; // inset from the cell edge
+  ctx.save();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = Math.max(1, size * 0.07);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + m, y + m); ctx.lineTo(x + size - m, y + size - m);
+  ctx.moveTo(x + size - m, y + m); ctx.lineTo(x + m, y + size - m);
+  ctx.stroke();
   ctx.restore();
 }
 
