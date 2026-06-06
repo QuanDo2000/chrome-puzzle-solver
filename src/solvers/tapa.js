@@ -86,6 +86,39 @@ class TapaSolver {
     return true;
   }
 
+  _shadedFromG() { const sh = []; for (let r = 0; r < this.rows; r++) { sh.push([]); for (let c = 0; c < this.cols; c++) sh[r].push(this.g[r][c] === 1 ? 1 : 0); } return sh; }
+
+  // emit in the Nurikabe value-space: 0 unknown, 1 shaded, 2 not-shaded (clue cells -> 2).
+  _emit() { const out = []; for (let r = 0; r < this.rows; r++) { out.push([]); for (let c = 0; c < this.cols; c++) { if (this.task[r][c] !== -1) { out[r].push(2); continue; } const v = this.g[r][c]; out[r].push(v === 9 ? 0 : v === 1 ? 1 : 2); } } return out; }
+
+  _pick() { for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.task[r][c] === -1 && this.g[r][c] === 9) return [r, c]; return null; }
+
+  _search(countAll) {
+    if (Date.now() > this._deadline) { this._timedOut = true; return true; }
+    const cell = this._pick();
+    if (!cell) { const sh = this._shadedFromG(); if (this._isValid(sh)) { this._count++; if (!this._first) this._first = this.g.map((row) => row.slice()); if (!countAll) return true; if (this._count >= 2) return true; } return false; }
+    const [r, c] = cell;
+    for (const val of [1, 0]) {
+      const snap = this.g.map((row) => row.slice());
+      this.g[r][c] = val;
+      if (this._propagate() && this._search(countAll)) { if (!countAll || this._count >= 2 || this._timedOut) return true; }
+      this.g = snap;
+    }
+    return false;
+  }
+
+  solve(countAll = false) {
+    this._initG();
+    this._deadline = Date.now() + this.maxMs; this._timedOut = false; this._count = 0; this._first = null;
+    for (const cl of this.clues) if (!cl.patterns.length) return { solved: false, error: 'No solution (a clue has no satisfiable pattern)' };
+    if (!this._propagate()) return { solved: false, error: 'No solution (contradiction in givens)' };
+    const root = this._emit();
+    this._search(countAll);
+    if (this._first) { this.g = this._first; return { solved: true, grid: this._emit(), count: this._count }; }
+    if (this._timedOut) return { solved: false, partial: true, grid: root };
+    return { solved: false, error: 'No solution found' };
+  }
+
   // Oracle (ported getErrors) on a complete shaded boolean grid (shaded[r][c] === 1 iff shaded).
   _isValid(shaded) {
     const { rows, cols, task } = this;

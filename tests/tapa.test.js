@@ -50,3 +50,48 @@ test('Tapa propagation: clue 0 forces all neighbours unshaded', () => {
   assert.equal(s._propagate(), true);
   for (const [r, c] of [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]) assert.equal(s.g[r][c], 0);
 });
+
+const REAL_TAPA = { rows: 6, cols: 6, task: [[-1,-1,-1,-1,-1,-1],[22,-1,33,7,-1,5],[-1,-1,-1,-1,-1,-1],[3,-1,-1,-1,-1,12],[12,-1,-1,-1,-1,3],[-1,-1,-1,-1,-1,-1]] };
+
+test('Tapa solve: the real 6x6-hard board solves to a valid, oracle-passing board', () => {
+  const s = new TapaSolver(REAL_TAPA);
+  const r = s.solve();
+  assert.equal(r.solved, true);
+  assert.equal(r.partial, undefined);
+  // grid value-space {0,1,2}; derive shaded boolean for the oracle
+  const shaded = r.grid.map((row) => row.map((v) => (v === 1 ? 1 : 0)));
+  assert.ok(s._isValid(shaded));
+  assert.equal(shaded.flat().filter((x) => x).length, 23);
+});
+
+function rng(seed) { let x = seed >>> 0; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; }
+
+test('Tapa soundness gate: solver matches brute-force across random tiny boards', () => {
+  const DR = [-1,-1,-1,0,1,1,1,0], DC = [-1,0,1,1,1,0,-1,-1];
+  const { tapaRunString } = require('../src/solvers/tapa.js');
+  let tested = 0;
+  for (let iter = 0; iter < 5000 && tested < 400; iter++) {
+    const rnd = rng(iter * 2654435761 + 777);
+    const rows = 3 + Math.floor(rnd() * 2), cols = 3 + Math.floor(rnd() * 2);
+    const isCl = [], task = [];
+    for (let r = 0; r < rows; r++) { isCl.push([]); task.push([]); for (let c = 0; c < cols; c++) { const clue = rnd() < 0.3; isCl[r].push(clue); task[r].push(clue ? 0 : -1); } }
+    // derive each clue from a random seed shading of the non-clue cells
+    const seed = []; for (let r = 0; r < rows; r++) { seed.push([]); for (let c = 0; c < cols; c++) seed[r].push(isCl[r][c] ? 0 : (rnd() < 0.5 ? 1 : 0)); }
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (isCl[r][c]) { let m = 0; for (let a = 0; a < 8; a++) { const h = r + DR[a], n = c + DC[a]; if (h >= 0 && n >= 0 && h < rows && n < cols && seed[h][n]) m |= 1 << a; } const v = tapaRunString(m); task[r][c] = v === '' ? 0 : parseInt(v, 10); }
+    const free = []; for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!isCl[r][c]) free.push([r, c]);
+    if (!free.length || free.length > 14) continue;
+    const oracle = new TapaSolver({ rows, cols, task });
+    let brute = 0;
+    for (let mask = 0; mask < (1 << free.length); mask++) { const sh = Array.from({ length: rows }, () => new Array(cols).fill(0)); for (let i = 0; i < free.length; i++) if (mask & (1 << i)) { const [r, c] = free[i]; sh[r][c] = 1; } if (oracle._isValid(sh)) brute++; }
+    tested++;
+    const solver = new TapaSolver({ rows, cols, task, maxMs: 5000 });
+    const res = solver.solve(true);
+    assert.equal(!!res.solved, brute > 0, `solved-mismatch task=${JSON.stringify(task)}`);
+    if (res.solved) {
+      const sh = res.grid.map((row) => row.map((v) => (v === 1 ? 1 : 0)));
+      assert.ok(solver._isValid(sh), 'oracle rejects own solution');
+      assert.equal(res.count === 1, brute === 1, `uniqueness task=${JSON.stringify(task)} brute=${brute} count=${res.count}`);
+    }
+  }
+  assert.ok(tested >= 200, `gate exercised too few boards (${tested})`);
+});
