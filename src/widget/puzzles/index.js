@@ -29,6 +29,7 @@ if (typeof shakashaka !== 'undefined') PUZZLES[shakashaka.type] = shakashaka;
 if (typeof lightup !== 'undefined') PUZZLES[lightup.type] = lightup;
 if (typeof slant !== 'undefined') PUZZLES[slant.type] = slant;
 if (typeof starbattle !== 'undefined') PUZZLES[starbattle.type] = starbattle;
+if (typeof stitches !== 'undefined') PUZZLES[stitches.type] = stitches;
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { PUZZLES };

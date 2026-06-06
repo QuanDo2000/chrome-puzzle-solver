@@ -68,6 +68,7 @@ const pipes       = require('../src/widget/puzzles/pipes.js');
 const shikaku     = require('../src/widget/puzzles/shikaku.js');
 const shingoki    = require('../src/widget/puzzles/shingoki.js');
 const masyu       = require('../src/widget/puzzles/masyu.js');
+const stitches    = require('../src/widget/puzzles/stitches.js');
 const slitherlink = require('../src/widget/puzzles/slitherlink.js');
 const yinyang     = require('../src/widget/puzzles/yinyang.js');
 
@@ -971,4 +972,24 @@ test('shingoki: partialResultArm draws preview + sets a "Partial" status, no rec
   assert.equal(loopConfirming, false);
   assert.equal(btnText, 'Confirm');
   assert.equal(clearedHint, true);
+});
+
+// ── stitches ────────────────────────────────────────────────────────
+
+test('stitches: solutionFromResult unwraps {horizontal, vertical}', () => {
+  const r = { solved: true, horizontal: [[1, 0]], vertical: [[0, 0]], extra: 'ignored' };
+  const s = stitches.solutionFromResult(r);
+  assert.deepEqual(s, { horizontal: [[1, 0]], vertical: [[0, 0]] });
+  assert.equal(stitches.solutionFromResult({ solved: false }), null);
+});
+
+test('stitches: loopDoneCheck true only when every solution stitch is on the board', () => {
+  const solution = { horizontal: [[1, 0]], vertical: [[0, 0]] };
+  assert.equal(stitches.loopDoneCheck({ boardState: { horizontal: [[0, 0]], vertical: [[0, 0]] }, solution }), false);
+  assert.equal(stitches.loopDoneCheck({ boardState: { horizontal: [[1, 0]], vertical: [[0, 0]] }, solution }), true);
+});
+
+test('stitches: hasAbsoluteHintCells set (edge-puzzle Loop guard)', () => {
+  assert.equal(stitches.hasAbsoluteHintCells, true);
+  assert.equal(stitches.type, 'stitches');
 });
