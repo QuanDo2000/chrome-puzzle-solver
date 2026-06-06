@@ -2062,6 +2062,54 @@ function applyTapaState(grid) {
   } catch (e) { return false; }
 }
 
+function readTentsData() {
+  try {
+    var G = window.Game;
+    if (!G || !Array.isArray(G.task) || !Array.isArray(G.trees) || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth;
+    var trees = [];
+    for (var r = 0; r < rows; r++) { var row = G.trees[r] || [], arr = new Array(cols); for (var c = 0; c < cols; c++) arr[c] = row[c] ? 1 : 0; trees.push(arr); }
+    var colClue = [], rowClue = [];
+    for (var cc = 0; cc < cols; cc++) colClue.push(parseInt(G.task[cc], 10) || 0);
+    for (var rr = 0; rr < rows; rr++) rowClue.push(parseInt(G.task[cols + rr], 10) || 0);
+    return { rows: rows, cols: cols, trees: trees, colClue: colClue, rowClue: rowClue };
+  } catch (e) { return null; }
+}
+
+function readTentsState(rows, cols) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return null;
+    var cs = G.currentState.cellStatus, grid = [];
+    for (var r = 0; r < rows; r++) { var row = cs[r] || [], arr = new Array(cols); for (var c = 0; c < cols; c++) arr[c] = row[c] || 0; grid.push(arr); }
+    return grid;
+  } catch (e) { return null; }
+}
+
+function applyTentsState(grid) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus || !Array.isArray(G.trees)) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    var cs = G.currentState.cellStatus, rows = G.puzzleHeight, cols = G.puzzleWidth;
+    for (var r = 0; r < rows; r++) {
+      if (!cs[r]) cs[r] = [];
+      for (var c = 0; c < cols; c++) {
+        if (G.trees[r] && G.trees[r][c]) continue; // tree cell (page renders it)
+        var v = (grid[r] && grid[r][c] !== undefined) ? grid[r][c] : 0;
+        if (v === 1 || v === 2) cs[r][c] = v; // 0/9 (unknown) left untouched
+      }
+    }
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    else if (typeof G.render === 'function') G.render();
+    else if (typeof G.redraw === 'function') G.redraw();
+    else if (typeof G.redrawGrid === 'function') G.redrawGrid();
+    else if (typeof G.draw === 'function') G.draw();
+    else if (G.getSaved && G.loadGame) { var saved = G.getSaved(); if (saved) G.loadGame(saved); }
+    return true;
+  } catch (e) { return false; }
+}
+
 function readHeyawakeData() {
   try {
     var G = window.Game;
@@ -2608,6 +2656,15 @@ function dumpPuzzleForBench() {
       var tpRows = g.puzzleHeight, tpCols = g.puzzleWidth, tpTask = [];
       for (var tpr = 0; tpr < tpRows; tpr++) { var tpSrc = g.task[tpr] || [], tpDst = new Array(tpCols); for (var tpc = 0; tpc < tpCols; tpc++) { var tpv = tpSrc[tpc]; tpDst[tpc] = (typeof tpv === 'number' && tpv >= -2) ? tpv : -1; } tpTask.push(tpDst); }
       return { type: 'tapa', rows: tpRows, cols: tpCols, task: tpTask, path: path };
+    }
+
+    if (path.indexOf('/tents/') !== -1 || g.slug === 'tents') {
+      if (!Array.isArray(g.task) || !Array.isArray(g.trees) || !g.puzzleWidth || !g.puzzleHeight) return { error: 'tents: missing task/trees/dims', diagnostic: diagnostic(g), path: path };
+      var teRows = g.puzzleHeight, teCols = g.puzzleWidth, teTrees = [], teCol = [], teRow = [];
+      for (var ter = 0; ter < teRows; ter++) { var teSrc = g.trees[ter] || [], teDst = new Array(teCols); for (var tec = 0; tec < teCols; tec++) teDst[tec] = teSrc[tec] ? 1 : 0; teTrees.push(teDst); }
+      for (var tecc = 0; tecc < teCols; tecc++) teCol.push(parseInt(g.task[tecc], 10) || 0);
+      for (var terr = 0; terr < teRows; terr++) teRow.push(parseInt(g.task[teCols + terr], 10) || 0);
+      return { type: 'tents', rows: teRows, cols: teCols, trees: teTrees, colClue: teCol, rowClue: teRow, path: path };
     }
 
     // Hashi: islands list, no grid clues. g.task is a flat array of island
