@@ -69,6 +69,7 @@ const shikaku     = require('../src/widget/puzzles/shikaku.js');
 const shingoki    = require('../src/widget/puzzles/shingoki.js');
 const masyu       = require('../src/widget/puzzles/masyu.js');
 const stitches    = require('../src/widget/puzzles/stitches.js');
+const tapa        = require('../src/widget/puzzles/tapa.js');
 const slitherlink = require('../src/widget/puzzles/slitherlink.js');
 const yinyang     = require('../src/widget/puzzles/yinyang.js');
 
@@ -992,4 +993,14 @@ test('stitches: loopDoneCheck true only when every solution stitch is on the boa
 test('stitches: hasAbsoluteHintCells set (edge-puzzle Loop guard)', () => {
   assert.equal(stitches.hasAbsoluteHintCells, true);
   assert.equal(stitches.type, 'stitches');
+});
+
+// ── tapa ────────────────────────────────────────────────────────────
+
+test('tapa: solutionFromResult unwraps the grid; hasAbsoluteHintCells + renderEmptyCells set', () => {
+  assert.deepEqual(tapa.solutionFromResult({ solved: true, grid: [[1, 2], [0, 1]] }), [[1, 2], [0, 1]]);
+  assert.equal(tapa.solutionFromResult({ solved: false }), null);
+  assert.equal(tapa.hasAbsoluteHintCells, true);
+  assert.equal(tapa.renderEmptyCells, true);
+  assert.equal(tapa.type, 'tapa');
 });
