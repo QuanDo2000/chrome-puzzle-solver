@@ -316,7 +316,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   const pd = puzzleData;
   const sig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
               '|rm=' + regionMapSig(pd?.regionMap) +
-              '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
+              '|st=' + (Array.isArray(pd?.stars) ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
               '|g=' + gridDataSig(grid) +
               '|h=' + hintSig(hint) +
               '|sol=' + (pd?.solution ? '1' : '0');
@@ -329,12 +329,12 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   if (staticSigReg?.staticSig) {
     staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
                 '|rm=' + regionMapSig(pd?.regionMap) +
-                '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
+                '|st=' + (Array.isArray(pd?.stars) ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '') +
                 '|' + staticSigReg.staticSig(pd);
   } else {
     staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
                 '|rm=' + regionMapSig(pd?.regionMap) +
-                '|st=' + (pd?.stars ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '');
+                '|st=' + (Array.isArray(pd?.stars) ? pd.stars.map(s => s.row + ',' + s.col).join(';') : '');
   }
   if (staticSig !== staticLayerSig) {
     // Cached layers are FULL-size (gutter included) with their content shifted
