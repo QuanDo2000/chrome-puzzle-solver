@@ -1,6 +1,10 @@
 'use strict';
 
-const { hashFNV1a, drawCrossCell, absoluteCellHintStatus, makeSimpleHintDispatch } = require('../shared.js');
+const { hashFNV1a, drawCrossCell, absoluteCellHintStatus } = require('../shared.js');
+
+// Per-click hint batch scales with board area so Loop finishes in reasonable wall-clock
+// (see [[hint-batch-scaling-for-loop]]): ~ceil(rows*cols/30), floor 6.
+function hintBatchCap(rows, cols) { return Math.max(6, Math.ceil((rows * cols) / 30)); }
 
 // Tapa widget module — cell-state shading puzzle (Nurikabe family). Value-space: cellStatus
 // 0 unknown / 1 shaded / 2 not-shaded. Clue cells (task >= 0 or -2) are NOT tracked in cellStatus;
@@ -73,8 +77,39 @@ const tapa = {
 
   partialResultArm(result, { applyGridPartialResult }) { applyGridPartialResult(result); },
 
-  hintDispatch: makeSimpleHintDispatch('tapa', (ctx) =>
-    new TapaSolver({ rows: ctx.rows, cols: ctx.cols, task: ctx.detectedGrid.task })),
+  // Deductive hint, then cached-solution fallback. TapaSolver.getHint only propagates
+  // (clue-pattern + no-2x2, no connectivity/search), so on a hard board it stalls before the
+  // board is complete — without the fallback Loop/Hint can't finish. When deduction is exhausted,
+  // reveal the next batch of cached-solution cells that the board hasn't placed yet.
+  hintDispatch(ctx) {
+    const { grid, solution, rows, cols, detectedGrid, firstMismatch } = ctx;
+    if (solution && firstMismatch && firstMismatch(grid, solution)) {
+      return { success: false, error: 'Current game state is wrong.' };
+    }
+    const task = detectedGrid && detectedGrid.task;
+    // 1) Deductive: forced cells from the live board (clue cells re-asserted inside getHint).
+    if (task) {
+      const Solver = (typeof TapaSolver !== 'undefined') ? TapaSolver : require('../../solvers/tapa.js').TapaSolver;
+      const forced = new Solver({ rows, cols, task, maxMs: 1500 }).getHint(grid);
+      if (forced && forced.length) {
+        const batch = forced.slice(0, hintBatchCap(rows, cols));
+        return { success: true, hint: { type: 'tapa', extraCells: batch, count: batch.length }, grid, solution };
+      }
+    }
+    // 2) Fallback: reveal the next batch of cached-solution shadeable cells not yet on the board.
+    if (!Array.isArray(solution)) return { success: false, error: 'No more cells can be deduced. Click Solve to finish.' };
+    const cap = hintBatchCap(rows, cols); const cells = [];
+    for (let r = 0; r < rows && cells.length < cap; r++) for (let c = 0; c < cols && cells.length < cap; c++) {
+      if (task && task[r] && task[r][c] !== -1) continue; // clue cell (not shadeable)
+      const sv = solution[r] ? solution[r][c] : 0;
+      if (sv !== 1 && sv !== 2) continue;
+      const cur = grid && grid[r] ? grid[r][c] : 0;
+      if (cur === sv) continue; // already correct on the board
+      cells.push({ row: r, col: c, value: sv });
+    }
+    if (!cells.length) return { success: false, error: 'No hint available' };
+    return { success: true, hint: { type: 'tapa', extraCells: cells, count: cells.length }, grid, solution };
+  },
 };
 
 function _tapaTaskSig(task) {

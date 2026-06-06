@@ -1004,3 +1004,22 @@ test('tapa: solutionFromResult unwraps the grid; hasAbsoluteHintCells + renderEm
   assert.equal(tapa.renderEmptyCells, true);
   assert.equal(tapa.type, 'tapa');
 });
+
+test('tapa: hintDispatch falls back to cached-solution cells when deduction stalls', () => {
+  // No-clue 2x2 board: getHint deduces nothing, so the hint must fall back to the cached solution
+  // (so Loop/Hint can finish hard boards instead of stalling). Cells reveal solution values 1/2.
+  const ctx = {
+    grid: [[0, 0], [0, 0]],
+    solution: [[1, 2], [2, 1]],
+    rows: 2, cols: 2,
+    detectedGrid: { task: [[-1, -1], [-1, -1]] },
+    firstMismatch: () => null,
+  };
+  const res = tapa.hintDispatch(ctx);
+  assert.equal(res.success, true);
+  assert.ok(res.hint.extraCells.length > 0);
+  assert.ok(res.hint.extraCells.every((c) => c.value === 1 || c.value === 2));
+  // a board already matching the solution yields no fallback cells
+  const done = tapa.hintDispatch({ ...ctx, grid: [[1, 2], [2, 1]] });
+  assert.equal(done.success, false);
+});
