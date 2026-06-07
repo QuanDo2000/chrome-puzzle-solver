@@ -579,6 +579,7 @@ function makeWidget() {
     if (puzzleData !== pd || !pd.solution) return;
     const grid = state && state.success ? state.grid : null;
     if (!grid) return;
+    await readPipesPinnedInto(state);
     drawPreview(grid);
     if (!confirming && !looping && !loopConfirming && !puzzleData.pendingHint) {
       const mistakes = computePuzzleDiff(pd.type, grid, pd.solution, pd.stars);
@@ -1122,25 +1123,32 @@ function makeWidget() {
 
   let stateObserver = null;
   let watchDebounce = null;
+  let watchTarget = null;
+  let watchPointerHandler = null;
+
+  // Read the pipes lock layer (Game.currentState.pinned) for the current state
+  // and stash it on puzzleData so the locked-mistake preview overlay has it.
+  // No-op for non-pipes or a failed read. Shared by the live state-watch and the
+  // post-auto-solve redraw.
+  async function readPipesPinnedInto(state) {
+    if (!puzzleData || puzzleData.type !== 'pipes' || !state?.success) return;
+    const pinned = await callMainWorld('readPipesPinned', [state.rows, state.cols]);
+    if (pinned) puzzleData.pipesPinned = pinned;
+  }
 
   function startStateWatch() {
     stopStateWatch();
     const el = detectedGrid?._element;
     if (!el) return;
     const target = el.querySelector('.nonograms-cell-back') || el;
-    stateObserver = new MutationObserver(() => {
+    const schedule = () => {
       if (suppressStateWatch) return;
       clearTimeout(watchDebounce);
       watchDebounce = setTimeout(async () => {
         if (!puzzleData) return;
         const state = await readGridState();
         if (!state?.success) return;
-        // Pipes error overlay needs the page's lock layer; read it here (the
-        // live-refresh path) only, so the generic readGridState stays cheap.
-        if (puzzleData.type === 'pipes') {
-          const pinned = await callMainWorld('readPipesPinned', [state.rows, state.cols]);
-          if (pinned) puzzleData.pipesPinned = pinned;
-        }
+        await readPipesPinnedInto(state);
         drawPreview(state.grid);
 
         if (!puzzleData.pendingHint) return;
@@ -1154,12 +1162,25 @@ function makeWidget() {
         q('[data-action="applyHint"]').disabled = false;
         renderHintStatusAndPreview(h, state.grid);
       }, 200);
-    });
+    };
+    stateObserver = new MutationObserver(schedule);
     stateObserver.observe(target, { attributes: true, attributeFilter: ['class', 'style'], subtree: true });
+    // Canvas-rendered puzzles (pipes) repaint a <canvas> on pin/rotate WITHOUT
+    // mutating the DOM, so the observer above never fires for them. A pointerup
+    // on the board is the reliable trigger: the page processes the click first,
+    // then the debounced refresh re-reads the board + lock layer and redraws.
+    watchTarget = target;
+    watchPointerHandler = schedule;
+    target.addEventListener('pointerup', schedule);
   }
 
   function stopStateWatch() {
     if (stateObserver) { stateObserver.disconnect(); stateObserver = null; }
+    if (watchTarget && watchPointerHandler) {
+      watchTarget.removeEventListener('pointerup', watchPointerHandler);
+    }
+    watchTarget = null;
+    watchPointerHandler = null;
     clearTimeout(watchDebounce);
   }
 
