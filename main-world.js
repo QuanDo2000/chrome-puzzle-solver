@@ -2110,6 +2110,57 @@ function applyTentsState(grid) {
   } catch (e) { return false; }
 }
 
+function readThermometersData() {
+  try {
+    var G = window.Game;
+    if (!G || !Array.isArray(G.task) || !Array.isArray(G.areaPoints) || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth;
+    var thermos = [];
+    for (var t = 0; t < G.areaPoints.length; t++) {
+      var pts = G.areaPoints[t] || [], cells = [];
+      for (var i = 0; i < pts.length; i++) cells.push({ r: pts[i].row, c: pts[i].col });
+      thermos.push(cells);
+    }
+    var colClue = [], rowClue = [];
+    for (var cc = 0; cc < cols; cc++) colClue.push(parseInt(G.task[cc], 10) || 0);
+    for (var rr = 0; rr < rows; rr++) rowClue.push(parseInt(G.task[cols + rr], 10) || 0);
+    return { rows: rows, cols: cols, thermos: thermos, colClue: colClue, rowClue: rowClue };
+  } catch (e) { return null; }
+}
+
+function readThermometersState(rows, cols) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return null;
+    var cs = G.currentState.cellStatus, grid = [];
+    for (var r = 0; r < rows; r++) { var row = cs[r] || [], arr = new Array(cols); for (var c = 0; c < cols; c++) arr[c] = row[c] || 0; grid.push(arr); }
+    return grid;
+  } catch (e) { return null; }
+}
+
+function applyThermometersState(grid) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    var cs = G.currentState.cellStatus, rows = G.puzzleHeight, cols = G.puzzleWidth;
+    for (var r = 0; r < rows; r++) {
+      if (!cs[r]) cs[r] = [];
+      for (var c = 0; c < cols; c++) {
+        var v = (grid[r] && grid[r][c] !== undefined) ? grid[r][c] : 0;
+        if (v === 1 || v === 2) cs[r][c] = v; // 1 filled / 2 empty; 0 (unknown) left untouched
+      }
+    }
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    else if (typeof G.render === 'function') G.render();
+    else if (typeof G.redraw === 'function') G.redraw();
+    else if (typeof G.redrawGrid === 'function') G.redrawGrid();
+    else if (typeof G.draw === 'function') G.draw();
+    else if (G.getSaved && G.loadGame) { var saved = G.getSaved(); if (saved) G.loadGame(saved); }
+    return true;
+  } catch (e) { return false; }
+}
+
 function readHeyawakeData() {
   try {
     var G = window.Game;
@@ -2665,6 +2716,15 @@ function dumpPuzzleForBench() {
       for (var tecc = 0; tecc < teCols; tecc++) teCol.push(parseInt(g.task[tecc], 10) || 0);
       for (var terr = 0; terr < teRows; terr++) teRow.push(parseInt(g.task[teCols + terr], 10) || 0);
       return { type: 'tents', rows: teRows, cols: teCols, trees: teTrees, colClue: teCol, rowClue: teRow, path: path };
+    }
+
+    if (path.indexOf('/thermometers/') !== -1 || g.slug === 'thermometers') {
+      if (!Array.isArray(g.task) || !Array.isArray(g.areaPoints) || !g.puzzleWidth || !g.puzzleHeight) return { error: 'thermometers: missing task/areaPoints/dims', diagnostic: diagnostic(g), path: path };
+      var thRows = g.puzzleHeight, thCols = g.puzzleWidth, thTherm = [], thCol = [], thRow = [];
+      for (var tht = 0; tht < g.areaPoints.length; tht++) { var thPts = g.areaPoints[tht] || [], thCells = []; for (var thi = 0; thi < thPts.length; thi++) thCells.push({ r: thPts[thi].row, c: thPts[thi].col }); thTherm.push(thCells); }
+      for (var thcc = 0; thcc < thCols; thcc++) thCol.push(parseInt(g.task[thcc], 10) || 0);
+      for (var thrr = 0; thrr < thRows; thrr++) thRow.push(parseInt(g.task[thCols + thrr], 10) || 0);
+      return { type: 'thermometers', rows: thRows, cols: thCols, thermos: thTherm, colClue: thCol, rowClue: thRow, path: path };
     }
 
     // Hashi: islands list, no grid clues. g.task is a flat array of island

@@ -120,6 +120,9 @@ type MainWorldFn =
   | 'readTentsData'
   | 'readTentsState'
   | 'applyTentsState'
+  | 'readThermometersData'
+  | 'readThermometersState'
+  | 'applyThermometersState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';
