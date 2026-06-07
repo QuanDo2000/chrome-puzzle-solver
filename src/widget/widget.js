@@ -574,6 +574,30 @@ function makeWidget() {
 
   // After the auto-solve lands: redraw the preview (so mistakes show) and, if
   // the widget is still idle on the post-detect message, note the count.
+  // "Found NxN Type — N mistakes" detection summary. The mistake count MUST match
+  // what the preview overlay rings: pipes uses its locked-cell count (the
+  // solver-layer computePuzzleDiff is empty for pipes — every cell always has a
+  // rotation, so only LOCKED cells are judged), every other type uses
+  // computePuzzleDiff. Skipped in confirm/loop/hint modes so it never clobbers
+  // those statuses. Called at auto-solve and, for pipes (whose canvas board can't
+  // otherwise keep the count live), on each live board refresh.
+  function setDetectionStatus(grid) {
+    if (!puzzleData?.solution || !grid) return;
+    if (confirming || looping || loopConfirming || puzzleData.pendingHint) return;
+    let n;
+    if (puzzleData.type === 'pipes') {
+      const reg = puzzleReg('pipes');
+      n = (reg?.lockedMistakes && puzzleData.pipesPinned)
+        ? reg.lockedMistakes({ grid, solution: puzzleData.solution, task: puzzleData.task, pinned: puzzleData.pipesPinned }).length
+        : 0;
+    } else {
+      n = computePuzzleDiff(puzzleData.type, grid, puzzleData.solution, puzzleData.stars).length;
+    }
+    const label = (puzzleData.type || 'puzzle').charAt(0).toUpperCase() + (puzzleData.type || 'puzzle').slice(1);
+    const note = n ? `${n} mistake${n === 1 ? '' : 's'}` : 'no mistakes';
+    setStatus(`Found ${puzzleData.rows}×${puzzleData.cols} ${label} — ${note}.`, 'success');
+  }
+
   async function afterAutoSolve(pd) {
     const state = await readGridState();
     if (puzzleData !== pd || !pd.solution) return;
@@ -581,14 +605,7 @@ function makeWidget() {
     if (!grid) return;
     await readPipesPinnedInto(state);
     drawPreview(grid);
-    if (!confirming && !looping && !loopConfirming && !puzzleData.pendingHint) {
-      const mistakes = computePuzzleDiff(pd.type, grid, pd.solution, pd.stars);
-      const label = (pd.type || 'puzzle').charAt(0).toUpperCase() + (pd.type || 'puzzle').slice(1);
-      const note = mistakes.length
-        ? `${mistakes.length} mistake${mistakes.length === 1 ? '' : 's'}`
-        : 'no mistakes';
-      setStatus(`Found ${pd.rows}×${pd.cols} ${label} — ${note}.`, 'success');
-    }
+    setDetectionStatus(grid);
   }
 
   // Cache solver outputs so subsequent operations (apply, hint, loop) can
@@ -1150,6 +1167,9 @@ function makeWidget() {
         if (!state?.success) return;
         await readPipesPinnedInto(state);
         drawPreview(state.grid);
+        // Keep the "N mistakes" status in sync with the live overlay for pipes
+        // (its canvas board can't update the count any other way).
+        if (puzzleData.type === 'pipes') setDetectionStatus(state.grid);
 
         if (!puzzleData.pendingHint) return;
         const hintResult = await getHint({ solution: puzzleData.solution });
