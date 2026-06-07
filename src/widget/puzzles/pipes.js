@@ -1,7 +1,7 @@
 'use strict';
 
 const { hashFNV1a } = require('../shared.js');
-const { rotationCount } = require('../pipes-rotation.js');
+const { rotationCount, rotateMask } = require('../pipes-rotation.js');
 
 // Pipes (Net) rotation puzzle. detectedGrid.task / puzzleData.task = per-cell
 // 4-bit arm masks in the page's CURRENT (scrambled) orientation. The solver
@@ -178,6 +178,33 @@ const pipes = {
       if (cur !== target) return false;
     }
     return true;
+  },
+
+  // lockedMistakes(ctx): ctx = { grid, solution, task, pinned }. grid & solution
+  // are rotation-COUNT grids, task is the scrambled-mask grid, pinned is a 0/1
+  // lock grid (Game.currentState.pinned). Returns [{row,col}] for every LOCKED
+  // cell whose CURRENT rotation produces a different pipe MASK than the solution.
+  // Compared by mask (via rotateMask), not by count, so a symmetric piece locked
+  // at an equivalent rotation (a straight at 180 deg) is not falsely flagged.
+  // Drives the preview's error overlay (preview.js); errors-only, locked-only.
+  lockedMistakes(ctx) {
+    const grid = ctx && ctx.grid;
+    const solution = ctx && ctx.solution;
+    const task = ctx && ctx.task;
+    const pinned = ctx && ctx.pinned;
+    const out = [];
+    if (!grid || !solution || !task || !pinned) return out;
+    for (let r = 0; r < task.length; r++) {
+      const tRow = task[r] || [];
+      for (let c = 0; c < tRow.length; c++) {
+        if (!(pinned[r] && pinned[r][c])) continue;
+        const t = tRow[c] | 0;
+        const curMask = rotateMask(t, (grid[r] && grid[r][c]) | 0, PIPE_PAGE_CW);
+        const solMask = rotateMask(t, (solution[r] && solution[r][c]) | 0, PIPE_PAGE_CW);
+        if (curMask !== solMask) out.push({ row: r, col: c });
+      }
+    }
+    return out;
   },
 
   // Hint Apply MUST use the pipes raw-count writer, not the generic
