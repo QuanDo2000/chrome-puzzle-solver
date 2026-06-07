@@ -36,6 +36,7 @@ declare const StitchesSolver: any;
 declare const TapaSolver: any;
 declare const TentsSolver: any;
 declare const ThermometersSolver: any;
+declare const LollipopsSolver: any;
 
 // JSDoc typedefs referenced by per-puzzle solver files in src/solvers/.
 // The originals lived as JSDoc @typedef in the old monolithic solver.js
