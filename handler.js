@@ -1361,6 +1361,39 @@ const tentsHandler = {
 
 registerHandler(tentsHandler);
 
+// ── Thermometers handler (puzzles-mobile.com/thermometers/) ───
+
+const thermometersHandler = {
+  name: 'puzzles-mobile-thermometers',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() && window.location.pathname.includes('/thermometers/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readThermometersData', []);
+    if (!data) return { ...result, error: 'No Thermometers task data found' };
+    const stageEl = document.getElementById('stage') || document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return { found: true, type: 'thermometers', rows: data.rows, cols: data.cols, thermos: data.thermos, colClue: data.colClue, rowClue: data.rowClue, rowClues: [], colClues: [], _cells: [], _element: stageEl };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readThermometersState', [ctx.rows, ctx.cols]);
+    if (state) return state; // RAW cellStatus 0/1/2 (no normalization — like tents)
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyThermometersState', [solution]);
+    return ok ? { success: true } : { success: false, error: 'Thermometers apply failed' };
+  },
+};
+
+registerHandler(thermometersHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
