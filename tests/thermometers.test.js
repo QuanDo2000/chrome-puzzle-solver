@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { ThermometersSolver } = require('../src/solvers/thermometers.js');
+const REAL = require('./fixtures/real-puzzles.js');
 
 // Build a solver from thermos given as arrays of [r,c] pairs (compact), bulb first.
 function mk(rows, cols, thermosRC, colClue, rowClue, maxMs) {
@@ -106,4 +107,22 @@ test('Thermometers soundness gate: solver matches brute-force across random tiny
   }
   assert.equal(mismatches, 0, `gate mismatches=${mismatches} (tested=${tested})`);
   assert.ok(tested >= 150, `gate exercised too few boards (${tested})`);
+});
+
+test('Thermometers solve: the real 15x15 board solves uniquely, oracle-passing, cols-first', () => {
+  const f = REAL.thermometers_15x15;
+  const thermos = f.areaPoints.map((pts) => pts.map((p) => ({ r: p.row, c: p.col })));
+  // coverage: every cell belongs to exactly one thermometer
+  const cover = Array.from({ length: f.rows }, () => new Array(f.cols).fill(0));
+  for (const t of thermos) for (const cell of t) cover[cell.r][cell.c]++;
+  for (let r = 0; r < f.rows; r++) for (let c = 0; c < f.cols; c++) assert.equal(cover[r][c], 1, `cell ${r},${c} covered ${cover[r][c]}x`);
+  const colClue = f.task.slice(0, f.cols), rowClue = f.task.slice(f.cols); // cols-first (validated)
+  const s = new ThermometersSolver({ rows: f.rows, cols: f.cols, thermos, colClue, rowClue, maxMs: 20000 });
+  const res = s.solve(true);
+  assert.equal(res.solved, true);
+  assert.equal(res.partial, undefined);
+  assert.equal(res.count, 1, 'unique solution');
+  const fill = res.grid.map((row) => row.map((v) => (v === 1 ? 1 : 0)));
+  assert.ok(s._isValid(fill), 'oracle rejects own solution');
+  assert.equal(fill.flat().filter(Boolean).length, 112); // total filled
 });
