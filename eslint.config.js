@@ -344,6 +344,7 @@ module.exports = [
         stitches: 'readonly',
         tapa: 'readonly',
         tents: 'readonly',
+        thermometers: 'readonly',
         // src/widget/state.js — widget storage prefs.
         loadWidgetPref: 'readonly',
         saveWidgetPref: 'readonly',
