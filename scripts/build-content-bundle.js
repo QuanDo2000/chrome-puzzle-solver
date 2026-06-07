@@ -38,6 +38,7 @@ const WIDGET_FILES = [
   'puzzles/tapa.js',
   'puzzles/tents.js',
   'puzzles/thermometers.js',
+  'puzzles/lollipops.js',
   'puzzles/heyawake.js',
   'puzzles/yinyang.js',
   'puzzles/aquarium.js',
