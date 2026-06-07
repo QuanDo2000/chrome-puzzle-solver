@@ -29,7 +29,7 @@ test('Tents propagation: a placed tent crosses its 8 neighbours to grass', () =>
   // (rows/cols 0 and 2 end up all grass). Adjacency runs first in _propagate and forces them.
   const s = new TentsSolver({ rows: 3, cols: 3, trees: [[0,0,0],[0,0,0],[0,0,0]], colClue: [0,1,0], rowClue: [0,1,0] });
   s._initG();
-  s.g[1][1] = 1; // a tent at centre (set directly for the test)
+  assert.equal(s._set(1, 1, 1), true); // a tent at centre (via _set so the worklist enqueues it)
   assert.equal(s._propagate(), true);
   for (const [r, c] of [[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]) assert.equal(s.g[r][c], 2);
 });

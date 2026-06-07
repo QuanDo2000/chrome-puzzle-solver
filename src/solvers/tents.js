@@ -15,6 +15,14 @@
 //   undecided cell; a Kuhn matching feasibility prune at each node + the perfect-matching leaf
 //   check; sound partial = root snapshot on timeout. Brute-force-gated in tests/tents.test.js.
 //   solve() returns grid 0 unknown/tree / 1 tent / 2 grass.
+//
+// PERF (large monthly boards, e.g. 30x30): the search is allocation-bound, not algorithm-bound —
+//   the matching prune is essential (without it a 30x30 doesn't finish) so it stays at every node.
+//   The wins are zero-allocation per node: (1) TRAIL-based undo (a preallocated Int32Array of
+//   touched cell ids + length pointer) replaces cloning the whole grid twice per node; (2) the Kuhn
+//   matching uses STAMPED Int32Array scratch (owner/seen) + one reused `_candOK` closure instead of
+//   a fresh Map + a Set-per-tree each call; (3) `_propagate` reuses one scratch buffer for the
+//   per-row/col unknown lists. `g` stays a 2D array (the test suite reads `g[r][c]` directly).
 
 const D8R = [-1, -1, -1, 0, 1, 1, 1, 0];
 const D8C = [-1, 0, 1, 1, 1, 0, -1, -1];
@@ -28,60 +36,147 @@ class TentsSolver {
     this.treeList = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (trees[r][c]) this.treeList.push([r, c]);
     this.T = this.treeList.length;
+    const N = rows * cols;
+    // Zero-allocation scratch (sized once). Trail: cell ids touched since a search mark (each cell
+    // goes 9 -> v at most once per path, so it never exceeds N). _scratch: per-line unknown list.
+    this._trail = new Int32Array(N); this._tlen = 0;
+    this._scratch = new Int32Array(Math.max(rows, cols) || 1);
+    // Matching scratch: owner[id]=tree matched to cell id when ostamp[id]===_mGen; seen[id]===sgen
+    // marks cells visited in the current augmenting search. Stamping avoids per-call Map/Set allocs.
+    this._mOwner = new Int32Array(N); this._mStamp = new Int32Array(N);
+    this._mSeen = new Int32Array(N); this._mGen = 0; this._seenGen = 0;
+    // Reused predicate for the feasibility matching (possible-tent = tent or unknown, non-tree).
+    this._candOK = (r, c) => !this.trees[r][c] && (this.g[r][c] === 1 || this.g[r][c] === 9);
+    // Dirty-worklist scratch. _propagate re-examines only the rows/cols/trees/tents a change can
+    // affect, instead of full-rescanning every fixpoint iteration. Row/col/tree queues are transient
+    // (drained to empty every call, seeded fully by _initG); the tent queue (cells newly set to tent,
+    // for the 8-adjacency rule) persists across nodes and is mark-restored on backtrack.
+    this._rowQ = new Int32Array(rows); this._rowIn = new Uint8Array(rows); this._rowQn = 0;
+    this._colQ = new Int32Array(cols); this._colIn = new Uint8Array(cols); this._colQn = 0;
+    this._treeQ = new Int32Array(this.T || 1); this._treeIn = new Uint8Array(this.T || 1); this._treeQn = 0;
+    this._tentQ = new Int32Array(N); this._tentN = 0; this._tentProc = 0;
+    // cell id -> index of a tree on that cell, else -1 (so _set can enqueue trees adjacent to a change).
+    this._treeIndex = new Int32Array(N).fill(-1);
+    for (let ti = 0; ti < this.T; ti++) this._treeIndex[this.treeList[ti][0] * cols + this.treeList[ti][1]] = ti;
   }
 
   // Kuhn bipartite max matching: trees -> candidate cells where cellOK(r,c) holds (orthogonal adj).
+  // Uses stamped Int32Array scratch (no Map/Set allocation per call).
   _maxMatch(cellOK) {
-    const { rows, cols } = this, matchCell = new Map();
-    const tryK = (ti, seen) => {
-      const [tr, tc] = this.treeList[ti];
+    const { rows, cols, treeList } = this;
+    const owner = this._mOwner, ostamp = this._mStamp, seen = this._mSeen;
+    const gen = ++this._mGen;
+    const tryK = (ti, sgen) => {
+      const tr = treeList[ti][0], tc = treeList[ti][1];
       for (let a = 0; a < 4; a++) {
         const r = tr + D4R[a], c = tc + D4C[a];
         if (r < 0 || c < 0 || r >= rows || c >= cols || !cellOK(r, c)) continue;
         const id = r * cols + c;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        if (!matchCell.has(id) || tryK(matchCell.get(id), seen)) { matchCell.set(id, ti); return true; }
+        if (seen[id] === sgen) continue;
+        seen[id] = sgen;
+        if (ostamp[id] !== gen || tryK(owner[id], sgen)) { owner[id] = ti; ostamp[id] = gen; return true; }
       }
       return false;
     };
     let m = 0;
-    for (let ti = 0; ti < this.T; ti++) if (tryK(ti, new Set())) m++;
+    for (let ti = 0; ti < this.T; ti++) { const sgen = ++this._seenGen; if (tryK(ti, sgen)) m++; }
     return m;
   }
 
   _free(r, c) { return r >= 0 && c >= 0 && r < this.rows && c < this.cols && !this.trees[r][c]; }
 
-  // g[r][c]: 9 unknown, 1 tent, 2 grass. Tree cells fixed 0 (never tents).
+  // g[r][c]: 9 unknown, 1 tent, 2 grass. Tree cells fixed 0 (never tents). Seeds every row/col/tree
+  // dirty so the first _propagate (root, or a unit test calling it after _initG) is a full pass.
   _initG() {
     this.g = [];
     for (let r = 0; r < this.rows; r++) { this.g.push([]); for (let c = 0; c < this.cols; c++) this.g[r].push(this.trees[r][c] ? 0 : 9); }
+    this._tlen = 0; this._tentN = 0; this._tentProc = 0;
+    this._rowQn = 0; this._colQn = 0; this._treeQn = 0;
+    this._rowIn.fill(0); this._colIn.fill(0); this._treeIn.fill(0);
+    for (let r = 0; r < this.rows; r++) { this._rowQ[this._rowQn++] = r; this._rowIn[r] = 1; }
+    for (let c = 0; c < this.cols; c++) { this._colQ[this._colQn++] = c; this._colIn[c] = 1; }
+    for (let ti = 0; ti < this.T; ti++) { this._treeQ[this._treeQn++] = ti; this._treeIn[ti] = 1; }
   }
 
-  _set(r, c, v) { if (this.g[r][c] === v) return true; if (this.g[r][c] !== 9) return false; this.g[r][c] = v; this._dirty = true; return true; }
+  _enqRow(r) { if (!this._rowIn[r]) { this._rowIn[r] = 1; this._rowQ[this._rowQn++] = r; } }
+  _enqCol(c) { if (!this._colIn[c]) { this._colIn[c] = 1; this._colQ[this._colQn++] = c; } }
+  _enqTree(ti) { if (!this._treeIn[ti]) { this._treeIn[ti] = 1; this._treeQ[this._treeQn++] = ti; } }
 
-  // count + 8-adjacency + tree-coverage, to a fixpoint. Returns false on contradiction.
+  // Records the 9 -> v transition on the trail and enqueues every scope the change can affect:
+  // its row/col (count forcing), orthogonally-adjacent trees (coverage), and — for a tent — the
+  // tent queue (8-adjacency). Returns false if the cell was already a different decided value.
+  _set(r, c, v) {
+    if (this.g[r][c] === v) return true;
+    if (this.g[r][c] !== 9) return false;
+    this.g[r][c] = v;
+    const cols = this.cols, id = r * cols + c;
+    this._trail[this._tlen++] = id;
+    this._enqRow(r); this._enqCol(c);
+    for (let a = 0; a < 4; a++) { const nr = r + D4R[a], nc = c + D4C[a]; if (nr < 0 || nc < 0 || nr >= this.rows || nc >= cols) continue; const ti = this._treeIndex[nr * cols + nc]; if (ti >= 0) this._enqTree(ti); }
+    if (v === 1) this._tentQ[this._tentN++] = id;
+    return true;
+  }
+
+  // Roll every cell touched after `mark` back to unknown (9). Tent-queue pointers are mark-restored
+  // by the caller (_search); the row/col/tree queues are always empty at a search boundary.
+  _rollback(mark) { const cols = this.cols; while (this._tlen > mark) { const id = this._trail[--this._tlen]; const r = (id / cols) | 0; this.g[r][id - r * cols] = 9; } }
+
+  // Clear the transient row/col/tree queues (used when _propagate bails on a contradiction, so the
+  // next propagate starts clean). The tent queue is left to the caller's mark-restore.
+  _clearQueues() {
+    while (this._rowQn > 0) this._rowIn[this._rowQ[--this._rowQn]] = 0;
+    while (this._colQn > 0) this._colIn[this._colQ[--this._colQn]] = 0;
+    while (this._treeQn > 0) this._treeIn[this._treeQ[--this._treeQn]] = 0;
+  }
+
+  // adjacency: a placed tent forces its 8 neighbours to grass; two adjacent tents = contradiction.
+  _forceTent(id) {
+    const cols = this.cols, r = (id / cols) | 0, c = id - r * cols;
+    for (let a = 0; a < 8; a++) { const nr = r + D8R[a], nc = c + D8C[a]; if (!this._free(nr, nc)) continue; if (this.g[nr][nc] === 1) return false; if (this.g[nr][nc] === 9 && !this._set(nr, nc, 2)) return false; }
+    return true;
+  }
+
+  // row count forcing (scratch reused for the unknown-column list).
+  _forceRow(r) {
+    const cols = this.cols, unk = this._scratch; let t = 0, n = 0;
+    for (let c = 0; c < cols; c++) { if (this.g[r][c] === 1) t++; else if (this.g[r][c] === 9) unk[n++] = c; }
+    if (t > this.rowClue[r] || t + n < this.rowClue[r]) return false;
+    if (t === this.rowClue[r]) { for (let i = 0; i < n; i++) if (!this._set(r, unk[i], 2)) return false; }
+    else if (t + n === this.rowClue[r]) { for (let i = 0; i < n; i++) if (!this._set(r, unk[i], 1)) return false; }
+    return true;
+  }
+
+  // col count forcing (scratch reused for the unknown-row list).
+  _forceCol(c) {
+    const rows = this.rows, unk = this._scratch; let t = 0, n = 0;
+    for (let r = 0; r < rows; r++) { if (this.g[r][c] === 1) t++; else if (this.g[r][c] === 9) unk[n++] = r; }
+    if (t > this.colClue[c] || t + n < this.colClue[c]) return false;
+    if (t === this.colClue[c]) { for (let i = 0; i < n; i++) if (!this._set(unk[i], c, 2)) return false; }
+    else if (t + n === this.colClue[c]) { for (let i = 0; i < n; i++) if (!this._set(unk[i], c, 1)) return false; }
+    return true;
+  }
+
+  // tree coverage: a tree with no placed adjacent tent and exactly one possible adjacent cell -> force it.
+  _forceTree(ti) {
+    const tr = this.treeList[ti][0], tc = this.treeList[ti][1]; let placed = 0, candN = 0, cr = 0, cc = 0;
+    for (let a = 0; a < 4; a++) { const r = tr + D4R[a], c = tc + D4C[a]; if (!this._free(r, c)) continue; if (this.g[r][c] === 1) placed++; else if (this.g[r][c] === 9) { candN++; cr = r; cc = c; } }
+    if (placed === 0) { if (candN === 0) return false; if (candN === 1 && !this._set(cr, cc, 1)) return false; }
+    return true;
+  }
+
+  // Drain the dirty worklists to a fixpoint. Returns false on contradiction (queues left clean).
   _propagate() {
-    const { rows, cols } = this;
-    this._dirty = true;
-    while (this._dirty) {
-      this._dirty = false;
-      // adjacency: a tent forces its 8 neighbours to grass; two adjacent tents = contradiction
-      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (this.g[r][c] === 1) {
-        for (let a = 0; a < 8; a++) { const nr = r + D8R[a], nc = c + D8C[a]; if (!this._free(nr, nc)) continue; if (this.g[nr][nc] === 1) return false; if (this.g[nr][nc] === 9 && !this._set(nr, nc, 2)) return false; }
-      }
-      // row count forcing
-      for (let r = 0; r < rows; r++) { let t = 0; const unk = []; for (let c = 0; c < cols; c++) { if (this.g[r][c] === 1) t++; else if (this.g[r][c] === 9) unk.push(c); } if (t > this.rowClue[r]) return false; if (t + unk.length < this.rowClue[r]) return false; if (t === this.rowClue[r]) { for (const c of unk) if (!this._set(r, c, 2)) return false; } else if (t + unk.length === this.rowClue[r]) { for (const c of unk) if (!this._set(r, c, 1)) return false; } }
-      // col count forcing
-      for (let c = 0; c < cols; c++) { let t = 0; const unk = []; for (let r = 0; r < rows; r++) { if (this.g[r][c] === 1) t++; else if (this.g[r][c] === 9) unk.push(r); } if (t > this.colClue[c]) return false; if (t + unk.length < this.colClue[c]) return false; if (t === this.colClue[c]) { for (const r of unk) if (!this._set(r, c, 2)) return false; } else if (t + unk.length === this.colClue[c]) { for (const r of unk) if (!this._set(r, c, 1)) return false; } }
-      // tree coverage: a tree with no placed adjacent tent and exactly one possible adjacent cell -> force it
-      for (const [tr, tc] of this.treeList) { let placed = 0; const cand = []; for (let a = 0; a < 4; a++) { const r = tr + D4R[a], c = tc + D4C[a]; if (!this._free(r, c)) continue; if (this.g[r][c] === 1) placed++; else if (this.g[r][c] === 9) cand.push([r, c]); } if (placed === 0) { if (cand.length === 0) return false; if (cand.length === 1 && !this._set(cand[0][0], cand[0][1], 1)) return false; } }
+    while (this._tentProc < this._tentN || this._rowQn > 0 || this._colQn > 0 || this._treeQn > 0) {
+      while (this._tentProc < this._tentN) { if (!this._forceTent(this._tentQ[this._tentProc++])) { this._clearQueues(); return false; } }
+      while (this._rowQn > 0) { const r = this._rowQ[--this._rowQn]; this._rowIn[r] = 0; if (!this._forceRow(r)) { this._clearQueues(); return false; } }
+      while (this._colQn > 0) { const c = this._colQ[--this._colQn]; this._colIn[c] = 0; if (!this._forceCol(c)) { this._clearQueues(); return false; } }
+      while (this._treeQn > 0) { const ti = this._treeQ[--this._treeQn]; this._treeIn[ti] = 0; if (!this._forceTree(ti)) { this._clearQueues(); return false; } }
     }
     return true;
   }
 
   // matching feasibility: trees must still be coverable by possible-tent cells (tent or unknown)
-  _matchFeasible() { return this._maxMatch((r, c) => !this.trees[r][c] && (this.g[r][c] === 1 || this.g[r][c] === 9)) === this.T; }
+  _matchFeasible() { return this._maxMatch(this._candOK) === this.T; }
 
   _tentGrid() { const t = []; for (let r = 0; r < this.rows; r++) { t.push([]); for (let c = 0; c < this.cols; c++) t[r].push(this.g[r][c] === 1 ? 1 : 0); } return t; }
   // emit: 0 unknown/tree, 1 tent, 2 grass.
@@ -94,11 +189,12 @@ class TentsSolver {
     if (!this._matchFeasible()) return false;
     const cell = this._pick();
     if (!cell) { const t = this._tentGrid(); if (this._isValid(t)) { this._count++; if (!this._first) this._first = this.g.map((row) => row.slice()); if (!countAll) return true; if (this._count >= 2) return true; } return false; }
-    const [r, c] = cell;
-    for (const v of [1, 2]) {
-      const snap = this.g.map((row) => row.slice());
+    const r = cell[0], c = cell[1];
+    for (let vi = 0; vi < 2; vi++) {
+      const v = vi === 0 ? 1 : 2;
+      const mark = this._tlen, tentMark = this._tentN;
       if (this._set(r, c, v) && this._propagate() && this._search(countAll)) { if (!countAll || this._count >= 2 || this._timedOut) return true; }
-      this.g = snap;
+      this._rollback(mark); this._tentN = tentMark; this._tentProc = tentMark;
     }
     return false;
   }
