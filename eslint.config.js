@@ -74,6 +74,7 @@ const solverClasses = {
   StitchesSolver: 'readonly',
   TapaSolver: 'readonly',
   TentsSolver: 'readonly',
+  ThermometersSolver: 'readonly',
 };
 
 // Rules tuned for this codebase. no-redeclare is off because main-world.js
