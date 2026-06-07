@@ -768,8 +768,25 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   // cell the player has placed wrong. Recomputed each redraw, so it tracks
   // the board live as the state-watch refreshes the preview.
   if (puzzleData?.solution) {
-    const mistakes = computePuzzleDiff(
-      puzzleData.type, grid, puzzleData.solution, puzzleData.stars);
+    // Pipes can't use the solver-layer computePuzzleDiff (the rotation math lives
+    // in the widget layer). Its registry hook rings only LOCKED cells at the
+    // wrong rotation, using the pinned grid the state-watch stashed. The returned
+    // {row,col} cells fall through to the generic red-ring renderer below.
+    let mistakes;
+    if (puzzleData.type === 'pipes') {
+      const reg = puzzleReg('pipes');
+      mistakes = (reg && reg.lockedMistakes && puzzleData.pipesPinned)
+        ? reg.lockedMistakes({
+            grid,
+            solution: puzzleData.solution,
+            task: puzzleData.task,
+            pinned: puzzleData.pipesPinned,
+          })
+        : [];
+    } else {
+      mistakes = computePuzzleDiff(
+        puzzleData.type, grid, puzzleData.solution, puzzleData.stars);
+    }
     if (mistakes.length) {
       ctx.save();
       ctx.strokeStyle = '#e63946';
