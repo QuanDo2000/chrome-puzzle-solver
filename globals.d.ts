@@ -124,6 +124,9 @@ type MainWorldFn =
   | 'readThermometersData'
   | 'readThermometersState'
   | 'applyThermometersState'
+  | 'readLollipopsData'
+  | 'readLollipopsState'
+  | 'applyLollipopsState'
   | 'applyGameState'
   | 'applyHintCells'
   | 'dumpPuzzleForBench';

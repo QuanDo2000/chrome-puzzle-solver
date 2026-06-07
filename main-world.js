@@ -2161,6 +2161,50 @@ function applyThermometersState(grid) {
   } catch (e) { return false; }
 }
 
+function readLollipopsData() {
+  try {
+    var G = window.Game;
+    if (!G || !Array.isArray(G.task) || !G.puzzleWidth || !G.puzzleHeight) return null;
+    var rows = G.puzzleHeight, cols = G.puzzleWidth, task = [];
+    for (var r = 0; r < rows; r++) { var row = G.task[r] || [], arr = new Array(cols); for (var c = 0; c < cols; c++) { var v = row[c]; arr[c] = (typeof v === 'number' && v >= 0) ? v : -1; } task.push(arr); }
+    return { rows: rows, cols: cols, task: task };
+  } catch (e) { return null; }
+}
+
+function readLollipopsState(rows, cols) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus) return null;
+    var cs = G.currentState.cellStatus, grid = [];
+    for (var r = 0; r < rows; r++) { var row = cs[r] || [], arr = new Array(cols); for (var c = 0; c < cols; c++) arr[c] = row[c] || 0; grid.push(arr); }
+    return grid;
+  } catch (e) { return null; }
+}
+
+function applyLollipopsState(grid) {
+  try {
+    var G = window.Game;
+    if (!G || !G.currentState || !G.currentState.cellStatus || !Array.isArray(G.task)) return false;
+    if (typeof G.saveState === 'function') G.saveState(true);
+    var cs = G.currentState.cellStatus, rows = G.puzzleHeight, cols = G.puzzleWidth;
+    for (var r = 0; r < rows; r++) {
+      if (!cs[r]) cs[r] = [];
+      for (var c = 0; c < cols; c++) {
+        if (G.task[r] && typeof G.task[r][c] === 'number' && G.task[r][c] >= 0) continue; // fixed clue cell
+        var v = (grid[r] && grid[r][c] !== undefined) ? grid[r][c] : 0;
+        if (v === 1 || v === 2 || v === 3 || v === 4) cs[r][c] = v; // 0 (unknown) left untouched
+      }
+    }
+    if (typeof G.drawCurrentState === 'function') G.drawCurrentState();
+    else if (typeof G.render === 'function') G.render();
+    else if (typeof G.redraw === 'function') G.redraw();
+    else if (typeof G.redrawGrid === 'function') G.redrawGrid();
+    else if (typeof G.draw === 'function') G.draw();
+    else if (G.getSaved && G.loadGame) { var saved = G.getSaved(); if (saved) G.loadGame(saved); }
+    return true;
+  } catch (e) { return false; }
+}
+
 function readHeyawakeData() {
   try {
     var G = window.Game;
@@ -2725,6 +2769,13 @@ function dumpPuzzleForBench() {
       for (var thcc = 0; thcc < thCols; thcc++) thCol.push(parseInt(g.task[thcc], 10) || 0);
       for (var thrr = 0; thrr < thRows; thrr++) thRow.push(parseInt(g.task[thCols + thrr], 10) || 0);
       return { type: 'thermometers', rows: thRows, cols: thCols, thermos: thTherm, colClue: thCol, rowClue: thRow, path: path };
+    }
+
+    if (path.indexOf('/lollipops/') !== -1 || g.slug === 'lollipops') {
+      if (!Array.isArray(g.task) || !g.puzzleWidth || !g.puzzleHeight) return { error: 'lollipops: missing task/dims', diagnostic: diagnostic(g), path: path };
+      var llRows = g.puzzleHeight, llCols = g.puzzleWidth, llTask = [];
+      for (var llr = 0; llr < llRows; llr++) { var llSrc = g.task[llr] || [], llDst = new Array(llCols); for (var llc = 0; llc < llCols; llc++) { var llv = llSrc[llc]; llDst[llc] = (typeof llv === 'number' && llv >= 0) ? llv : -1; } llTask.push(llDst); }
+      return { type: 'lollipops', rows: llRows, cols: llCols, task: llTask, path: path };
     }
 
     // Hashi: islands list, no grid clues. g.task is a flat array of island
