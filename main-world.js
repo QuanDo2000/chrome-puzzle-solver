@@ -1640,6 +1640,27 @@ function applyPipesState(rotations) {
   }
 }
 
+function readPipesPinned(rows, cols) {
+  // Game.currentState.pinned[r][c] === true when a cell is LOCKED. Coerce to 0/1
+  // so the array serializes cleanly across the executeScript boundary. Mirrors
+  // readPipesState's shape/guards; returns null when the layer is unavailable.
+  try {
+    var g = window.Game;
+    if (!g || !g.currentState || !g.currentState.pinned) return null;
+    var ps = g.currentState.pinned;
+    var grid = [];
+    for (var r = 0; r < rows; r++) {
+      var row = ps[r] || [];
+      var arr = new Array(cols);
+      for (var c = 0; c < cols; c++) arr[c] = row[c] ? 1 : 0;
+      grid.push(arr);
+    }
+    return grid;
+  } catch (e) {
+    return null;
+  }
+}
+
 function readKakurasuData() {
   try {
     var G = window.Game;

@@ -94,6 +94,7 @@ type MainWorldFn =
   | 'readPipesData'
   | 'readPipesState'
   | 'applyPipesState'
+  | 'readPipesPinned'
   | 'readShingokiData'
   | 'readShingokiState'
   | 'applyShingokiState'

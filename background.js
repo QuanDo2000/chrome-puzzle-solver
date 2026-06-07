@@ -64,6 +64,7 @@ const EXEC_MAIN_ALLOWLIST = new Set([
   'readPipesData',
   'readPipesState',
   'applyPipesState',
+  'readPipesPinned',
   'readShingokiData',
   'readShingokiState',
   'applyShingokiState',
