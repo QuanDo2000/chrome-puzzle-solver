@@ -1394,6 +1394,39 @@ const thermometersHandler = {
 
 registerHandler(thermometersHandler);
 
+// ── Lollipops handler (puzzles-mobile.com/lollipops/) ─────────
+
+const lollipopsHandler = {
+  name: 'puzzles-mobile-lollipops',
+  priority: 30,
+
+  matches() {
+    return isPuzzlesMobilePage() && window.location.pathname.includes('/lollipops/');
+  },
+
+  async detect() {
+    const result = { found: false, rows: 0, cols: 0, rowClues: [], colClues: [] };
+    const data = await callMainWorld('readLollipopsData', []);
+    if (!data) return { ...result, error: 'No Lollipops task data found' };
+    const stageEl = document.getElementById('stage') || document.getElementById('game') ||
+                    document.querySelector('[class*="game"], [class*="puzzle"]');
+    return { found: true, type: 'lollipops', rows: data.rows, cols: data.cols, task: data.task, rowClues: [], colClues: [], _cells: [], _element: stageEl };
+  },
+
+  async readState(ctx) {
+    const state = await callMainWorld('readLollipopsState', [ctx.rows, ctx.cols]);
+    if (state) return state; // RAW cellStatus 0/1/2/3/4 (no normalization)
+    return Array.from({ length: ctx.rows }, () => new Array(ctx.cols).fill(0));
+  },
+
+  async applySolution(solution, _ctx) {
+    const ok = await callMainWorld('applyLollipopsState', [solution]);
+    return ok ? { success: true } : { success: false, error: 'Lollipops apply failed' };
+  },
+};
+
+registerHandler(lollipopsHandler);
+
 // ── Puzzles-mobile handler ────────────────────────────────────
 
 const puzzlesMobileHandler = {
