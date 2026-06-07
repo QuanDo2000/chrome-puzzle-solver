@@ -19,6 +19,11 @@ const thermometers = {
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
   renderEmptyCells: true,
+  // The thermometer tubes + bulbs must sit UNDER the mercury fills, so they're drawn in the lattice
+  // layer (composited under the dynamic cells). Putting them in drawStaticLayer would paint the grey
+  // tubes ON TOP of the red mercury (staticLayer composites last), hiding the fill. customLattice
+  // replaces the default grid lines (we redraw faint ones ourselves in drawLattice).
+  customLattice: true,
 
   cacheKey(data) {
     if (data?.type !== 'thermometers' || !data.thermos) return null;
@@ -32,10 +37,16 @@ const thermometers = {
     return { rows: pd?.rows || (Array.isArray(grid) ? grid.length : 0), cols: pd?.cols || (Array.isArray(grid) && grid[0] ? grid[0].length : 0), marginCells: 0.6 };
   },
 
-  // Static layer: thermometer tubes (grey) with a bulb circle at index 0 + row/col clue gutters + border.
-  drawStaticLayer(ctx, { rows, cols, cellSize, pd }) {
-    const thermos = (pd && pd.thermos) || [], colClue = (pd && pd.colClue) || [], rowClue = (pd && pd.rowClue) || [];
+  // Lattice (UNDER the mercury fills): faint grid + thermometer tubes (grey) with a bulb circle at
+  // index 0. customLattice means we own the grid lines too.
+  drawLattice(ctx, { rows, cols, cellSize, pd }) {
+    const thermos = (pd && pd.thermos) || [];
     ctx.save();
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let r = 0; r <= rows; r++) { ctx.moveTo(0, r * cellSize); ctx.lineTo(cols * cellSize, r * cellSize); }
+    for (let c = 0; c <= cols; c++) { ctx.moveTo(c * cellSize, 0); ctx.lineTo(c * cellSize, rows * cellSize); }
+    ctx.stroke();
     ctx.strokeStyle = '#cbd5e1'; ctx.fillStyle = '#cbd5e1';
     ctx.lineWidth = cellSize * 0.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const therm of thermos) {
@@ -46,6 +57,13 @@ const thermometers = {
       for (let i = 0; i < therm.length; i++) { const x = (therm[i].c + 0.5) * cellSize, y = (therm[i].r + 0.5) * cellSize; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
       ctx.stroke();
     }
+    ctx.restore();
+  },
+
+  // Static layer (ON TOP of fills): row/col clue gutters + border only (tubes are in drawLattice).
+  drawStaticLayer(ctx, { rows, cols, cellSize, pd }) {
+    const colClue = (pd && pd.colClue) || [], rowClue = (pd && pd.rowClue) || [];
+    ctx.save();
     ctx.fillStyle = '#1f2937'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `bold ${Math.max(8, Math.floor(cellSize * 0.5))}px sans-serif`;
     const g = cellSize * 0.6;
@@ -57,7 +75,7 @@ const thermometers = {
     ctx.restore();
   },
 
-  // Dynamic: filled (1) -> red mercury circle; empty (2) -> bare tube (drawn by static layer).
+  // Dynamic (BETWEEN lattice and static): filled (1) -> red mercury circle; empty (2) -> bare tube.
   drawPreviewCell(ctx, { v, x, y, cellSize }) {
     if (v === 1) { ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize * 0.28, 0, Math.PI * 2); ctx.fill(); }
   },
