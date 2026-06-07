@@ -84,3 +84,18 @@ test('Lollipops soundness gate: solver matches brute-force across random tiny bo
   assert.equal(mism, 0, `gate mismatches=${mism} (tested=${tested})`);
   assert.ok(tested >= 100, `gate exercised too few boards (${tested})`);
 });
+
+const REAL = require('./fixtures/real-puzzles.js');
+
+test('Lollipops solve: the real 10x10 board solves uniquely, oracle-passing', () => {
+  const f = REAL.lollipops_10x10;
+  const s = new LollipopsSolver({ rows: f.rows, cols: f.cols, task: f.task, maxMs: 20000 });
+  const res = s.solve(true);
+  assert.equal(res.solved, true);
+  assert.equal(res.partial, undefined);
+  assert.equal(res.count, 1, 'unique solution');
+  assert.ok(s.isValid(res.grid), 'oracle rejects own solution');
+  // 15 free-cell shapes (16 candies + 16 sticks total minus the 17 clue cells).
+  let freeShapes = 0; for (let r = 0; r < f.rows; r++) for (let c = 0; c < f.cols; c++) { const v = res.grid[r][c]; if (v === 1 || v === 2 || v === 3) freeShapes++; }
+  assert.equal(freeShapes, 15);
+});
