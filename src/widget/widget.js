@@ -1135,6 +1135,12 @@ function makeWidget() {
         if (!puzzleData) return;
         const state = await readGridState();
         if (!state?.success) return;
+        // Pipes error overlay needs the page's lock layer; read it here (the
+        // live-refresh path) only, so the generic readGridState stays cheap.
+        if (puzzleData.type === 'pipes') {
+          const pinned = await callMainWorld('readPipesPinned', [state.rows, state.cols]);
+          if (pinned) puzzleData.pipesPinned = pinned;
+        }
         drawPreview(state.grid);
 
         if (!puzzleData.pendingHint) return;
