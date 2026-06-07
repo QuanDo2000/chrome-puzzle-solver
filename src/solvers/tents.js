@@ -30,7 +30,7 @@ const D4R = [-1, 1, 0, 0];
 const D4C = [0, 0, -1, 1];
 
 class TentsSolver {
-  constructor({ rows, cols, trees, colClue, rowClue, maxMs = 30000 } = {}) {
+  constructor({ rows, cols, trees, colClue, rowClue, maxMs = 30000 }) {
     this.rows = rows; this.cols = cols; this.trees = trees;
     this.colClue = colClue; this.rowClue = rowClue; this.maxMs = maxMs;
     this.treeList = [];

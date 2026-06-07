@@ -19,7 +19,7 @@
 //   meaningful for c<cols-1; vertical[r][c] for r<rows-1.
 
 class StitchesSolver {
-  constructor({ rows, cols, areas, colClue, rowClue, stitches, maxMs = 30000 } = {}) {
+  constructor({ rows, cols, areas, colClue, rowClue, stitches, maxMs = 30000 }) {
     this.rows = rows; this.cols = cols; this.areas = areas;
     this.colClue = colClue; this.rowClue = rowClue; this.K = stitches; this.maxMs = maxMs;
     // candidate edges: cross-region orthogonal borders

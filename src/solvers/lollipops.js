@@ -35,7 +35,7 @@ function partner(c, dir) {
 }
 
 class LollipopsSolver {
-  constructor({ rows, cols, task, maxMs = 30000 } = {}) {
+  constructor({ rows, cols, task, maxMs = 30000 }) {
     this.rows = rows; this.cols = cols; this.task = task; this.maxMs = maxMs;
   }
 

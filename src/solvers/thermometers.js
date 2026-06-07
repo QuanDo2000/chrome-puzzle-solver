@@ -19,7 +19,7 @@
 //   (most-constrained thermometer, snapshot/restore of the small lo/hi arrays) is the fallback.
 
 class ThermometersSolver {
-  constructor({ rows, cols, thermos, colClue, rowClue, maxMs = 30000 } = {}) {
+  constructor({ rows, cols, thermos, colClue, rowClue, maxMs = 30000 }) {
     this.rows = rows; this.cols = cols; this.thermos = thermos;
     this.colClue = colClue; this.rowClue = rowClue; this.maxMs = maxMs;
     this.T = thermos.length;

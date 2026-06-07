@@ -81,6 +81,17 @@ const EXPORT_RE =
 const SHARED_REQUIRE_RE =
   /^\s*const\s*\{[^}]*\}\s*=\s*require\(['"]\.{1,2}\/(?:[\w.-]+\/)*(?:shared|pipes-rotation)\.js['"]\);?\s*$/mg;
 
+// Remove a file's leading `'use strict';` directive, tolerating header comments
+// before it (a directive prologue may legally follow comments). After
+// concatenation the directive would otherwise become a stray no-op string
+// statement mid-bundle. The bundle keeps a single top-of-file 'use strict'.
+function stripLeadingUseStrict(s) {
+  return s.replace(
+    /^((?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*)'use strict';[ \t]*\r?\n/,
+    '$1',
+  );
+}
+
 const root = path.join(__dirname, '..');
 const widgetDir = path.join(root, 'src', 'widget');
 
@@ -97,7 +108,7 @@ function buildContentBundle() {
     const fullPath = path.join(widgetDir, file);
     if (!fs.existsSync(fullPath)) continue;
     let body = fs.readFileSync(fullPath, 'utf8');
-    body = body.replace(/^\s*'use strict';\s*\n/, '');
+    body = stripLeadingUseStrict(body);
     // Strip the guarded CJS export tail. If a file carries the `typeof module`
     // guard but nothing stripped, its footer drifted from the expected shape —
     // throw rather than ship a bundle with a stray `module.exports` (mirrors
@@ -112,8 +123,10 @@ function buildContentBundle() {
     parts.push(body.trim());
     parts.push("");
   }
-  const contentBody = fs.readFileSync(path.join(root, 'content.js'), 'utf8')
-    .replace(/^\s*'use strict';\s*module\.exports\s*=\s*require\([^)]*\)\s*;\s*$/m, '');
+  // content.js is a stub (just its 'use strict' + a pointer comment); strip the
+  // leading directive so the bundle keeps a single top-of-file 'use strict',
+  // matching the per-widget-file strip above.
+  const contentBody = stripLeadingUseStrict(fs.readFileSync(path.join(root, 'content.js'), 'utf8'));
   parts.push('// ── content.js ──');
   parts.push(contentBody.trim());
   parts.push('');
@@ -125,8 +138,7 @@ function buildContentBundle() {
   // page and kills the whole content script. EXPORT_RE only strips the GUARDED
   // `if (typeof module …) { module.exports = … }` footer, so a bare
   // `module.exports = x;` (no guard) slips past both EXPORT_RE and the
-  // per-file guard above. Catch any survivor here. (content.js's own
-  // `module.exports = require(...)` head is stripped separately above.)
+  // per-file guard above. Catch any survivor here.
   if (/^\s*module\.exports\s*=/m.test(bundle)) {
     throw new Error('a bare `module.exports =` survived into the content bundle — a puzzle module is missing its `if (typeof module …)` guard (would throw "module is not defined" in-page)');
   }

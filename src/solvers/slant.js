@@ -35,7 +35,7 @@ class DSU {
 }
 
 class SlantSolver {
-  constructor({ task, rows, cols, maxMs = 30000 } = {}) {
+  constructor({ task, rows, cols, maxMs = 30000 }) {
     this.task = task; this.rows = rows; this.cols = cols; this.maxMs = maxMs;
     this.V = (rows + 1) * (cols + 1);
   }

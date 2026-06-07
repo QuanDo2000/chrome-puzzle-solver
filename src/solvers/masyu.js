@@ -20,7 +20,7 @@
 // 25x25 is not achievable (the global-connectivity ceiling, same as Shingoki).
 
 class MasyuSolver {
-  constructor({ task, rows, cols, maxMs = 30000 } = {}) {
+  constructor({ task, rows, cols, maxMs = 30000 }) {
     this.task = task;
     this.rows = typeof rows === 'number' ? rows : task.length;
     this.cols = typeof cols === 'number' ? cols : (task[0] ? task[0].length : 0);

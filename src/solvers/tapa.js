@@ -41,7 +41,7 @@ function tapaRunString(mask) {
 }
 
 class TapaSolver {
-  constructor({ rows, cols, task, maxMs = 30000 } = {}) {
+  constructor({ rows, cols, task, maxMs = 30000 }) {
     this.rows = rows; this.cols = cols; this.task = task; this.maxMs = maxMs;
     this.shadeable = (r, c) => r >= 0 && c >= 0 && r < rows && c < cols && task[r][c] === -1;
     // per numeric clue (>=0): valid neighbour bitmasks + flat neighbour indices (-1 = not shadeable)

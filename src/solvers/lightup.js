@@ -25,7 +25,7 @@
 // in tests/lightup.test.js.
 
 class LightUpSolver {
-  constructor({ task, maxMs = 30000 } = {}) {
+  constructor({ task, maxMs = 30000 }) {
     this.task = task;
     this.rows = task.length;
     this.cols = task[0] ? task[0].length : 0;

@@ -53,6 +53,12 @@ const shakashaka = {
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
   renderEmptyCells: true,
+  // Loop must apply only the hint delta via the custom applyHint hook below —
+  // NOT the full read-back grid. readState maps undecided cells to 0 and
+  // applyShakashakaState maps 0 to a committed white, so applying the whole grid
+  // each Loop step over-commits every still-undecided cell to white, corrupting
+  // the board and misleading the next deductive hint. See applyLoopStep.
+  loopApplyViaHint: true,
 
   cacheKey(data) {
     if (!data || data.type !== 'shakashaka' || !data.task) return null;

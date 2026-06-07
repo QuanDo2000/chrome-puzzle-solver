@@ -80,6 +80,26 @@ function galaxiesHintLineDesc(h) {
     : `vertical boundary at row ${l.row + 1}, after column ${l.col}`;
 }
 
+// One Loop step's board apply. Most puzzles write the full read-back grid via
+// applySolution(grid): undecided cells round-trip as empty, so re-applying the
+// whole grid is harmless. But some puzzles (shakashaka) have a NON-identity
+// read↔apply round-trip — readState maps undecided cells to 0 and the MAIN-world
+// writer maps 0 to a COMMITTED value (white) — so applying the full grid
+// over-commits every still-undecided cell. Those opt into reg.loopApplyViaHint
+// and apply ONLY the hint delta through the custom applyHint hook
+// (dispatchApplyHint), never the full grid. Galaxies always applies its computed
+// boundary lines. Lifted to bundle scope (out of makeWidget) so it's unit
+// testable; applySolution / dispatchApplyHint are injected from the closure.
+async function applyLoopStep(reg, hint, grid, { applySolution, dispatchApplyHint }) {
+  if (hint?.type === 'galaxies') {
+    return applySolution({ type: 'galaxies-lines', lines: hint.lines });
+  }
+  if (reg?.loopApplyViaHint) {
+    return { success: await dispatchApplyHint(hint) };
+  }
+  return applySolution(grid);
+}
+
 function makeWidget() {
   const pref = loadWidgetPref();
   let expanded = pref.expanded !== false;
@@ -492,49 +512,14 @@ function makeWidget() {
         applyPartialResult(result);
         return;
       }
-      // Generic 2D-grid partial: any cell-state puzzle (heyawake, hitori)
-      // that emits {partial:true, grid:[...]} on timeout.
-      if (result?.partial && puzzleData?.type === 'heyawake' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'hitori' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'kakurasu' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'kurodoko' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'mosaic' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'norinori' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'nurikabe' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'tapa' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'tents' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'thermometers' && Array.isArray(result.grid)) {
-        applyPartialResult(result);
-        return;
-      }
-      if (result?.partial && puzzleData?.type === 'lollipops' && Array.isArray(result.grid)) {
+      // Generic 2D-grid partial: any grid-emitting cell-state puzzle (heyawake,
+      // hitori, kakurasu, kurodoko, mosaic, norinori, nurikabe, tapa, tents,
+      // thermometers, lollipops) that emits { partial:true, grid:[...] } on
+      // timeout and declares a partialResultArm hook routes through that hook's
+      // preview UI. Mirrors the cells branch below; the hook-check keeps any
+      // hookless grid puzzle falling through to the error path.
+      if (result?.partial && Array.isArray(result.grid) &&
+          typeof PUZZLES !== 'undefined' && PUZZLES && PUZZLES[puzzleData?.type]?.partialResultArm) {
         applyPartialResult(result);
         return;
       }
@@ -892,9 +877,8 @@ function makeWidget() {
       // reuses sol directly for row-by-row diffs.
       if (hr.solution) puzzleData.solution = hr.solution;
       applyHintToGrid(gs.grid, h);
-      const ar = h.type === 'galaxies'
-        ? await applySolution({ type: 'galaxies-lines', lines: h.lines })
-        : await applySolution(gs.grid);
+      const loopReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+      const ar = await applyLoopStep(loopReg, h, gs.grid, { applySolution, dispatchApplyHint });
       if (!ar?.success) break;
 
       steps++;
@@ -1305,5 +1289,5 @@ function makeWidget() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { makeWidget };
+  module.exports = { makeWidget, applyLoopStep };
 }

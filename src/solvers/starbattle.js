@@ -24,7 +24,7 @@ const STAR_DR = [-1, -1, -1, 0, 1, 1, 1, 0];
 const STAR_DC = [-1, 0, 1, 1, 1, 0, -1, -1];
 
 class StarBattleSolver {
-  constructor({ rows, cols, stars, areas = null, walls = null, maxMs = 30000 } = {}) {
+  constructor({ rows, cols, stars, areas = null, walls = null, maxMs = 30000 }) {
     this.rows = rows; this.cols = cols; this.k = stars; this.maxMs = maxMs;
     // Normalize areas/walls: the page (and callers) pass [] for "none" — shaped boards
     // carry walls:[], shapeless boards carry areas all-0 or absent. Treat anything that

@@ -53,3 +53,12 @@ test('content bundle parses without SyntaxError (catches bad strip / redeclarati
   // without needing a DOM/chrome environment.
   assert.doesNotThrow(() => new Function(src));
 });
+
+test('content bundle has exactly one "use strict" directive (no per-file leftovers)', () => {
+  const src = buildContentBundle();
+  // The bundler emits one top-of-file directive and strips every per-file
+  // 'use strict'; (widget files AND content.js). A leftover in the middle is a
+  // stale strip — harmless but a sign the strip regex drifted from its source.
+  const count = (src.match(/'use strict';/g) || []).length;
+  assert.equal(count, 1, `expected one 'use strict'; directive, found ${count}`);
+});
