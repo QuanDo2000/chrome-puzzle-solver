@@ -1,5 +1,7 @@
 'use strict';
 
+const { puzzleReg } = require('./shared.js');
+
 // Solution-cache hygiene. Each cached entry stores `savedAt: Date.now()`.
 // Two cleanup paths cooperate:
 //   * TTL on read: entries older than SOLUTION_TTL_MS are evicted at the
@@ -106,7 +108,7 @@ function cacheGalaxiesSolution(data, grid) {
 }
 
 function getCachedGridSolution(data) {
-  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
+  const reg = puzzleReg(data?.type);
   if (reg?.cacheKey) assertCtxHas(data, ['type'], 'cacheKey');
   const key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) return null;
@@ -131,7 +133,7 @@ function getCachedGridSolution(data) {
 }
 
 function cacheGridSolution(data, grid) {
-  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
+  const reg = puzzleReg(data?.type);
   if (reg?.cacheKey) assertCtxHas(data, ['type'], 'cacheKey');
   const key = reg?.cacheKey ? reg.cacheKey(data) : null;
   if (!key) return;

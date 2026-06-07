@@ -68,6 +68,16 @@ function makeSimpleHintDispatch(type, makeSolver) {
   };
 }
 
+// Resolve a puzzle type's registry entry from the bundle-global PUZZLES map, or
+// null when it's absent (PUZZLES undefined — e.g. under Node unit tests — or an
+// unknown type). Unlike the other helpers here this one reads a bundle global
+// rather than being purely arg-driven; the typeof guard keeps it null-safe in
+// every context. Collapses the `(typeof PUZZLES !== 'undefined' && PUZZLES) ?
+// PUZZLES[t] : null` idiom that the widget layer repeated ~20 times.
+function puzzleReg(type) {
+  return (typeof PUZZLES !== 'undefined' && PUZZLES) ? (PUZZLES[type] || null) : null;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hashFNV1a, drawCrossCell, absoluteCellHintStatus, makeSimpleHintDispatch };
+  module.exports = { hashFNV1a, drawCrossCell, absoluteCellHintStatus, makeSimpleHintDispatch, puzzleReg };
 }

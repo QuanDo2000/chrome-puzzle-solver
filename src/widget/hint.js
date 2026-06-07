@@ -1,5 +1,7 @@
 'use strict';
 
+const { puzzleReg } = require('./shared.js');
+
 function firstMismatch(grid, solution) {
   if (!grid || !solution) return null;
   for (let r = 0; r < grid.length; r++) {
@@ -212,7 +214,7 @@ async function getHint(request = {}) {
     // Per-puzzle hintDispatch (Stage D Task 7). Migrated modules return the
     // full {success, hint, grid, solution} shape and bypass the inline chain
     // below entirely. Unmigrated puzzles fall through.
-    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[detectedGrid.type] : null;
+    const reg = puzzleReg(detectedGrid.type);
     if (reg?.hintDispatch) {
       const ctx = {
         detectedGrid, grid, solution, hintSolution,

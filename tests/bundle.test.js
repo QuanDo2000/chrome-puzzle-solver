@@ -1,6 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { buildSolverBundle } = require('../scripts/build-solver-bundle.js');
 const { buildContentBundle } = require('../scripts/build-content-bundle.js');
 const nodeSolvers = require('../solver.js');
@@ -15,11 +17,23 @@ function loadBundledSolvers() {
   return m.exports;
 }
 
-test('solver bundle evaluates and exports every solver class', () => {
+// Directory-driven so the bundler's FILES list can't silently drift from the
+// solver directory — a solver added to src/solvers/ but forgotten in the
+// bundler would ship a runtime-missing puzzle in the actual extension (the
+// dangerous drift axis that solvers-index.test.js does NOT cover). The PRODUCTION
+// bundle, not index.js, is the source of truth checked here.
+test('solver bundle exports every *Solver class in src/solvers/', () => {
   const bundled = loadBundledSolvers();
-  for (const name of ['NonogramSolver', 'AquariumSolver', 'MosaicSolver', 'PipesSolver', 'ShingokiSolver', 'computePuzzleDiff']) {
-    assert.equal(typeof bundled[name], 'function', `${name} missing from bundle`);
+  const dir = path.join(__dirname, '..', 'src', 'solvers');
+  const SKIP = new Set(['index.js', 'shared.js', 'diff.js']);
+  const missing = [];
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.js') && !SKIP.has(f))) {
+    for (const name of Object.keys(require(path.join(dir, file)))) {
+      if (name.endsWith('Solver') && typeof bundled[name] !== 'function') missing.push(`${name} (${file})`);
+    }
   }
+  assert.deepEqual(missing, [], `bundle is missing solver classes: ${missing.join(', ')}`);
+  assert.equal(typeof bundled.computePuzzleDiff, 'function', 'computePuzzleDiff missing from bundle');
 });
 
 test('bundled NonogramSolver matches the Node-source path', () => {
@@ -61,4 +75,17 @@ test('content bundle has exactly one "use strict" directive (no per-file leftove
   // stale strip — harmless but a sign the strip regex drifted from its source.
   const count = (src.match(/'use strict';/g) || []).length;
   assert.equal(count, 1, `expected one 'use strict'; directive, found ${count}`);
+  // ...and it must be the very first statement, or the whole bundle isn't in
+  // strict mode (count===1 alone would pass even if the top directive vanished
+  // while a stray mid-bundle one survived).
+  assert.ok(src.trimStart().startsWith("'use strict';"), 'bundle must open with the directive');
+});
+
+test('solver bundle has exactly one "use strict" directive at the top', () => {
+  // Both bundlers share stripLeadingUseStrict (scripts/build-utils.js); guard the
+  // solver bundle too so the shared helper can't regress for one and not the other.
+  const src = buildSolverBundle();
+  const count = (src.match(/'use strict';/g) || []).length;
+  assert.equal(count, 1, `expected one 'use strict'; directive, found ${count}`);
+  assert.ok(src.trimStart().startsWith("'use strict';"), 'bundle must open with the directive');
 });

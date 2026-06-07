@@ -1,5 +1,7 @@
 'use strict';
 
+const { puzzleReg } = require('./shared.js');
+
 // Widget shell. The makeWidget() factory builds the DOM, wires button
 // handlers, mounts the state-watch MutationObserver, and wires lifecycle
 // hooks (pagehide/pageshow). widgetExpandFn is assigned by makeWidget
@@ -80,23 +82,26 @@ function galaxiesHintLineDesc(h) {
     : `vertical boundary at row ${l.row + 1}, after column ${l.col}`;
 }
 
-// One Loop step's board apply. Most puzzles write the full read-back grid via
-// applySolution(grid): undecided cells round-trip as empty, so re-applying the
-// whole grid is harmless. But some puzzles (shakashaka) have a NON-identity
-// read↔apply round-trip — readState maps undecided cells to 0 and the MAIN-world
-// writer maps 0 to a COMMITTED value (white) — so applying the full grid
-// over-commits every still-undecided cell. Those opt into reg.loopApplyViaHint
-// and apply ONLY the hint delta through the custom applyHint hook
-// (dispatchApplyHint), never the full grid. Galaxies always applies its computed
-// boundary lines. Lifted to bundle scope (out of makeWidget) so it's unit
-// testable; applySolution / dispatchApplyHint are injected from the closure.
-async function applyLoopStep(reg, hint, grid, { applySolution, dispatchApplyHint }) {
+// One Loop step's board apply — the single locus of "how to apply this step".
+// Most puzzles merge the hint into the read-back grid (applyHintToGrid) and write
+// the whole grid via applySolution(grid): undecided cells round-trip as empty, so
+// re-applying the whole grid is harmless. But some puzzles (shakashaka, lightup)
+// have a NON-identity read↔apply round-trip — readState maps undecided cells to 0
+// and the MAIN-world writer maps 0 to a COMMITTED value (white / X) — so applying
+// the full grid over-commits every still-undecided cell. Those opt into
+// reg.loopApplyViaHint and apply ONLY the hint delta through the custom applyHint
+// hook (dispatchApplyHint), never the full grid. Galaxies always applies its
+// computed boundary lines. The grid is merged/built only on the path that
+// consumes it. Lifted to bundle scope (out of makeWidget) so it's unit testable;
+// the closure injects applySolution / dispatchApplyHint / applyHintToGrid.
+async function applyLoopStep(reg, hint, grid, { applySolution, dispatchApplyHint, applyHintToGrid }) {
   if (hint?.type === 'galaxies') {
     return applySolution({ type: 'galaxies-lines', lines: hint.lines });
   }
   if (reg?.loopApplyViaHint) {
     return { success: await dispatchApplyHint(hint) };
   }
+  applyHintToGrid(grid, hint);
   return applySolution(grid);
 }
 
@@ -258,7 +263,7 @@ function makeWidget() {
   // hintStatusNodes). Optional `prefix` is prepended verbatim — the loop body
   // uses `Step N: ` so it threads through one branch.
   function setHintStatus(h, prefix = '') {
-    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    const reg = puzzleReg(puzzleData?.type);
     if (reg?.hintStatusNodes) {
       setStatusNodes('info', prefix, ...reg.hintStatusNodes(h, { bold, puzzleData }));
     } else {
@@ -512,25 +517,18 @@ function makeWidget() {
         applyPartialResult(result);
         return;
       }
-      // Generic 2D-grid partial: any grid-emitting cell-state puzzle (heyawake,
-      // hitori, kakurasu, kurodoko, mosaic, norinori, nurikabe, tapa, tents,
-      // thermometers, lollipops) that emits { partial:true, grid:[...] } on
-      // timeout and declares a partialResultArm hook routes through that hook's
-      // preview UI. Mirrors the cells branch below; the hook-check keeps any
-      // hookless grid puzzle falling through to the error path.
-      if (result?.partial && Array.isArray(result.grid) &&
-          typeof PUZZLES !== 'undefined' && PUZZLES && PUZZLES[puzzleData?.type]?.partialResultArm) {
-        applyPartialResult(result);
-        return;
-      }
-      // Generic cell-state partial: any puzzle whose solver emits { partial:true,
-      // cells:[...] } (lightup, shakashaka, slant, starbattle, ...) and declares a
-      // partialResultArm hook routes through that hook's preview UI. Edge puzzles
-      // (slitherlink/shingoki/masyu) use the horizontal/vertical branch above; hashi
-      // uses the edges branch; the older grid-emitting puzzles use the per-type
-      // branches above. Placed last so those specific shapes take precedence.
-      if (result?.partial && Array.isArray(result.cells) &&
-          typeof PUZZLES !== 'undefined' && PUZZLES && PUZZLES[puzzleData?.type]?.partialResultArm) {
+      // Generic cell-state partial: any puzzle whose solver emits { partial:true }
+      // with either a 2D `grid` (heyawake, hitori, kakurasu, kurodoko, mosaic,
+      // norinori, nurikabe, tapa, tents, thermometers, lollipops) or a `cells`
+      // array (lightup, shakashaka, slant, starbattle, ...) and declares a
+      // partialResultArm hook routes through that hook's preview UI. The two
+      // shapes are mutually exclusive per solver, so one branch handles both.
+      // Edge puzzles (slitherlink/shingoki/masyu) use the horizontal/vertical
+      // branch above; hashi uses the edges branch. The hook-check keeps any
+      // hookless puzzle falling through to the error path. Placed last so the
+      // specific edge/hashi shapes take precedence.
+      if (result?.partial && (Array.isArray(result.grid) || Array.isArray(result.cells)) &&
+          puzzleReg(puzzleData?.type)?.partialResultArm) {
         applyPartialResult(result);
         return;
       }
@@ -603,7 +601,7 @@ function makeWidget() {
     // downstream consumers (gsComplete, endComplete, mistake-diff) can compare
     // directly without re-checking. The puzzle module's solutionFromResult
     // hook (slitherlink, hashi) re-shapes; default is result.grid.
-    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    const reg = puzzleReg(puzzleData?.type);
     puzzleData.solution = reg?.solutionFromResult ? reg.solutionFromResult(result, puzzleData) : result.grid;
     cacheGalaxiesSolution(puzzleData, result.grid);
     cacheGridSolution(puzzleData, puzzleData.solution);
@@ -631,7 +629,7 @@ function makeWidget() {
   // solutionFromResult hook (slitherlink, hashi) shapes the preview payload;
   // default is result.grid.
   function previewGridFromResult(result) {
-    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    const reg = puzzleReg(puzzleData?.type);
     if (reg?.solutionFromResult) return reg.solutionFromResult(result, puzzleData);
     return result?.grid;
   }
@@ -644,7 +642,7 @@ function makeWidget() {
   // recordSolveSuccess: the partial is a subset of the real solution, so
   // caching it would mis-trigger Loop's done-check and the mistake overlay.
   function applyPartialResult(result) {
-    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    const reg = puzzleReg(puzzleData?.type);
     if (reg?.partialResultArm) {
       const ctx = {
         clearPendingHint, setStatus, drawPreview,
@@ -838,7 +836,7 @@ function makeWidget() {
       const gs = await readGridState();
       if (!gs?.success) break;
       let gsComplete;
-      const regLoop = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+      const regLoop = puzzleReg(puzzleData?.type);
       if (regLoop?.loopDoneCheck) {
         const ctx = { boardState: gs.grid, solution: puzzleData.solution ?? null, puzzleData };
         assertCtxHas(ctx, ['boardState', 'solution', 'puzzleData'], 'loopDoneCheck');
@@ -850,7 +848,7 @@ function makeWidget() {
 
       const hr = await getHint({ solution: puzzleData.solution });
       if (!hr?.success) break;
-      const hintReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[hr.hint?.type] : null;
+      const hintReg = puzzleReg(hr.hint?.type);
       if (!hintReg?.hasAbsoluteHintCells && !hr.hint?.cells?.length) break;
 
       const h = hr.hint;
@@ -876,9 +874,8 @@ function makeWidget() {
       // solver call. Galaxies attaches a memoized _galaxyPath; aquarium
       // reuses sol directly for row-by-row diffs.
       if (hr.solution) puzzleData.solution = hr.solution;
-      applyHintToGrid(gs.grid, h);
-      const loopReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
-      const ar = await applyLoopStep(loopReg, h, gs.grid, { applySolution, dispatchApplyHint });
+      const loopReg = puzzleReg(puzzleData?.type);
+      const ar = await applyLoopStep(loopReg, h, gs.grid, { applySolution, dispatchApplyHint, applyHintToGrid });
       if (!ar?.success) break;
 
       steps++;
@@ -903,7 +900,7 @@ function makeWidget() {
       if (end?.success) drawPreview(end.grid);
       let endComplete = false;
       if (end?.grid) {
-        const regEnd = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+        const regEnd = puzzleReg(puzzleData?.type);
         if (regEnd?.loopDoneCheck) {
           const ctx = { boardState: end.grid, solution: puzzleData.solution ?? null, puzzleData };
           assertCtxHas(ctx, ['boardState', 'solution', 'puzzleData'], 'loopDoneCheck');
@@ -996,7 +993,7 @@ function makeWidget() {
     // on pendingAutoSolve — on hard 30×30 dailies that solve can take >30 s,
     // while the propagation hint returns in ~1 ms. Other puzzle types still
     // need the cached solution for mistake comparison.
-    const skipAutoSolveGate = !!(typeof PUZZLES !== 'undefined' && PUZZLES?.[puzzleData?.type]?.skipAutoSolveGate);
+    const skipAutoSolveGate = !!puzzleReg(puzzleData?.type)?.skipAutoSolveGate;
     if (!skipAutoSolveGate && !puzzleData.solution && pendingAutoSolve) {
       setStatus('Solving...', 'info');
       await pendingAutoSolve;
@@ -1063,9 +1060,7 @@ function makeWidget() {
   // align with puzzleData.type. Pick the registry entry by hint.type ===
   // 'galaxies' first, then by puzzleData.type.
   async function dispatchApplyHint(hint) {
-    const reg = (typeof PUZZLES !== 'undefined' && PUZZLES)
-      ? PUZZLES[hint?.type === 'galaxies' ? 'galaxies' : puzzleData?.type]
-      : null;
+    const reg = puzzleReg(hint?.type === 'galaxies' ? 'galaxies' : puzzleData?.type);
     if (reg?.applyHint) {
       const ctx = {
         applySolution,

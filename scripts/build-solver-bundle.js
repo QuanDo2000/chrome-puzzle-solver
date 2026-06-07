@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { stripLeadingUseStrict } = require('./build-utils.js');
 
 // Order is for readability only — classes don't reference each other at
 // file scope. `shared.js` is listed FIRST so its helpers are bundle-scope
@@ -65,7 +66,7 @@ function buildSolverBundle() {
     const fullPath = path.join(srcDir, file);
     let body = fs.readFileSync(fullPath, 'utf8');
     // Drop the per-file 'use strict' to avoid duplication at the top.
-    body = body.replace(/^\s*'use strict';\s*\n/, '');
+    body = stripLeadingUseStrict(body);
     // Drop the per-file CommonJS export block. If the regex fails to match,
     // throw — the bundle would be subtly broken otherwise.
     // shared.js has no solver classes so its export tail is fine to silently

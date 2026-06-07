@@ -29,6 +29,14 @@ const lightup = {
   hasAbsoluteHintCells: true,
   hintBandSkip: true,
   renderEmptyCells: true,
+  // Loop must apply only the hint delta via the custom applyHint hook below —
+  // NOT the full read-back grid. readState maps undecided cells to 0 and
+  // applyLightUpState maps 0 to a committed X (no-bulb, cellStatus 2), so
+  // applying the whole grid each Loop step over-commits every still-undecided
+  // cell, corrupting the board the next deductive hint reads. Same class as
+  // shakashaka; see applyLoopStep. (lollipops/pipes leave undecided cells
+  // untouched in their writers, so they do NOT need this.)
+  loopApplyViaHint: true,
 
   cacheKey(data) {
     if (!data || data.type !== 'lightup' || !data.task) return null;

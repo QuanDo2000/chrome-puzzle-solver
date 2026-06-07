@@ -1,5 +1,7 @@
 'use strict';
 
+const { puzzleReg } = require('./shared.js');
+
 // Cross-puzzle dispatch glue between the per-puzzle registry (PUZZLES /
 // handler.js) and the widget's user-facing actions. These functions used
 // to live at the top of content.js; they're factored out so the listener
@@ -82,7 +84,7 @@ async function applySolution(solution, skipUndo = false, internal = false) {
 function solveExtraData() {
   const data = detectedGrid;
   if (!data) return null;
-  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[data?.type] : null;
+  const reg = puzzleReg(data?.type);
   if (reg?.solveExtraData) return reg.solveExtraData(data);
   return null;
 }

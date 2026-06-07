@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { stripLeadingUseStrict } = require('./build-utils.js');
 
 const WIDGET_FILES = [
   // Shared helpers (hashFNV1a etc.) — no dependencies; must be FIRST so its
@@ -80,17 +81,6 @@ const EXPORT_RE =
 // surviving const-require would redeclare them and throw at parse time.
 const SHARED_REQUIRE_RE =
   /^\s*const\s*\{[^}]*\}\s*=\s*require\(['"]\.{1,2}\/(?:[\w.-]+\/)*(?:shared|pipes-rotation)\.js['"]\);?\s*$/mg;
-
-// Remove a file's leading `'use strict';` directive, tolerating header comments
-// before it (a directive prologue may legally follow comments). After
-// concatenation the directive would otherwise become a stray no-op string
-// statement mid-bundle. The bundle keeps a single top-of-file 'use strict'.
-function stripLeadingUseStrict(s) {
-  return s.replace(
-    /^((?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*)'use strict';[ \t]*\r?\n/,
-    '$1',
-  );
-}
 
 const root = path.join(__dirname, '..');
 const widgetDir = path.join(root, 'src', 'widget');

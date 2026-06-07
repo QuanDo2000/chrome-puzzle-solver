@@ -1,6 +1,6 @@
 'use strict';
 
-const { hashFNV1a } = require('./shared.js');
+const { hashFNV1a, puzzleReg } = require('./shared.js');
 
 // Canvas-rendering helpers for the puzzle-preview overlay. Extracted
 // from content.js's makeWidget closure (Stage A of the Phase 2
@@ -98,7 +98,7 @@ function buildLatticeLayer(rows, cols, cellSize, w, h, pd, margin = 0) {
   if (margin) ctx.translate(margin, margin);
   ctx.strokeStyle = '#d1d5db';
   ctx.lineWidth = 0.5;
-  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
+  const reg = puzzleReg(pd?.type);
   if (reg?.customLattice && reg.drawLattice) {
     reg.drawLattice(ctx, { rows, cols, cellSize, w, h, pd });
     return c;
@@ -129,7 +129,7 @@ function buildStaticLayer(rows, cols, cellSize, w, h, pd, margin = 0) {
   const ctx = c.getContext('2d');
   if (margin) ctx.translate(margin, margin);
   drawRegionBordersOn(ctx, rows, cols, cellSize, pd?.regionMap);
-  const reg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
+  const reg = puzzleReg(pd?.type);
   if (reg?.drawStaticLayer) {
     reg.drawStaticLayer(ctx, { rows, cols, cellSize, w, h, pd });
     return c;
@@ -267,7 +267,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   // canvasDims(pd, { grid }) returning {rows, cols, padRight?, padBottom?}.
   // padRight/padBottom (default 0) are EXTRA cells added to the canvas —
   // kakurasu uses padRight=1, padBottom=1 for its (N+1)×(N+1) clue rim.
-  const dimsReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+  const dimsReg = puzzleReg(puzzleData?.type);
   const dims = dimsReg?.canvasDims
     ? dimsReg.canvasDims(puzzleData, { grid })
     : { rows: grid.length, cols: grid[0]?.length || 0, padRight: 0, padBottom: 0 };
@@ -325,7 +325,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   lastDrawSig = sig;
 
   // (Re)build the static layers if puzzle shape or size changed.
-  const staticSigReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
+  const staticSigReg = puzzleReg(pd?.type);
   let staticSig;
   if (staticSigReg?.staticSig) {
     staticSig = rows + 'x' + cols + '@' + cellSize + '|t=' + (pd?.type || '') +
@@ -375,8 +375,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   // mosaic/norinori/nurikabe" need to render v===0 cells (clue digits, walls,
   // region borders, etc.). Lifted to a per-module flag so adding a new
   // empty-rendering puzzle stays a one-file change in src/widget/puzzles/.
-  const renderEmpty = !!(typeof PUZZLES !== 'undefined'
-    && PUZZLES?.[puzzleData?.type]?.renderEmptyCells);
+  const renderEmpty = !!puzzleReg(puzzleData?.type)?.renderEmptyCells;
   const discR = puzzleData?.type === 'binairo' ? Math.max(2, Math.floor(cellSize * 0.35)) : 0;
   if (isEdgeLoop) {
     ctx.save();
@@ -590,7 +589,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
   } else {
     let xMarkPath = null;
     ctx.fillStyle = '#1f2937';
-    const cellReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[pd?.type] : null;
+    const cellReg = puzzleReg(pd?.type);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const v = grid[r][c];
@@ -700,7 +699,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     const highlightColor = 'rgba(46, 134, 222, 0.25)';
     const fillColor = 'rgba(46, 134, 222, 0.45)';
     const crossColor = 'rgba(230, 57, 70, 0.45)';
-    const bandReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    const bandReg = puzzleReg(puzzleData?.type);
     if (hint.type === 'galaxies') {
       ctx.save();
       ctx.strokeStyle = '#2e86de';
@@ -735,7 +734,7 @@ function renderPreview(canvas, puzzleData, grid, hint, bodyWidth) {
     // Per-puzzle modules own their hint-cell render via drawHintCell; the
     // default branch covers the nonogram-shape arms (value=1 fill,
     // value=-1 red cross) that don't belong to any per-puzzle module.
-    const hintCellReg = (typeof PUZZLES !== 'undefined' && PUZZLES) ? PUZZLES[puzzleData?.type] : null;
+    const hintCellReg = puzzleReg(puzzleData?.type);
     for (const cell of hintAbsoluteCells(hint)) {
       const cx = cell.col * cellSize;
       const cy = cell.row * cellSize;
