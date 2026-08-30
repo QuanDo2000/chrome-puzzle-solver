@@ -51,7 +51,7 @@
 | `tests/solver.test.js` | New unit tests for the three new methods |
 | `tests/fixtures/real-puzzles.js` | New `yinyangWeekly35x35` fixture |
 | `tests/bench-yinyang.js` | Set `maxMs` so a non-solving puzzle bails instead of hanging |
-| `CLAUDE.md` | Update the Yin-Yang solver-shape description |
+| `AGENTS.md` | Update the Yin-Yang solver-shape description |
 
 ---
 
@@ -544,14 +544,14 @@ jj commit -m "feat(yin-yang): raise worker solve budget to 30s for large boards"
 
 ---
 
-## Task 6: Update CLAUDE.md
+## Task 6: Update AGENTS.md
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Update the solver-shape description**
 
-In `CLAUDE.md`, the "Yin-Yang encoding" subsection describes the solver. It currently says propagation iterates "2×2 forcing (`_apply2x2`) and a connectivity-cut probe (`_applyConnectivity`, which forces any empty cell whose removal would sever a colour's placed cells)".
+In `AGENTS.md`, the "Yin-Yang encoding" subsection describes the solver. It currently says propagation iterates "2×2 forcing (`_apply2x2`) and a connectivity-cut probe (`_applyConnectivity`, which forces any empty cell whose removal would sever a colour's placed cells)".
 
 Replace that description of the connectivity rule with an accurate one:
 
@@ -573,7 +573,7 @@ Adjust the surrounding wording so the paragraph reads naturally — the goal is 
 - [ ] **Step 2: Verify**
 
 Run: `npm test`
-Expected: full suite green (CLAUDE.md edits need no rebuild).
+Expected: full suite green (AGENTS.md edits need no rebuild).
 
 - [ ] **Step 3: Commit**
 

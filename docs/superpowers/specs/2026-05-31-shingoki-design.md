@@ -69,7 +69,7 @@ bundler FILE lists (`scripts/build-solver-bundle.js`,
 `main-world.js` (`readShingokiData` / `readShingokiState` /
 `applyShingokiState` + `/shingoki/` dump branch), `background.js`
 `EXEC_MAIN_ALLOWLIST`, `globals.d.ts` `MainWorldFn`, `src/widget/cache.js`
-(`shingoki-solution:` prefix), CLAUDE.md puzzle list.
+(`shingoki-solution:` prefix), AGENTS.md puzzle list.
 
 ## Solver (`ShingokiSolver`)
 

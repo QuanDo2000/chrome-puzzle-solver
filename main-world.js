@@ -526,7 +526,7 @@ function applyBinairoState(solution) {
 
     // saveState(true) BEFORE writes — this engine matches aquarium's pattern
     // where direct cellStatus mutation needs to be committed to the page's
-    // internal model first. See CLAUDE.md "MAIN-world write functions: save +
+    // internal model first. See AGENTS.md "MAIN-world write functions: save +
     // render ladder" and the prior aquarium bug fix (7df9fa5).
     if (typeof window.Game.saveState === 'function') {
       window.Game.saveState(true);
@@ -637,7 +637,7 @@ function applyYinYangState(solution) {
     var rows = solution.length;
 
     // saveState(true) BEFORE writes — commit to the page's internal model
-    // first. See CLAUDE.md "MAIN-world write functions: save + render ladder".
+    // first. See AGENTS.md "MAIN-world write functions: save + render ladder".
     if (typeof window.Game.saveState === 'function') {
       window.Game.saveState(true);
     }
@@ -751,7 +751,7 @@ function applySlitherlinkState(lines) {
     var vs = window.Game.currentState.cellVerticalStatus;
     if (!Array.isArray(hs) || !Array.isArray(vs)) return false;
 
-    // saveState(true) BEFORE writes — see CLAUDE.md "MAIN-world write
+    // saveState(true) BEFORE writes — see AGENTS.md "MAIN-world write
     // functions: save + render ladder".
     if (typeof window.Game.saveState === 'function') {
       window.Game.saveState(true);

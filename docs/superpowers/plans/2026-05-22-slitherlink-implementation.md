@@ -169,7 +169,7 @@ Locate the end of the `YinYangSolver` class with `grep -n "^}" solver.js | head`
 ```js
 /**
  * Slitherlink ("Loop") solver. Edge-variable propagation + backtracking,
- * modeled on GalaxiesSolver's trail-based undo. See CLAUDE.md "Slitherlink
+ * modeled on GalaxiesSolver's trail-based undo. See AGENTS.md "Slitherlink
  * encoding" for the design notes.
  *
  * Edge encoding (internal): 0=UNKNOWN, 1=LINE, 2=EMPTY. Chosen so 1 maps
@@ -1549,7 +1549,7 @@ function applySlitherlinkState(lines) {
     var vs = window.Game.currentState.cellVerticalStatus;
     if (!Array.isArray(hs) || !Array.isArray(vs)) return false;
 
-    // saveState(true) BEFORE writes — see CLAUDE.md "MAIN-world write
+    // saveState(true) BEFORE writes — see AGENTS.md "MAIN-world write
     // functions: save + render ladder".
     if (typeof window.Game.saveState === 'function') {
       window.Game.saveState(true);
@@ -2891,11 +2891,11 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 19: Dump-button branch + CLAUDE.md + final verification
+## Task 19: Dump-button branch + AGENTS.md + final verification
 
 **Files:**
 - Modify: `main-world.js` — `dumpPuzzleForBench` slitherlink branch
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Add the dump-button branch**
 
@@ -2920,12 +2920,12 @@ In `main-world.js`'s `dumpPuzzleForBench` (around line 910 — after the yin-yan
     }
 ```
 
-- [ ] **Step 2: Update CLAUDE.md**
+- [ ] **Step 2: Update AGENTS.md**
 
 Update the intro line (currently "A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo, Binairo Plus, Shikaku, and Yin-Yang puzzles…") to include Slitherlink:
 
 ```markdown
-# Project conventions for Claude Code
+# Project conventions
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
 Binairo Plus, Shikaku, Yin-Yang, and Slitherlink puzzles on puzzles-mobile.com.
@@ -3019,7 +3019,7 @@ Update the MV3 hardening contract subsection to bump the allowlist count:
 - `background.js`'s `onMessage` listener rejects anything where `sender.id !== chrome.runtime.id` and gates `execMain` `funcName` against `EXEC_MAIN_ALLOWLIST` (20 entries). The TS-side mirror is `MainWorldFn` in `globals.d.ts`; keep them in sync.
 ```
 
-(Search for "17 entries" in CLAUDE.md and update to "20 entries". If the exact wording differs from the example above, use the file's actual text and only change the count.)
+(Search for "17 entries" in AGENTS.md and update to "20 entries". If the exact wording differs from the example above, use the file's actual text and only change the count.)
 
 - [ ] **Step 3: Final verification**
 

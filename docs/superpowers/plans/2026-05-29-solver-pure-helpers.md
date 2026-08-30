@@ -307,14 +307,14 @@ jj commit -m "refactor(solvers): extract cache eviction to shared lruSet"
 
 ---
 
-## Task 5: Update CLAUDE.md + final verification
+## Task 5: Update AGENTS.md + final verification
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Extend the shared-utils note**
 
-In `CLAUDE.md`'s "### Shared utilities + bundler require-strip" subsection, update the helper list from "(currently `hashFNV1a`)" to reflect the new helpers, e.g.: "dependency-free helpers (`hashFNV1a`, `emitGrid`, `cloneSolveResult`, `timeUp`, `lruSet`)."
+In `AGENTS.md`'s "### Shared utilities + bundler require-strip" subsection, update the helper list from "(currently `hashFNV1a`)" to reflect the new helpers, e.g.: "dependency-free helpers (`hashFNV1a`, `emitGrid`, `cloneSolveResult`, `timeUp`, `lruSet`)."
 
 - [ ] **Step 2: Final full gate**
 

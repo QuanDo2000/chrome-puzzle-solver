@@ -29,7 +29,7 @@
 | `src/solvers/{hitori,kurodoko,mosaic,norinori,heyawake,nurikabe,kakurasu,slitherlink}.js` | Modify | `_rollback`/`_set` trail → `rollbackTrail`/`trailPush`. |
 | grid solvers with a `getHint` | Modify | `collectChanged` closure → `collectChangedCells`. |
 | `tests/shared-utils.test.js` | Modify | Unit tests for each helper. |
-| `CLAUDE.md` | Modify | Extend the shared-utils note. |
+| `AGENTS.md` | Modify | Extend the shared-utils note. |
 
 ---
 
@@ -268,9 +268,9 @@ jj commit -m "refactor(solvers): extract getHint change-collector to shared coll
 ## Task 4: Docs + final verification
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
-- [ ] **Step 1: Extend the shared-utils note.** In `CLAUDE.md`'s "### Shared utilities + bundler require-strip" subsection, add the new helpers to the listed set (so it reads e.g. "…`emitGrid`, `cloneSolveResult`, `timeUp`, `lruSet`, `whiteConnectivity`, `rollbackTrail`/`trailPush`, `collectChangedCells`").
+- [ ] **Step 1: Extend the shared-utils note.** In `AGENTS.md`'s "### Shared utilities + bundler require-strip" subsection, add the new helpers to the listed set (so it reads e.g. "…`emitGrid`, `cloneSolveResult`, `timeUp`, `lruSet`, `whiteConnectivity`, `rollbackTrail`/`trailPush`, `collectChangedCells`").
 
 - [ ] **Step 2: Final full gate.**
 Run: `npm run build && npm test && npm run lint && npm run typecheck` → all green.

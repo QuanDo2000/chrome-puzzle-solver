@@ -26,7 +26,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 | `tests/fixtures/real-puzzles.js` | Real captures | Add `shingoki_7x7_hard` fixture |
 | `tests/bench-shingoki.js` | Bench ladder | No logic change; confirm it runs the DFS |
 | `solver.worker.js` | Worker dispatch | No change (confirm `maxMs: 30000`, no CDCL-only options) |
-| `CLAUDE.md` | Project notes | Replace the Shingoki CDCL note with the adaptive-DFS description |
+| `AGENTS.md` | Project notes | Replace the Shingoki CDCL note with the adaptive-DFS description |
 
 The new engine sits behind `solve()`. During Tasks 1–3 the CDCL methods still exist but are unreferenced (the DFS calls `_initState`, not `_cdclInit`, so `this._cdcl` stays falsy and the CDCL branches inside `_propagate`/`setEdge` are skipped). Task 4 deletes the dead code.
 
@@ -804,7 +804,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `src/solvers/shingoki.js` — replace the CDCL header paragraph
-- Modify: `CLAUDE.md` — replace the Shingoki per-puzzle note
+- Modify: `AGENTS.md` — replace the Shingoki per-puzzle note
 - Verify: `tests/bench-shingoki.js`, `solver.worker.js`
 - Build: `npm run build`
 
@@ -844,9 +844,9 @@ In `src/solvers/shingoki.js`, replace the `=== CDCL search engine ===` block (li
 // success criteria.
 ```
 
-- [ ] **Step 2: Update the CLAUDE.md Shingoki note**
+- [ ] **Step 2: Update the AGENTS.md Shingoki note**
 
-In `CLAUDE.md`, replace the Shingoki bullet (line ~253) with:
+In `AGENTS.md`, replace the Shingoki bullet (line ~253) with:
 
 ```
 - Shingoki — `src/widget/puzzles/shingoki.js`, `src/solvers/shingoki.js` (Hint/Loop use a deductive getStepwiseHint — border/axis + number-run propagation + 1-step lookahead — falling back to the cached solution when logic is exhausted) (solver: adaptive DFS — loop-aware chain-extension where chains exist, constraint-focused probe-guided branching where they don't; reuses the sound propagation rules + connectivity prunes; sound level-0 partial on a ~6s searchMs cap. The 7x7-hard and dense boards solve in a few seconds; real hard boards >=10x10 do NOT fully solve — deduction stalls at ~9-16 edges, so they return a sound partial that Hint/Loop extend (CDCL and iterated lookahead also fail them; solving real mid-size needs a stronger deduction engine — out of scope). See the adaptive-DFS spec. CDCL was tried and removed: clause-learning is useless+harmful on connectivity-dominated boards.).
@@ -861,7 +861,7 @@ Confirm `solver.worker.js` shingoki branch still reads `new ShingokiSolver({ row
 
 - [ ] **Step 4: Rebuild the extension bundle**
 
-`src/solvers/shingoki.js` changed, so the solver bundle must be rebuilt (per CLAUDE.md).
+`src/solvers/shingoki.js` changed, so the solver bundle must be rebuilt (per AGENTS.md).
 
 Run: `npm run build`
 Expected: `Wrote dist/solver.js` + `Wrote dist/content.js`, no bundler errors (the surviving-require / shared-first / bare-module.exports guards pass).

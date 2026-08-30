@@ -6,7 +6,7 @@
 
 **Architecture:** Per-thermometer fill-level CSP. Each thermometer is an ordered bulb→tip cell chain; its state is a single fill level (0..len) and a cell is filled iff its index < level (the contiguous-prefix rule is intrinsic). A **contribution-bound** line propagation (bound each thermometer's contribution to a row/col by what the clue allows given the other thermometers' min/max) drives the solver — this alone fully solves the real 15×15 (validated: 1 node, 1 ms, unique). Wiring mirrors the Tents module exactly (cell-state, margin clues, every cell tracked in `cellStatus`).
 
-**Tech Stack:** Vanilla JS (no deps), `node:test`, Chrome MV3. Version control is **`jj`, never `git`** (colocated Jujutsu repo — see CLAUDE.md). Commit only the files each task lists.
+**Tech Stack:** Vanilla JS (no deps), `node:test`, Chrome MV3. Version control is **`jj`, never `git`** (colocated Jujutsu repo — see AGENTS.md). Commit only the files each task lists.
 
 **Validated facts (from validate-before-plan):**
 - Clue orientation is **cols-first**: `task[0..cols-1]` = column clues, `task[cols..]` = row clues (rows-first produces a contradiction on the real board).
@@ -683,7 +683,7 @@ registerHandler(thermometersHandler);
 - [ ] **Step 2: Verify lint + typecheck + build**
 
 Run: `npm run lint && npm run typecheck && npm run build`
-Expected: all succeed. (`registerHandler(...)` runs under Node `require` of handler.js but only pushes to a local array; this handler touches `window`/`document` only inside function bodies, so the Node-side require does not throw — per CLAUDE.md.)
+Expected: all succeed. (`registerHandler(...)` runs under Node `require` of handler.js but only pushes to a local array; this handler touches `window`/`document` only inside function bodies, so the Node-side require does not throw — per AGENTS.md.)
 
 - [ ] **Step 3: Commit**
 

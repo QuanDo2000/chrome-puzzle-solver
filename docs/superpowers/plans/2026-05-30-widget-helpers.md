@@ -278,9 +278,9 @@ jj commit -m "refactor(widget): extract simple hint dispatch to shared makeSimpl
 
 ## Task 4: Docs + final verification
 
-**Files:** Modify `CLAUDE.md`.
+**Files:** Modify `AGENTS.md`.
 
-- [ ] **Step 1: Extend the shared-utils note.** In `CLAUDE.md`'s "### Shared utilities + bundler require-strip" subsection, add the widget-layer helpers to the list (so it notes the widget `shared.js` now holds `drawCrossCell`, `absoluteCellHintStatus`, `makeSimpleHintDispatch` alongside `hashFNV1a`).
+- [ ] **Step 1: Extend the shared-utils note.** In `AGENTS.md`'s "### Shared utilities + bundler require-strip" subsection, add the widget-layer helpers to the list (so it notes the widget `shared.js` now holds `drawCrossCell`, `absoluteCellHintStatus`, `makeSimpleHintDispatch` alongside `hashFNV1a`).
 
 - [ ] **Step 2: Final full gate.**
 Run: `npm run build && npm test && npm run lint && npm run typecheck` → all green.

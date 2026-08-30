@@ -63,7 +63,7 @@ markers (`=` / `≠` between adjacent cells).
 | Modify | `tests/binairo-fuzz.test.js` | `verifyBinairoRules` accepts optional `comparisonClues`. New constructive fuzz block for comparison-clue puzzles. |
 | Modify | `tests/fixtures/real-puzzles.js` | New `binairoPlusReal6x6_a`. |
 | (no change) | `tests/bench-binairo.js` | Already filters by `type === 'binairo'`; the plus fixture rides along. Construct call updated to spread `comparisonClues`. |
-| Modify | `CLAUDE.md` | New "Binairo Plus / comparison-clue support" subsection. |
+| Modify | `AGENTS.md` | New "Binairo Plus / comparison-clue support" subsection. |
 
 No `manifest.json` change (existing host permission covers the path). No new
 `MainWorldFn` entries — the existing `readBinairoData` already supplies the
@@ -249,7 +249,7 @@ standard rules and the comparison constraints.
 bench script's existing loop filters by `type === 'binairo'` and now
 spreads `comparisonClues` into the constructor call.
 
-`CLAUDE.md` gets a "Binairo Plus / comparison-clue support" subsection:
+`AGENTS.md` gets a "Binairo Plus / comparison-clue support" subsection:
 - Handler matches both `/binairo/` and `/binairo-plus/`.
 - Flag encoding (`1=R-EQ, 2=R-NE, 4=D-EQ, 8=D-NE`, OR-able).
 - `_decodeComparison` flattens to `compConstraints`; `_applyComparison`
@@ -300,7 +300,7 @@ Hint flow follows the same getHint pipeline (local rules including
 5. **Fixture + golden + bench:** capture a real puzzle via Dump, add to
    fixtures, regenerate goldens, verify bench runs.
 6. **Fuzz coverage:** constructive comparison-clue fuzz.
-7. **CLAUDE.md:** document the new subsection.
+7. **AGENTS.md:** document the new subsection.
 
 ## Open assumptions to verify at impl time
 

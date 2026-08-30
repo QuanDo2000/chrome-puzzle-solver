@@ -632,7 +632,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Task 10: CI perf/range test + docs + cleanup
 
-**Files:** Modify `tests/shingoki.test.js`, `CLAUDE.md`, `src/solvers/shingoki.js` (header doc).
+**Files:** Modify `tests/shingoki.test.js`, `AGENTS.md`, `src/solvers/shingoki.js` (header doc).
 
 - [ ] **Step 1: Add a bounded range test** to `tests/shingoki.test.js` using the measured ladder — assert the sizes that now solve DO solve within budget (set from Task 8's measurement; e.g. if 15×15 solves in 1s, assert 15×15 solves under 8s). Do NOT assert the 40×40 solves (it may not — assert it returns either solved or a partial, never spurious UNSAT):
 
@@ -648,7 +648,7 @@ test('Shingoki CDCL: solvable-range boards solve within budget; 40x40 never spur
 ```
 Add a constructive mid-size assertion sized from the real measurement (the implementer fills the size/budget from Task 8's ladder — document the chosen values in a comment).
 
-- [ ] **Step 2: Docs.** Update `src/solvers/shingoki.js` header to document the CDCL engine (mirroring slitherlink's CDCL doc block, abbreviated) + the measured range. Update `CLAUDE.md`'s Shingoki bullet: `(solver: CDCL — boolean edge vars, first-UIP learning, VSIDS, Luby restarts; reuses the sound propagation rules, no in-search lookahead; partial-on-timeout. Real 40×40 monthly: <state the measured outcome>. See the CDCL spec.)`.
+- [ ] **Step 2: Docs.** Update `src/solvers/shingoki.js` header to document the CDCL engine (mirroring slitherlink's CDCL doc block, abbreviated) + the measured range. Update `AGENTS.md`'s Shingoki bullet: `(solver: CDCL — boolean edge vars, first-UIP learning, VSIDS, Luby restarts; reuses the sound propagation rules, no in-search lookahead; partial-on-timeout. Real 40×40 monthly: <state the measured outcome>. See the CDCL spec.)`.
 
 - [ ] **Step 3: Full gate** `npm run build && npm test && npm run lint && npm run typecheck` all 0. Commit:
 ```

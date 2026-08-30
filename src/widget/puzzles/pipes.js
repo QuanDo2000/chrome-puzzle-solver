@@ -141,7 +141,7 @@ const pipes = {
   // solutionFromResult), so compare them directly — no mask→count conversion.
   //
   // Batch cap: return only the next `batchSize` mismatched cells, NOT all of
-  // them. This is the documented Loop convention (see CLAUDE.md hint-batch
+  // them. This is the documented Loop convention (see AGENTS.md hint-batch
   // scaling): Loop calls hintDispatch each step, so an uncapped hint would
   // rotate the whole board in a single programmatic move — which both makes
   // Loop pointless (identical to Solve) and applies a from-scratch full solve

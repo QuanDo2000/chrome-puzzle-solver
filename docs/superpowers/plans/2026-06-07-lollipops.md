@@ -6,7 +6,7 @@
 
 **Architecture:** Per-cell shape CSP. Each free cell ∈ {empty=4, candy=1, v-stick=2, h-stick=3}; clue cells (`task ≥ 0`) are fixed shapes. The oracle is ported verbatim from the page's `getErrors` (every lollipop is a candy+stick domino — candy↔`h` L/R, candy↔`v` U/D — with exactly one connection per shape, no non-partner shape neighbour, and a line-of-sight rule). The solver runs a sound unit-propagation fixpoint (forces any cell with a single locally-consistent value) then backtracks; this fully solves the real 10×10 uniquely in ~17 ms (validated).
 
-**Tech Stack:** Vanilla JS (no deps), `node:test`, Chrome MV3. Version control is **`jj`, never `git`** (colocated Jujutsu repo — see CLAUDE.md). Commit only the files each task lists. End every commit message body with:
+**Tech Stack:** Vanilla JS (no deps), `node:test`, Chrome MV3. Version control is **`jj`, never `git`** (colocated Jujutsu repo — see AGENTS.md). Commit only the files each task lists. End every commit message body with:
 ```
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```

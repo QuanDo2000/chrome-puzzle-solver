@@ -1,4 +1,4 @@
-# Project conventions for Claude Code
+# Project conventions
 
 A Chrome MV3 extension that solves Nonogram, Aquarium, Galaxies, Binairo,
 Binairo Plus, Shikaku, Yin-Yang, Slitherlink, Hashi, Heyawake, Hitori,

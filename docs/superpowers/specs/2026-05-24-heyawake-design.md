@@ -273,7 +273,7 @@ function readHeyawakeState(rows, cols) {
 }
 
 function applyHeyawakeState(grid) {
-  // 1. Game.saveState(true)  — BEFORE writes (mandatory per CLAUDE.md)
+  // 1. Game.saveState(true)  — BEFORE writes (mandatory per AGENTS.md)
   // 2. cellStatus[r][c] = grid[r][c] for every cell
   // 3. Render ladder: drawCurrentState → render → redraw → draw
 }
@@ -374,7 +374,7 @@ to `MainWorldFn` (globals.d.ts), both lists kept symmetric:
 - `readHeyawakeState`
 - `applyHeyawakeState`
 
-(CLAUDE.md note already updated to not pin a count — fix #15.)
+(AGENTS.md note already updated to not pin a count — fix #15.)
 
 ## 9. Tests
 

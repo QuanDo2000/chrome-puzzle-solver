@@ -10,7 +10,7 @@
 //
 // EXCLUDED (deliberately not covered):
 //   - AquariumSolver._cacheKey     — deliberate string-concat, not FNV, not being swapped.
-//   - aquarium.cacheKey (widget)   — same; the CLAUDE.md spec says to exclude it.
+//   - aquarium.cacheKey (widget)   — same; the AGENTS.md spec says to exclude it.
 //   - BinairoSolver._cacheKey uses `h ^= n` (no & 0xff) — included: the parity
 //     test is the whole point of catching whether the masked shared helper
 //     changes any key.

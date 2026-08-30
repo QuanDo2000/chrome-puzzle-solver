@@ -6,13 +6,13 @@
 
 **Architecture:** A new `BinairoSolver` class in `solver.js` using deduction-first propagation (no-triples, balance, uniqueness) with backtracking as fallback, plus three new MAIN-world functions for read/apply/dump, a `binairoHandler` in `handler.js`, and `'binairo'` dispatch branches in `content.js`, `solver.worker.js`, and `drawPreview`.
 
-**Tech Stack:** Vanilla JS (ES2022 in `content.js` / `solver.js`, ES5-ish in `main-world.js` per its `@ts-nocheck` convention). Tests use `node:test` + `node:assert/strict`. Version control is **jj (Jujutsu)** — never use plain `git` commands (per `CLAUDE.md`).
+**Tech Stack:** Vanilla JS (ES2022 in `content.js` / `solver.js`, ES5-ish in `main-world.js` per its `@ts-nocheck` convention). Tests use `node:test` + `node:assert/strict`. Version control is **jj (Jujutsu)** — never use plain `git` commands (per `AGENTS.md`).
 
 **Spec:** `docs/superpowers/specs/2026-05-18-binairo-design.md`
 
 **Convention reminders:**
 - After editing any source file referenced by `manifest.json`, run `npm run build` so Chrome's `dist/` reflects changes.
-- All commit commands use `jj`. Never `git commit`, `git add`, `git status`. Use `jj status`, `jj diff`, `jj commit -m "..."`. See CLAUDE.md for the full mapping.
+- All commit commands use `jj`. Never `git commit`, `git add`, `git status`. Use `jj status`, `jj diff`, `jj commit -m "..."`. See AGENTS.md for the full mapping.
 - Cell encoding throughout: `0 = empty`, `1 = one (black)`, `2 = zero (white)`. The page-native encoding. **Givens** (`Game.task`) use a different one: `-1 = blank, 0 = given zero, 1 = given one`. Translation `givens → state`: `-1→0, 0→2, 1→1`. Only translated at the input boundary of `BinairoSolver`.
 
 ---
@@ -37,7 +37,7 @@
 | Modify | `tests/fixtures/real-puzzles.js` | + 1–3 real-puzzle entries (after Dump works). |
 | Modify | `package.json` | + `"bench:binairo"` script. |
 | Modify | `.github/workflows/bench-nightly.yml` | + `bench:binairo` step. |
-| Modify | `CLAUDE.md` | Document Binairo and the task-vs-cellStatus encoding gotcha. |
+| Modify | `AGENTS.md` | Document Binairo and the task-vs-cellStatus encoding gotcha. |
 
 ---
 
@@ -1285,7 +1285,7 @@ function applyBinairoState(solution) {
 
     // saveState(true) BEFORE writes — this engine matches aquarium's pattern
     // where direct cellStatus mutation needs to be committed to the page's
-    // internal model first. See CLAUDE.md "MAIN-world write functions: save +
+    // internal model first. See AGENTS.md "MAIN-world write functions: save +
     // render ladder" and the prior aquarium bug fix (7df9fa5).
     if (typeof window.Game.saveState === 'function') {
       window.Game.saveState(true);
@@ -2062,14 +2062,14 @@ jj commit -m "ci(binairo): bench:binairo npm script + nightly workflow step"
 
 ---
 
-## Task 22: Update `CLAUDE.md` documentation
+## Task 22: Update `AGENTS.md` documentation
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 Document the Binairo puzzle type and the non-obvious `task`-vs-`cellStatus` encoding difference so future readers (including future Claude sessions) don't trip on it.
 
-- [ ] **Step 1: Add Binairo to the file-responsibilities table.** Find the description line at the top of `CLAUDE.md`:
+- [ ] **Step 1: Add Binairo to the file-responsibilities table.** Find the description line at the top of `AGENTS.md`:
 
 ```markdown
 A Chrome MV3 extension that solves Nonogram, Aquarium, and Galaxies puzzles
@@ -2086,7 +2086,7 @@ content-script widget in `content.js`, and a small service worker in
 `background.js`.
 ```
 
-- [ ] **Step 2: Add a `### Binairo encoding gotcha` subsection to the "Architectural notes" section** of `CLAUDE.md`, right after the "### MAIN-world write functions" subsection. Content:
+- [ ] **Step 2: Add a `### Binairo encoding gotcha` subsection to the "Architectural notes" section** of `AGENTS.md`, right after the "### MAIN-world write functions" subsection. Content:
 
 ```markdown
 ### Binairo encoding gotcha
@@ -2180,9 +2180,9 @@ Expected: the commits land in this order, each with a descriptive message:
 
 - **The cell encoding is the load-bearing detail.** Internal state is `0/1/2` (cellStatus). Givens are `-1/0/1`. Translation happens once, in `_initialFromGivens`. Don't let the translation leak.
 
-- **`jj`, not `git`.** Every commit command uses `jj commit -m "..."`. The repo is a colocated Jujutsu + git workspace; running `git commit` silently misroutes. See `CLAUDE.md` "Version control: use `jj`, never plain `git`" for the full command mapping.
+- **`jj`, not `git`.** Every commit command uses `jj commit -m "..."`. The repo is a colocated Jujutsu + git workspace; running `git commit` silently misroutes. See `AGENTS.md` "Version control: use `jj`, never plain `git`" for the full command mapping.
 
-- **Save+render ladder.** `applyBinairoState` follows the same `saveState(true)` → mutate cellStatus → `redraw` → `getSaved` + `loadGame` ladder that aquarium needs (see CLAUDE.md "MAIN-world write functions: save + render ladder"). If the live verification in Task 18 shows the call isn't needed for binairo, remove it and update the spec's open-assumption #1.
+- **Save+render ladder.** `applyBinairoState` follows the same `saveState(true)` → mutate cellStatus → `redraw` → `getSaved` + `loadGame` ladder that aquarium needs (see AGENTS.md "MAIN-world write functions: save + render ladder"). If the live verification in Task 18 shows the call isn't needed for binairo, remove it and update the spec's open-assumption #1.
 
 - **No closures in MAIN-world functions.** Every function in `main-world.js` is serialized via `fn.toString()` and runs in the page MAIN world. Outer references and other top-level helpers in the same file are not in scope. Helpers must be nested inside the function body. See the `syncTimer` pattern in `applyGameState` (`main-world.js:380-453`).
 

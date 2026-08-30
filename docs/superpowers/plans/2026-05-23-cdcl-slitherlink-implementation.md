@@ -3043,12 +3043,12 @@ EOF
 
 ---
 
-## Task 17: CLAUDE.md update + final verification
+## Task 17: AGENTS.md update + final verification
 
 **Files:**
-- Modify: `CLAUDE.md` — extend the Slitherlink architectural-notes subsection with a `### Slitherlink CDCL search` sub-subsection.
+- Modify: `AGENTS.md` — extend the Slitherlink architectural-notes subsection with a `### Slitherlink CDCL search` sub-subsection.
 
-- [ ] **Step 1: Locate the insertion point in `CLAUDE.md`**
+- [ ] **Step 1: Locate the insertion point in `AGENTS.md`**
 
 Find the existing `### Slitherlink encoding` subsection (around line 241+). The new `### Slitherlink CDCL search` sub-subsection goes AFTER all existing Slitherlink content and BEFORE the next top-level `###` architectural-notes subsection.
 
@@ -3138,7 +3138,7 @@ Expected: both the 5×5 real fixture and the 50×40 monthly report `solved: true
 
 ```bash
 jj commit -m "$(cat <<'EOF'
-docs(slitherlink): document CDCL search in CLAUDE.md
+docs(slitherlink): document CDCL search in AGENTS.md
 
 Adds a 'Slitherlink CDCL search' sub-subsection covering: variable/literal
 encoding, reason tracking, first-UIP conflict analysis, non-chronological

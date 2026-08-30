@@ -35,7 +35,7 @@
 | `eslint.config.js` | Add `computePuzzleDiff` to the content-script globals |
 | `tests/solver.test.js` | Unit tests for `computePuzzleDiff` |
 | `content.js` | `drawPreview` mistake overlay; `autoSolve()` + `detectHandler` call + `pendingAutoSolve`; reuse bridges in `solveHandler`/`hintHandler`/`loopHandler` |
-| `CLAUDE.md` | Document the auto-solve + diff behaviour |
+| `AGENTS.md` | Document the auto-solve + diff behaviour |
 
 ---
 
@@ -407,11 +407,11 @@ jj commit -m "feat(auto-solve): Solve/Hint/Loop reuse the pending auto-solve"
 ## Task 5: Document + final verification
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Document the behaviour**
 
-In `CLAUDE.md`, under the "Widget conventions" section, add a bullet:
+In `AGENTS.md`, under the "Widget conventions" section, add a bullet:
 
 ```
 - `detectHandler` fires `autoSolve()` (non-blocking) after a successful

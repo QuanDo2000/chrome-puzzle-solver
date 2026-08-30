@@ -460,7 +460,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Task 5: Lock in the win — CI perf test + docs
 
-**Files:** Modify `tests/shingoki.test.js`, `CLAUDE.md`.
+**Files:** Modify `tests/shingoki.test.js`, `AGENTS.md`.
 
 - [ ] **Step 1: Add a bounded perf test** to `tests/shingoki.test.js` using the measured final time. Set `BUDGET_MS` to ~2× the measured solve time (headroom for slow CI), but no more than 15000:
 
@@ -482,7 +482,7 @@ Set `BUDGET_MS` from the actual final measurement (e.g. if it solves in 1.5s, se
 
 - [ ] **Step 2: Run** `node --test tests/shingoki.test.js` — the perf test passes.
 
-- [ ] **Step 3: Docs.** In `src/solvers/shingoki.js` header, add a short note listing which layers shipped and the measured 40×40 time. In `CLAUDE.md`'s Shingoki design-notes bullet, append `(solver: trail-undo + in-search connectivity pruning [+ max-reach / branching as needed] — real 40×40 monthly solves in ~Xs; see the solver-performance spec).` with the real X.
+- [ ] **Step 3: Docs.** In `src/solvers/shingoki.js` header, add a short note listing which layers shipped and the measured 40×40 time. In `AGENTS.md`'s Shingoki design-notes bullet, append `(solver: trail-undo + in-search connectivity pruning [+ max-reach / branching as needed] — real 40×40 monthly solves in ~Xs; see the solver-performance spec).` with the real X.
 
 - [ ] **Step 4: Full gate + commit.** `npm run build && npm test && npm run lint && npm run typecheck` all 0.
 ```

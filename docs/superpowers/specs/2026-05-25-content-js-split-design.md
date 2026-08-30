@@ -157,7 +157,7 @@ Pure state container. No DOM access. ~80 LOC.
 
 ### `src/widget/worker.js`
 
-`getSolverWorker()` (the inline-blob worker trick from CLAUDE.md
+`getSolverWorker()` (the inline-blob worker trick from AGENTS.md
 "MV3 Worker cross-origin gotcha") plus `runSolve(rowClues, colClues,
 initialGrid, solverType, extraData)`. Exports both.
 

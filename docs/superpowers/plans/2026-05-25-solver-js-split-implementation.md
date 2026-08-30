@@ -421,7 +421,7 @@ Write `scripts/build-solver-bundle.js`:
 'use strict';
 // Concatenate src/solvers/*.js into a single dist/solver.js bundle. The
 // extension's Blob worker requires solver.js as one self-contained text
-// file (per content.js getSolverWorker — see CLAUDE.md "MV3 Worker
+// file (per content.js getSolverWorker — see AGENTS.md "MV3 Worker
 // cross-origin gotcha"). Run from `npm run build`.
 
 const fs = require('fs');

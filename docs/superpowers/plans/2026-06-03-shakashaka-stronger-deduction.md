@@ -353,11 +353,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ### Task 4: Bench, docs, build, final
 
-**Files:** add `tests/bench-shakashaka.js` (extend), Modify `CLAUDE.md`, build.
+**Files:** add `tests/bench-shakashaka.js` (extend), Modify `AGENTS.md`, build.
 
 - [ ] **Step 1:** Extend `tests/bench-shakashaka.js` to print, for the 5×5 and `shakashaka_25x25` (and a constructive size ladder 6/8/10/12), root-deduction reach (`_initDomains(); _deduceAll(0)`; singleton count) + solve/partial + wall-time.
 - [ ] **Step 2:** Run `node tests/bench-shakashaka.js`, record the numbers (which sizes solve; 25×25 reach/partial-time).
-- [ ] **Step 3:** Update `CLAUDE.md`'s Shakashaka per-puzzle note: two-tier deduction (GAC Tier-1 + bifurcation Tier-2, oracle-gated, size-gated), the measured outcome (small/medium solve; 25×25 strong sound partial), honest about the large-board ceiling (same as Shingoki).
+- [ ] **Step 3:** Update `AGENTS.md`'s Shakashaka per-puzzle note: two-tier deduction (GAC Tier-1 + bifurcation Tier-2, oracle-gated, size-gated), the measured outcome (small/medium solve; 25×25 strong sound partial), honest about the large-board ceiling (same as Shingoki).
 - [ ] **Step 4:** `npm run build && npm test && npm run lint && npm run typecheck` — all green. Commit:
 ```bash
 jj commit -m "docs+build(shakashaka): two-tier deduction bench + CLAUDE note; rebuild dist

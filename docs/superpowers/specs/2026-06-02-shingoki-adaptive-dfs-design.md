@@ -200,7 +200,7 @@ exactly (it is the no-spurious-UNSAT guarantee).
 - `tests/fixtures/real-puzzles.js` — add the real 7×7-hard board
   (`shingoki_7x7_hard`) as a fixture. Keep `shingoki_40x40_monthly`.
 - `tests/bench-shingoki.js` — keep the size ladder; it now measures the DFS.
-- `CLAUDE.md` — update the Shingoki per-puzzle note (currently describes the
+- `AGENTS.md` — update the Shingoki per-puzzle note (currently describes the
   CDCL engine) to the adaptive-DFS engine.
 
 ## Testing

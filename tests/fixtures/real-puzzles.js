@@ -318,7 +318,7 @@ module.exports = {
   // 50x40 Slitherlink monthly captured from puzzles-mobile.com/loop/special/monthly
   // (2026-05-23 seed). task: -1=no clue, 0/1/2/3=count of loop edges around cell.
   // Note: this puzzle currently times out under SlitherlinkSolver.solve() — see
-  // CLAUDE.md "Slitherlink performance envelope" for context. Captured here so
+  // AGENTS.md "Slitherlink performance envelope" for context. Captured here so
   // the bench has a stable regression baseline against future _applyLookahead
   // performance work.
   slitherlinkRealMonthly50x40_a: {
@@ -327,7 +327,7 @@ module.exports = {
     cols: 40,
     // bench-slitherlink.js: skip the strict "must solve" check for this fixture;
     // it currently times out (the CDCL search inside solve() can't drive the
-    // 50×40 monthly to completion in the budget — see CLAUDE.md "Slitherlink
+    // 50×40 monthly to completion in the budget — see AGENTS.md "Slitherlink
     // performance envelope"). Captured here as a regression baseline for any
     // future _applyLookahead performance work.
     expectSolved: false,

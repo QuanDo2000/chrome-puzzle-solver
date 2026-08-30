@@ -190,7 +190,7 @@ miss — pinned by a parity test before any swap).
   Kurodoko).
 - **Phase 3 — widget helpers:** `hashFNV1a` swap-in → `drawCrossCell` →
   `absoluteCellHintStatus` → `makeSimpleHintDispatch`.
-- **Phase 4 — docs:** update CLAUDE.md (architectural notes + the bundler's
+- **Phase 4 — docs:** update AGENTS.md (architectural notes + the bundler's
   shared-require strip).
 
 **Fallback:** if a Phase-2 helper proves too entangled for a clean interface,

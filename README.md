@@ -56,7 +56,7 @@ Each bench warms up for 2 untimed iterations and exits nonzero on missing fixtur
 
 ### Version control
 
-This repo is a [Jujutsu](https://github.com/jj-vcs/jj) + git colocated workspace. Use `jj` for working-copy operations (`jj status`, `jj commit`, `jj log`). See `CLAUDE.md` for the conventional table of commands.
+This repo is a [Jujutsu](https://github.com/jj-vcs/jj) + git colocated workspace. Use `jj` for working-copy operations (`jj status`, `jj commit`, `jj log`). See `AGENTS.md` for the conventional table of commands.
 
 ### Architecture
 
@@ -67,7 +67,7 @@ This repo is a [Jujutsu](https://github.com/jj-vcs/jj) + git colocated workspace
 - `background.js` — MV3 service worker; dispatches MAIN-world function calls.
 - `main-world.js` — functions injected into the page context via `chrome.scripting.executeScript`.
 
-`CLAUDE.md` covers the non-obvious bits (MV3 Worker cross-origin workaround, MAIN-world function serialization, performance patterns).
+`AGENTS.md` covers the non-obvious bits (MV3 Worker cross-origin workaround, MAIN-world function serialization, performance patterns).
 
 ## License
 

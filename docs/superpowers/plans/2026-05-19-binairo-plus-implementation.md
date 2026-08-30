@@ -6,7 +6,7 @@
 
 **Architecture:** `BinairoSolver` gets an optional `comparisonClues` constructor parameter, a `_decodeComparison` helper that flattens the page's sparse 2D flag format into a canonical array of constraints, and a new `_applyComparison` propagation rule run between balance and uniqueness. `binairoHandler` matches both `/binairo/` and `/binairo-plus/`, drops the "not supported" refusal, and threads `comparisonClues` through `detect()` → `solveExtraData` → worker → solver. Canvas preview renders `=`/`≠` glyphs in the cached static layer. `puzzleData.type` stays `'binairo'` for both paths; the differentiation lives in the data.
 
-**Tech Stack:** Vanilla JS (ES2022 in `content.js`/`solver.js`/`handler.js`, ES5-ish in `main-world.js`). Tests use `node:test` + `node:assert/strict`. Version control is **jj (Jujutsu)** — never plain `git` per `CLAUDE.md`.
+**Tech Stack:** Vanilla JS (ES2022 in `content.js`/`solver.js`/`handler.js`, ES5-ish in `main-world.js`). Tests use `node:test` + `node:assert/strict`. Version control is **jj (Jujutsu)** — never plain `git` per `AGENTS.md`.
 
 **Spec:** `docs/superpowers/specs/2026-05-19-binairo-plus-design.md`
 
@@ -32,7 +32,7 @@
 | Modify | `tests/solver.test.js` | Comparison-rule tests + golden test. |
 | Modify | `tests/binairo-fuzz.test.js` | `verifyBinairoRules` takes optional `comparisonClues`; constructive fuzz block. |
 | Modify | `tests/fixtures/real-puzzles.js` | New `binairoPlusReal6x6_a`. |
-| Modify | `CLAUDE.md` | Binairo Plus + comparison-clue documentation. |
+| Modify | `AGENTS.md` | Binairo Plus + comparison-clue documentation. |
 
 ---
 
@@ -1231,10 +1231,10 @@ cd /home/quando/documents/chrome-puzzle-solver && jj commit -m "test(binairo-plu
 
 ---
 
-## Task 12: CLAUDE.md update
+## Task 12: AGENTS.md update
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Update the top description.** Find the very first paragraph:
 
@@ -1304,7 +1304,7 @@ layer rebuilds when the clue set changes.
 
 Run: `cd /home/quando/documents/chrome-puzzle-solver && npm run lint && npm run typecheck`
 
-Expected: both exit 0 (CLAUDE.md is markdown — neither tool checks it; the run verifies you didn't accidentally edit something else).
+Expected: both exit 0 (AGENTS.md is markdown — neither tool checks it; the run verifies you didn't accidentally edit something else).
 
 - [ ] **Step 4: Commit**
 

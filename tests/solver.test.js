@@ -2696,7 +2696,7 @@ test('SlitherlinkSolver+CDCL: 30x30 daily still solves under 2s with same output
 
 test('SlitherlinkSolver+CDCL: 50x40 monthly returns a sound result within budget', () => {
   // Current state: the monthly times out and returns a partial. That is the
-  // known perf envelope — see CLAUDE.md "Slitherlink performance envelope".
+  // known perf envelope — see AGENTS.md "Slitherlink performance envelope".
   // This test asserts the sound behaviours only:
   //   - solve() returns within budget (no infinite loop / hang)
   //   - result is either solved=true OR (solved=false AND error='timed out' AND

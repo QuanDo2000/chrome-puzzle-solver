@@ -6,13 +6,13 @@
 
 **Architecture:** New `ShikakuSolver` in `solver.js` with per-clue rectangle candidate enumeration, propagation (single-candidate forcing, single-coverer cells, rectangle-fit elimination), and most-constrained backtracking. New `shikakuHandler` matches `/shikaku/`; three MAIN-world functions handle read/state/apply. `content.js` adds a `'shikaku'` branch through the existing dispatch chains. Canvas preview colors cells by owner index (using the existing `galaxiesColors` palette) and overlays clue numbers as text.
 
-**Tech Stack:** Vanilla JS (ES2022 in `content.js`/`solver.js`/`handler.js`, ES5-ish in `main-world.js`). Tests use `node:test` + `node:assert/strict`. Version control is **jj (Jujutsu)** — never plain `git` per `CLAUDE.md`.
+**Tech Stack:** Vanilla JS (ES2022 in `content.js`/`solver.js`/`handler.js`, ES5-ish in `main-world.js`). Tests use `node:test` + `node:assert/strict`. Version control is **jj (Jujutsu)** — never plain `git` per `AGENTS.md`.
 
 **Spec:** `docs/superpowers/specs/2026-05-19-shikaku-design.md`
 
 **Convention reminders:**
 - After editing source files referenced by `manifest.json`, run `npm run build` so Chrome's `dist/` reflects changes.
-- Every commit uses `jj commit -m "..."`. Never `git commit`. See `CLAUDE.md` for the full `jj` ↔ `git` mapping.
+- Every commit uses `jj commit -m "..."`. Never `git commit`. See `AGENTS.md` for the full `jj` ↔ `git` mapping.
 - Solution shape across the worker → content → MAIN bridge is a `number[][]` 2D where each cell holds its owning clue's *index* (0..clues.length-1) or `-1` if unassigned.
 - Functions in `main-world.js` are serialized via `fn.toString()` and run in the page MAIN world — no outer-scope references, helpers must be nested inside the function body. See the existing `readBinairoData` for the canonical shape.
 
@@ -39,7 +39,7 @@
 | Create | `tests/bench-shikaku.js` | Real-puzzle perf bench. |
 | Modify | `package.json` | + `bench:shikaku` script. |
 | Modify | `.github/workflows/bench-nightly.yml` | + `bench:shikaku` step. |
-| Modify | `CLAUDE.md` | Top description + file row + new Shikaku encoding subsection. |
+| Modify | `AGENTS.md` | Top description + file row + new Shikaku encoding subsection. |
 
 No `manifest.json` change.
 
@@ -2024,10 +2024,10 @@ cd /home/quando/documents/chrome-puzzle-solver && jj commit -m "test(shikaku): r
 
 ---
 
-## Task 17: `CLAUDE.md` update
+## Task 17: `AGENTS.md` update
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Update the top description**
 

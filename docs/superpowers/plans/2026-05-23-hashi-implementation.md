@@ -44,7 +44,7 @@
 - `tests/solver.test.js` — add HashiSolver import + integration tests
 - `tests/bench-real.js` — add hashi arm
 - `.github/workflows/bench-nightly.yml` — add `node tests/bench-hashi.js` step
-- `CLAUDE.md` — add `### Hashi encoding` section
+- `AGENTS.md` — add `### Hashi encoding` section
 
 ---
 
@@ -2386,10 +2386,10 @@ jj commit -m "ci(hashi): add bench-hashi to nightly workflow"
 
 ---
 
-## Task 24: CLAUDE.md update — Hashi encoding section
+## Task 24: AGENTS.md update — Hashi encoding section
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Add `### Hashi encoding` section**
 
@@ -2415,7 +2415,7 @@ Insert immediately after the `### Slitherlink CDCL search` block (so all puzzle-
 - [ ] **Step 3: Commit**
 
 ```
-jj commit -m "docs(hashi): CLAUDE.md encoding section"
+jj commit -m "docs(hashi): AGENTS.md encoding section"
 ```
 
 ---
@@ -2479,9 +2479,9 @@ After writing this plan, scanned for issues:
 
 - **Type consistency** ✓ — `HashiSolver` constructor takes `{rows, cols, islands, maxMs}`; `solve()` returns `{solved, edges, error?}`; `getHint(currentEdges)` takes an edges array. Used consistently in all tasks.
 - **Edge shape** ✓ — `{a, b, orientation: 'H'|'V', bridges: number}` with `a < b`. Used in worker output, MAIN-world apply, computePuzzleDiff, drawPreview, done-check.
-- **MAIN-world write contract** ✓ — `saveState(true)` before writes, render ladder after, per CLAUDE.md.
+- **MAIN-world write contract** ✓ — `saveState(true)` before writes, render ladder after, per AGENTS.md.
 - **Sentinel detection** ✓ — Task 13's `readHashiState` uses `cell.br !== -1` (not `cell.right.index === 0`) per spec.
-- **All spec sections covered**: §1 summary→Task 0 (header), §2 puzzle→Tasks 1–10, §3 recon→Task 13, §4 solver→Tasks 1–10, §5 worker→Task 12, §6 MAIN-world→Task 13, §7 handler→Task 14, §8 content.js→Tasks 16–18, §9 MV3→Task 15, §10 tests→Tasks 19–22, §11 CLAUDE.md→Task 24, §12 build/verify→Task 25, §13 out-of-scope→no task needed, §14 execution→pre-determined subagent-driven per memory.
+- **All spec sections covered**: §1 summary→Task 0 (header), §2 puzzle→Tasks 1–10, §3 recon→Task 13, §4 solver→Tasks 1–10, §5 worker→Task 12, §6 MAIN-world→Task 13, §7 handler→Task 14, §8 content.js→Tasks 16–18, §9 MV3→Task 15, §10 tests→Tasks 19–22, §11 AGENTS.md→Task 24, §12 build/verify→Task 25, §13 out-of-scope→no task needed, §14 execution→pre-determined subagent-driven per memory.
 - **All tasks have committable units**; no half-finished features left dangling.
 - **No placeholders**; every step contains exact code or exact commands.
 - **`jj` not `git`** consistently used in every commit step.

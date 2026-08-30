@@ -163,9 +163,9 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ### Task 2: docs + build (after measuring)
 
-**Files:** `src/solvers/shingoki.js` (header), `CLAUDE.md`, build.
+**Files:** `src/solvers/shingoki.js` (header), `AGENTS.md`, build.
 
-- [ ] **Step 1:** Update the solver module header + CLAUDE.md Shingoki note with the new measured outcome (reach + which sizes solve), honestly. If 25×25 now solves, say so; if not, keep it as a sound-partial limit.
+- [ ] **Step 1:** Update the solver module header + AGENTS.md Shingoki note with the new measured outcome (reach + which sizes solve), honestly. If 25×25 now solves, say so; if not, keep it as a sound-partial limit.
 - [ ] **Step 2:** `npm run build` (solver.js changed) → no bundler errors.
 - [ ] **Step 3:** `npm test && npm run lint && npm run typecheck` → all green.
 - [ ] **Step 4:** Commit: `docs+build(shingoki): candidate-strengthening outcome + rebuild dist`.

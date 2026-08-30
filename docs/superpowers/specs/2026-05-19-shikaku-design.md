@@ -68,7 +68,7 @@ localStorage hint cache).
 | Create | `tests/bench-shikaku.js` | Per-fixture perf bench, `process.exit(1)` on unsolved. |
 | Modify | `package.json` | + `bench:shikaku` script. |
 | Modify | `.github/workflows/bench-nightly.yml` | + `bench:shikaku` step. |
-| Modify | `CLAUDE.md` | Top description + file row + new "Shikaku encoding" subsection. |
+| Modify | `AGENTS.md` | Top description + file row + new "Shikaku encoding" subsection. |
 
 No `manifest.json` change (host permission covers the path).
 
@@ -332,7 +332,7 @@ Nightly workflow += `node tests/bench-shikaku.js` step.
 5. **Preview canvas:** colored rectangles + clue numbers + borders.
 6. **Fuzz + bench + CI:** comparison-clue analog of the binairo fuzz.
 7. **Dump branch:** Shikaku-aware fixture capture.
-8. **CLAUDE.md:** new subsection + file-row updates.
+8. **AGENTS.md:** new subsection + file-row updates.
 
 ## Open assumptions to verify at impl time
 

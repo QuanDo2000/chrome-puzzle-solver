@@ -628,7 +628,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ### Task 6: Fixture, bench, build, docs, live-verify
 
-**Files:** Modify `tests/fixtures/real-puzzles.js`, `CLAUDE.md`; add `tests/bench-shakashaka.js`; build.
+**Files:** Modify `tests/fixtures/real-puzzles.js`, `AGENTS.md`; add `tests/bench-shakashaka.js`; build.
 
 - [ ] **Step 1:** Add the captured 25×25 to `tests/fixtures/real-puzzles.js` (task grid verbatim from recon, in the "Appendix: captured 25×25 task" below):
 ```js
@@ -642,7 +642,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 3:** Run `node tests/bench-shakashaka.js` — record solve time + solved/partial. Run `npm test` — all green.
 
-- [ ] **Step 4:** Update `CLAUDE.md`: add `shakashaka` to the puzzle list (intro line) and a per-puzzle note (encoding + CSP-with-ported-oracle solver + the white=5 / triangle-geometry empirical notes).
+- [ ] **Step 4:** Update `AGENTS.md`: add `shakashaka` to the puzzle list (intro line) and a per-puzzle note (encoding + CSP-with-ported-oracle solver + the white=5 / triangle-geometry empirical notes).
 
 - [ ] **Step 5:** `npm run build && npm test && npm run lint && npm run typecheck` — all green. Confirm `manifest.json` already matches `puzzles-mobile.com/*` (no change).
 

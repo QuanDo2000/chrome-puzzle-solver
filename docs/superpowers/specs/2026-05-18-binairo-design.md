@@ -148,7 +148,7 @@ Bench fails CI if any captured real puzzle is unsolved.
 ### `main-world.js` additions
 
 All three functions are serialized via `chrome.scripting.executeScript` and
-must therefore (per `CLAUDE.md`) live without outer-scope references and
+must therefore (per `AGENTS.md`) live without outer-scope references and
 without dependence on other functions in `main-world.js`.
 
 ```
@@ -166,7 +166,7 @@ readBinairoState(rows, cols)
   to be rows × cols. Returns null if shape mismatch or undefined.
 
 applyBinairoState(solution2D)
-  Returns boolean. Follows the save+render ladder from CLAUDE.md:
+  Returns boolean. Follows the save+render ladder from AGENTS.md:
     1. Game.saveState(true)   — verified necessary on aquarium engine; assumed
                                 necessary here. To be confirmed at impl time;
                                 drop if observation proves otherwise.
@@ -330,7 +330,7 @@ arrives as a 2D array, not a string).
 4. **Widget + preview.** `content.js` routing, hint cache key, loop dispatch,
    canvas preview render mode.
 5. **Bench + CI.** `bench-binairo.js`, package.json script, nightly workflow.
-6. **CLAUDE.md update.** Add Binairo to the puzzle-type list and document the
+6. **AGENTS.md update.** Add Binairo to the puzzle-type list and document the
    `task`-vs-`cellStatus` encoding difference (it's a non-obvious gotcha that
    future readers will hit).
 

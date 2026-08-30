@@ -223,7 +223,7 @@ four side mirrors with `-1` clamped to `0`:
 
 Then standard ladder: `saveState(true)` BEFORE writes, fall through
 `render → redraw → drawCurrentState → drawCellStatus` AFTER. Per the
-CLAUDE.md MAIN-world write contract, never call `Game.check()`.
+AGENTS.md MAIN-world write contract, never call `Game.check()`.
 
 Field names are **load-bearing** — three page functions read them
 (`drawCurrentStateInternal`, `drawCellStatus`, `checkFinished`) and any
@@ -349,7 +349,7 @@ list grows from 20 → 23.
 - `.github/workflows/bench-nightly.yml` — add `node tests/bench-hashi.js`
   to the nightly job (no `continue-on-error`).
 
-## 11. CLAUDE.md update
+## 11. AGENTS.md update
 
 Add a `### Hashi encoding` section after `### Slitherlink encoding`
 documenting:
@@ -366,7 +366,7 @@ documenting:
 
 ## 12. Build & verify
 
-After every source-file edit run `npm run build` (per CLAUDE.md). Final
+After every source-file edit run `npm run build` (per AGENTS.md). Final
 verify checklist:
 - `npm test` clean
 - `npm run lint`, `npm run typecheck` clean

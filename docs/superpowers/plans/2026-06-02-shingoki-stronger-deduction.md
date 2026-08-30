@@ -802,7 +802,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 6: Measurement bench, docs, and build
 
 **Files:**
-- Modify: `tests/bench-shingoki.js`, `src/solvers/shingoki.js` (header), `CLAUDE.md`
+- Modify: `tests/bench-shingoki.js`, `src/solvers/shingoki.js` (header), `AGENTS.md`
 - Build: `npm run build`
 
 - [ ] **Step 1: Extend the bench to print reach (determined-edge counts)**
@@ -828,9 +828,9 @@ for (const k of ['shingoki_7x7_hard','shingoki_10x10_hard','shingoki_15x15_hard'
 Run: `node tests/bench-shingoki.js`
 Record per-fixture: root-deduction reach + solved/partial + wall-time. This is the deliverable's evidence.
 
-- [ ] **Step 3: Update the solver module header + CLAUDE.md to the measured outcome**
+- [ ] **Step 3: Update the solver module header + AGENTS.md to the measured outcome**
 
-Update the `=== Adaptive DFS search engine ===` header in `src/solvers/shingoki.js` to describe the two-tier deduction (`_deduceAll`: Tier 1 `_propagate`+max-reach, Tier 2 `_deduceHeavy` candidate-intersection/connectivity/bifurcation) and state the measured reach/solve outcome on the real fixtures (fill in the actual numbers from Step 2). Update the `CLAUDE.md` Shingoki bullet's solver description likewise — state honestly which real sizes now solve and which still return a sound partial.
+Update the `=== Adaptive DFS search engine ===` header in `src/solvers/shingoki.js` to describe the two-tier deduction (`_deduceAll`: Tier 1 `_propagate`+max-reach, Tier 2 `_deduceHeavy` candidate-intersection/connectivity/bifurcation) and state the measured reach/solve outcome on the real fixtures (fill in the actual numbers from Step 2). Update the `AGENTS.md` Shingoki bullet's solver description likewise — state honestly which real sizes now solve and which still return a sound partial.
 
 - [ ] **Step 4: Rebuild**
 

@@ -984,7 +984,7 @@ function applyYinYangState(solution) {
     var rows = solution.length;
 
     // saveState(true) BEFORE writes — commit to the page's internal model
-    // first. See CLAUDE.md "MAIN-world write functions: save + render ladder".
+    // first. See AGENTS.md "MAIN-world write functions: save + render ladder".
     if (typeof window.Game.saveState === 'function') {
       window.Game.saveState(true);
     }
@@ -1672,14 +1672,14 @@ jj commit -m "test(yin-yang): bench script and real-puzzle fixture"
 
 ---
 
-## Task 17: Document the Yin-Yang encoding in CLAUDE.md
+## Task 17: Document the Yin-Yang encoding in AGENTS.md
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Update the intro line**
 
-In `CLAUDE.md`, update the opening description to include Yin-Yang in the list of supported puzzles, and the solver-class count (it lists the solver classes in `solver.js`).
+In `AGENTS.md`, update the opening description to include Yin-Yang in the list of supported puzzles, and the solver-class count (it lists the solver classes in `solver.js`).
 
 - [ ] **Step 2: Add a Yin-Yang encoding subsection**
 
@@ -1730,12 +1730,12 @@ The "MV3 hardening contract" section states the allowlist has 14 entries. Update
 - [ ] **Step 4: Verify**
 
 Run: `npm test && npm run lint && npm run typecheck`
-Expected: all pass. (CLAUDE.md edits need no rebuild.)
+Expected: all pass. (AGENTS.md edits need no rebuild.)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-jj commit -m "docs(yin-yang): document the encoding and solver in CLAUDE.md"
+jj commit -m "docs(yin-yang): document the encoding and solver in AGENTS.md"
 ```
 
 ---
@@ -1758,7 +1758,7 @@ After all tasks:
 - The render ladder in `applyYinYangState` (`drawCurrentState → redraw →
   draw → getSaved+loadGame`) cannot be unit-tested. Verify it during the
   final live check; if the board does not visibly update after Apply, adjust
-  the ladder order (see CLAUDE.md "MAIN-world write functions: save + render
+  the ladder order (see AGENTS.md "MAIN-world write functions: save + render
   ladder").
 - `getHint` ignoring the `initialState` for `task` is intentional — the live
   board (`currentGrid`) already contains the givens, so seeding from it is

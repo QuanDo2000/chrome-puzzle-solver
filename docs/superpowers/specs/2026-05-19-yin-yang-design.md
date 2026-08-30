@@ -56,7 +56,7 @@ is `'yinyang'`.
 | `globals.d.ts` | Mirror the 3 names in the `MainWorldFn` union |
 | `handler.js` | `yinYangHandler` — matches `/yin-yang/`, priority 30 |
 | `content.js` | `solveExtraData` arm, `yinYangCacheKey`, `getHint` branch, hint-status nodes, `drawPreview` rendering, `SUPPORTED_PUZZLES` entry |
-| `CLAUDE.md` | Yin-Yang encoding subsection |
+| `AGENTS.md` | Yin-Yang encoding subsection |
 | `tests/` | `yinyang6x6` fixture + golden, solver tests, `yinyang-fuzz.test.js`, real-puzzle capture, `bench-yinyang.js` |
 
 The Loop done-check needs no special arm — Yin-Yang uses `0` = empty like the

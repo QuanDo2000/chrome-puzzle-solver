@@ -31,7 +31,7 @@
 | `tests/cachekey-parity.test.js` | Create | Golden cache-key characterization for every solver + widget type. |
 | `src/solvers/*.js` (14) | Modify | `_cacheKey` → `hashFNV1a(feed)`. |
 | `src/widget/puzzles/*.js` + `src/widget/galaxies-hint.js` | Modify | `cacheKey`/`staticSig` FNV → `hashFNV1a(feed)` (except aquarium). |
-| `CLAUDE.md` | Modify | Document the shared-utils mechanism. |
+| `AGENTS.md` | Modify | Document the shared-utils mechanism. |
 
 ---
 
@@ -703,10 +703,10 @@ jj commit -m "refactor(widget): swap cacheKey/staticSig FNV-1a to shared hashFNV
 
 ---
 
-## Task 10: Document the mechanism in CLAUDE.md
+## Task 10: Document the mechanism in AGENTS.md
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Add an architectural note**
 

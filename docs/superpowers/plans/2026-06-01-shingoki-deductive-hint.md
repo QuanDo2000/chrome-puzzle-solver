@@ -42,7 +42,7 @@ const TASK_5x5 = [
 - `src/widget/puzzles/shingoki.js` — `hintDispatch` tries `getStepwiseHint` first, falls back to the existing solution-diff (Task 4).
 - `tests/shingoki.test.js` — per-rule + `getStepwiseHint` unit tests (Tasks 1-3, 5).
 - `tests/puzzle-modules.test.js` — `hintDispatch` deduction-first + fallback tests (Task 4).
-- `CLAUDE.md` / spec — note the deductive hint (Task 5).
+- `AGENTS.md` / spec — note the deductive hint (Task 5).
 
 No other files change.
 
@@ -513,7 +513,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Task 5: Measure deductive reach + docs
 
-**Files:** `tests/shingoki.test.js` (measurement test), `CLAUDE.md` / spec note.
+**Files:** `tests/shingoki.test.js` (measurement test), `AGENTS.md` / spec note.
 
 - [ ] **Step 1: Add a measurement test** that records how far pure logic reaches on the captured 5×5 (NOT asserted to be 100% — the spec says fallback covers gaps). Append to `tests/shingoki.test.js`:
 
@@ -551,7 +551,7 @@ test('Shingoki deductive reach: iterating getStepwiseHint from empty makes monot
 
 - [ ] **Step 2: Run.** `node --test tests/shingoki.test.js` — passes; note the logged reach (`applied/totalLines`).
 
-- [ ] **Step 3: Update docs.** In `CLAUDE.md`, under the Shingoki design-notes bullet, append a short clause: `(Hint/Loop use a deductive getStepwiseHint — border/axis + number-run propagation + 1-step lookahead — falling back to the cached solution when logic is exhausted).` Add a one-line note to the bottom of `src/solvers/shingoki.js`'s header comment pointing at `getStepwiseHint` as the deductive-hint entry point.
+- [ ] **Step 3: Update docs.** In `AGENTS.md`, under the Shingoki design-notes bullet, append a short clause: `(Hint/Loop use a deductive getStepwiseHint — border/axis + number-run propagation + 1-step lookahead — falling back to the cached solution when logic is exhausted).` Add a one-line note to the bottom of `src/solvers/shingoki.js`'s header comment pointing at `getStepwiseHint` as the deductive-hint entry point.
 
 - [ ] **Step 4: Full gate + commit.** `npm run build && npm test && npm run lint && npm run typecheck` all 0.
 ```

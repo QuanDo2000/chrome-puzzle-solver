@@ -735,7 +735,7 @@ Add `'readPipesData'`, `'readPipesState'`, `'applyPipesState'` to the `EXEC_MAIN
 
 - [ ] **Step 6: Add to `globals.d.ts` MainWorldFn**
 
-Add the same three string literals to the `MainWorldFn` union (mirror how `applyNurikabeState` etc. appear). The allowlist and this union must stay in sync (CLAUDE.md contract).
+Add the same three string literals to the `MainWorldFn` union (mirror how `applyNurikabeState` etc. appear). The allowlist and this union must stay in sync (AGENTS.md contract).
 
 - [ ] **Step 7: Build + sync check**
 
@@ -1004,13 +1004,13 @@ Report any cell that ends mis-rotated (would indicate a `PIPE_PAGE_CW` or cellSt
 
 **Files:**
 - Modify: `tests/cachekey-parity.test.js`
-- Modify: `CLAUDE.md`
+- Modify: `AGENTS.md`
 
 - [ ] **Step 1: Add pipes to `tests/cachekey-parity.test.js`**
 
 Add `widget:pipes:cacheKey` to the characterization map. Require `pipes` module, build a fixture `data = { type:'pipes', rows:4, cols:4, task:[[8,3,2,6],[8,7,1,10],[10,13,13,11],[6,3,1,8]] }`, record the golden via the file's `RECORD=1` workflow, paste it in, and confirm a plain run passes.
 
-- [ ] **Step 2: Update CLAUDE.md**
+- [ ] **Step 2: Update AGENTS.md**
 
 - Update the opening line listing supported puzzles to include Pipes ("…, Hashi, and Pipes").
 - Add a "Per-puzzle design notes" bullet pointing at `src/widget/puzzles/pipes.js` + `src/solvers/pipes.js`.
